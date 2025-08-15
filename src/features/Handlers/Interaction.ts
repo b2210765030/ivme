@@ -14,6 +14,7 @@ import { ChatMessage } from '../../types/index';
 import { EXTENSION_ID, SETTINGS_KEYS } from '../../core/constants';
 import { createContextualPrompt } from '../../system_prompts';
 import { build_context_for_query } from '../../services/orchestrator';
+import { run_planner } from '../../services/planner';
 export class InteractionHandler {
     private currentRequestController: AbortController | null = null;
 
@@ -38,6 +39,20 @@ export class InteractionHandler {
         }
         
         this.conversationManager.addMessage('user', instruction);
+        // Eğer indexing etkinse, önce Planner'ı çalıştır ve retrieval akışını Bypass et
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        const indexingEnabled = config.get<boolean>(SETTINGS_KEYS.indexingEnabled, false);
+        if (indexingEnabled) {
+            try {
+                const plan = await run_planner(this.conversationManager.getExtensionContext(), this.apiManager, instruction);
+                // Planı UI'da göster
+                this.webview.postMessage({ type: 'plannerResult', payload: { plan } });
+                return; // Şimdilik chat LLM akışını başlatma
+            } catch (e) {
+                console.warn('[Interaction] Planner çalıştırılırken hata oluştu, sohbet akışına dönülüyor:', e);
+            }
+        }
+
         await this.streamStandardChat();
     }
 
@@ -103,14 +118,42 @@ export class InteractionHandler {
             const isAgentModeActive = config.get<boolean>(SETTINGS_KEYS.agentModeActive, false);
             
             if (isAgentModeActive) {
-                // Agent modunda: retrieval ile bağlam oluştur ve mesaja ekle
-                try {
-                    const contextText = await build_context_for_query(this.conversationManager.getExtensionContext(), this.apiManager, lastUserMessage.content);
-                    const merged = `${contextualContent}\n\n<retrieved_context>\n${contextText}\n</retrieved_context>`;
-                    limitedHistory[lastUserMessageIndex] = { role: 'user', content: merged };
-                } catch (e) {
-                    console.warn('[Interaction] Retrieval başarısız, bağlam eklenmeden devam ediliyor:', e);
-                    limitedHistory[lastUserMessageIndex] = { role: 'user', content: contextualContent };
+                // Agent modunda: eğer indexing etkinse önce Planner çalışsın (retrieval öncesi)
+                const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+                const indexingEnabled = config.get<boolean>(SETTINGS_KEYS.indexingEnabled, false);
+
+                if (indexingEnabled) {
+                    try {
+                        // Planner'ı çalıştır (doğrudan LLM'e gider)
+                        const plan = await run_planner(this.conversationManager.getExtensionContext(), this.apiManager, lastUserMessage.content);
+                        // UI'ya planı göster
+                        this.webview.postMessage({ type: 'plannerResult', payload: { plan } });
+
+                        // Planner çıktısını kullanıcı mesajına ekle (LLM'e gönderilecek sohbet bağlamına)
+                        const merged = `${contextualContent}\n\n<planner_result>\n${JSON.stringify(plan, null, 2)}\n</planner_result>`;
+                        limitedHistory[lastUserMessageIndex] = { role: 'user', content: merged };
+                    } catch (e) {
+                        console.warn('[Interaction] Planner çalıştırılırken hata oluştu, normal akışa dönülüyor:', e);
+                        // Fallback: retrieval ile bağlam oluştur
+                        try {
+                            const contextText = await build_context_for_query(this.conversationManager.getExtensionContext(), this.apiManager, lastUserMessage.content);
+                            const merged = `${contextualContent}\n\n<retrieved_context>\n${contextText}\n</retrieved_context>`;
+                            limitedHistory[lastUserMessageIndex] = { role: 'user', content: merged };
+                        } catch (e2) {
+                            console.warn('[Interaction] Retrieval başarısız, bağlam eklenmeden devam ediliyor:', e2);
+                            limitedHistory[lastUserMessageIndex] = { role: 'user', content: contextualContent };
+                        }
+                    }
+                } else {
+                    // Index kapalıysa eski davranış (retrieval)
+                    try {
+                        const contextText = await build_context_for_query(this.conversationManager.getExtensionContext(), this.apiManager, lastUserMessage.content);
+                        const merged = `${contextualContent}\n\n<retrieved_context>\n${contextText}\n</retrieved_context>`;
+                        limitedHistory[lastUserMessageIndex] = { role: 'user', content: merged };
+                    } catch (e) {
+                        console.warn('[Interaction] Retrieval başarısız, bağlam eklenmeden devam ediliyor:', e);
+                        limitedHistory[lastUserMessageIndex] = { role: 'user', content: contextualContent };
+                    }
                 }
             } else {
                 // Chat modunda: sadece contextual content kullan, retrieval yapma
