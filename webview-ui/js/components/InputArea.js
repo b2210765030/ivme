@@ -117,7 +117,7 @@ export function recalculateTotalAndUpdateUI() {
     DOM.characterCounter.classList.toggle('limit-exceeded', isLimitExceeded);
     
     // Tooltip ile detaylı bilgi göster
-    const tooltipText = `📊 Token Kullanımı\n${totalTokens} / ${TOKEN_LIMIT} tokens (${percentage}%)\n\n📋 Detay:\n• Konuşma: ${conversationTokens} tokens\n• Dosyalar: ${filesTokens} tokens\n• Prompt: ${promptTokenUsage.tokenCount} tokens\n• Kalan: ${Math.max(0, TOKEN_LIMIT - totalTokens)} tokens`;
+    const tooltipText = `${DOM.getText('tokenUsage')}\n${totalTokens} / ${TOKEN_LIMIT} ${DOM.getText('tokens')} (${percentage}%)\n\n${DOM.getText('tokenDetail')}\n${DOM.getText('conversation')} ${conversationTokens} ${DOM.getText('tokens')}\n${DOM.getText('files')} ${filesTokens} ${DOM.getText('tokens')}\n${DOM.getText('prompt')} ${promptTokenUsage.tokenCount} ${DOM.getText('tokens')}\n${DOM.getText('remaining')} ${Math.max(0, TOKEN_LIMIT - totalTokens)} ${DOM.getText('tokens')}`;
     if (DOM.tokenProgressRing) {
         DOM.tokenProgressRing.setAttribute('data-tooltip', tooltipText);
     }
@@ -137,12 +137,12 @@ export function updateInputAndButtonState(limitExceeded = false) {
 
     if (isAiResponding) {
         DOM.sendButton.disabled = false;
-        DOM.sendButton.title = 'Durdur';
+        DOM.sendButton.title = DOM.getText('stop');
         sendIcon.classList.add('hidden');
         stopIcon.classList.remove('hidden');
     } else {
         DOM.sendButton.disabled = !canSend;
-        DOM.sendButton.title = 'Gönder';
+        DOM.sendButton.title = DOM.getText('send');
         sendIcon.classList.remove('hidden');
         stopIcon.classList.add('hidden');
     }
@@ -167,9 +167,9 @@ export function setPlaceholder(text = null) {
     }
 
     if (isAiResponding) {
-        DOM.input.placeholder = 'İvme yanıtlıyor, lütfen bekleyin...';
+        DOM.input.placeholder = DOM.getText('responding');
     } else {
-        DOM.input.placeholder = 'ivmeye soru sorun...';
+        DOM.input.placeholder = DOM.getText('placeholder');
     }
 }
 

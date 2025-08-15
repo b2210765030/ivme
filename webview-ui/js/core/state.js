@@ -324,17 +324,158 @@ export function setLanguage(lang) {
     }
 
     // UI metinlerini güncelle
+    updateUITexts();
+}
+
+// Dil değişikliği sırasında tüm UI metinlerini güncelle
+export function updateUITexts() {
     const subtitle = document.getElementById('welcome-subtitle');
     const input = document.getElementById('prompt-input');
     if (subtitle) {
-        subtitle.textContent = (lang === 'en')
-            ? 'Accelerate your code development and analysis with AI.'
-            : 'Kod geliştirme ve analiz süreçlerinizi yapay zeka ile hızlandırın.';
+        subtitle.textContent = DOM.getText('welcomeSubtitle');
     }
     if (input) {
-        input.setAttribute('placeholder', 'ivmeye soru sorun...');
+        input.setAttribute('placeholder', DOM.getText('placeholder'));
     }
     setPlaceholder();
+    
+    // Buton metinlerini güncelle
+    if (DOM.sendButton) {
+        const { isAiResponding } = getState();
+        DOM.sendButton.title = isAiResponding ? DOM.getText('stop') : DOM.getText('send');
+    }
+    
+    // HTML metinlerini güncelle
+    updateHTMLTexts();
+}
+
+// HTML metinlerini güncelle
+function updateHTMLTexts() {
+    // Buton title'larını güncelle
+    const attachFileButton = document.getElementById('attach-file-button');
+    if (attachFileButton) {
+        attachFileButton.title = DOM.getText('attachFile');
+    }
+    
+    const agentModeButton = document.getElementById('agent-mode-button');
+    if (agentModeButton) {
+        agentModeButton.title = DOM.getText('modChange');
+    }
+    
+    const indexerStartButton = document.getElementById('indexer-start-button');
+    if (indexerStartButton) {
+        indexerStartButton.title = DOM.getText('indexProject');
+        indexerStartButton.setAttribute('aria-label', DOM.getText('indexProject'));
+    }
+    
+    const indexerCancelButton = document.getElementById('indexer-cancel-button');
+    if (indexerCancelButton) {
+        indexerCancelButton.title = DOM.getText('stop');
+        indexerCancelButton.setAttribute('aria-label', DOM.getText('stop'));
+    }
+    
+    const agentStatusCollapsed = document.getElementById('agent-status-collapsed');
+    if (agentStatusCollapsed) {
+        agentStatusCollapsed.title = DOM.getText('showAgentContext');
+    }
+    
+    const agentStatusBar = document.getElementById('agent-status-bar');
+    if (agentStatusBar) {
+        agentStatusBar.title = DOM.getText('activeContext');
+    }
+    
+    const agentStatusHide = document.getElementById('agent-status-hide');
+    if (agentStatusHide) {
+        agentStatusHide.title = DOM.getText('hideContext');
+    }
+    
+    // Settings modal metinlerini güncelle
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) {
+        const modalHeader = settingsModal.querySelector('.modal-header h2');
+        if (modalHeader) {
+            modalHeader.textContent = DOM.getText('settings');
+        }
+        
+        // Nav butonları
+        const navButtons = settingsModal.querySelectorAll('.nav-button');
+        navButtons.forEach(button => {
+            const target = button.getAttribute('data-target');
+            if (target === 'pane-services') {
+                button.textContent = DOM.getText('services');
+            } else if (target === 'pane-interface') {
+                button.textContent = DOM.getText('interface');
+            } else if (target === 'pane-general') {
+                button.textContent = DOM.getText('general');
+            }
+        });
+        
+        // Form etiketleri
+        const serviceSelectLabel = settingsModal.querySelector('label[for="service-select"]');
+        if (serviceSelectLabel) {
+            serviceSelectLabel.textContent = DOM.getText('activeService');
+        }
+        
+        const vllmUrlLabel = settingsModal.querySelector('label[for="vllm-url"]');
+        if (vllmUrlLabel) {
+            vllmUrlLabel.textContent = DOM.getText('vllmServerAddress');
+        }
+        
+        const vllmModelLabel = settingsModal.querySelector('label[for="vllm-model"]');
+        if (vllmModelLabel) {
+            vllmModelLabel.textContent = DOM.getText('vllmModelName');
+        }
+        
+        const geminiKeyLabel = settingsModal.querySelector('label[for="gemini-key"]');
+        if (geminiKeyLabel) {
+            geminiKeyLabel.textContent = DOM.getText('geminiApiKey');
+        }
+        
+        const geminiKeyInput = settingsModal.querySelector('#gemini-key');
+        if (geminiKeyInput) {
+            geminiKeyInput.placeholder = DOM.getText('enterApiKey');
+        }
+        
+        const videoToggleLabel = settingsModal.querySelector('label[for="video-toggle-switch"]');
+        if (videoToggleLabel) {
+            videoToggleLabel.textContent = DOM.getText('backgroundVideo');
+        }
+        
+        const videoToggleDesc = settingsModal.querySelector('#pane-interface .form-group-description');
+        if (videoToggleDesc) {
+            videoToggleDesc.textContent = DOM.getText('backgroundVideoDesc');
+        }
+        
+        const historyLimitLabel = settingsModal.querySelector('label[for="history-limit"]');
+        if (historyLimitLabel) {
+            historyLimitLabel.textContent = DOM.getText('conversationHistoryLimit');
+        }
+        
+        const historyLimitDesc = settingsModal.querySelector('#pane-general .form-group-description');
+        if (historyLimitDesc) {
+            historyLimitDesc.textContent = DOM.getText('conversationHistoryDesc');
+        }
+        
+        const tokenLimitLabel = settingsModal.querySelector('label[for="token-limit"]');
+        if (tokenLimitLabel) {
+            tokenLimitLabel.textContent = DOM.getText('tokenLimit');
+        }
+        
+        const tokenLimitDesc = settingsModal.querySelector('#pane-general .form-group-description:last-child');
+        if (tokenLimitDesc) {
+            tokenLimitDesc.textContent = DOM.getText('tokenLimitDesc');
+        }
+        
+        const cancelButton = settingsModal.querySelector('#cancel-settings-button');
+        if (cancelButton) {
+            cancelButton.textContent = DOM.getText('cancel');
+        }
+        
+        const saveButton = settingsModal.querySelector('button[type="submit"]');
+        if (saveButton) {
+            saveButton.textContent = DOM.getText('save');
+        }
+    }
 }
 
 // YENİ: Workspace adını ayarlama fonksiyonu (şimdilik sadece state'de tutuyoruz)

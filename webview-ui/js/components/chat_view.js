@@ -74,15 +74,15 @@ function addCodeBlockActions(element) {
         const copyButton = document.createElement('button');
         copyButton.className = 'code-action-button';
         copyButton.innerHTML = DOM.COPY_ICON_SVG; // Sadece ikon
-        copyButton.title = 'Kopyala'; // Tooltip metni
+        copyButton.title = DOM.getText('copy'); // Tooltip metni
         copyButton.addEventListener('click', () => {
             const codeToCopy = codeElement.textContent;
             navigator.clipboard.writeText(codeToCopy).then(() => {
                 copyButton.innerHTML = DOM.COPY_ICON_SVG; // Sadece ikon
-                copyButton.title = 'Kopyalandı!'; // Tooltip metni
+                copyButton.title = DOM.getText('copied'); // Tooltip metni
                 setTimeout(() => { 
                     copyButton.innerHTML = DOM.COPY_ICON_SVG; 
-                    copyButton.title = 'Kopyala';
+                    copyButton.title = DOM.getText('copy');
                 }, 2000);
             });
         });
@@ -91,7 +91,7 @@ function addCodeBlockActions(element) {
         const applyButton = document.createElement('button');
         applyButton.className = 'code-action-button apply-button';
         applyButton.innerHTML = DOM.APPLY_ICON_SVG; // Sadece ikon
-        applyButton.title = 'Değişikliği Uygula'; // Tooltip metni
+        applyButton.title = DOM.getText('apply'); // Tooltip metni
 
         // Başlangıçta butonun görünürlüğünü ayarla
         updateApplyButtonVisibility(applyButton); 
@@ -102,11 +102,11 @@ function addCodeBlockActions(element) {
             postMessage('applyCodeChange', { newCode: codeToApply });
             
             applyButton.innerHTML = DOM.APPLY_ICON_SVG; // Sadece ikon
-            applyButton.title = 'Uygulandı!'; // Tooltip metni
+            applyButton.title = DOM.getText('applied'); // Tooltip metni
             applyButton.disabled = true;
             setTimeout(() => { 
                 applyButton.innerHTML = DOM.APPLY_ICON_SVG; 
-                applyButton.title = 'Değişikliği Uygula';
+                applyButton.title = DOM.getText('apply');
                 applyButton.disabled = false;
             }, 2500);
         });
@@ -150,7 +150,7 @@ function processTypingQueue() {
     }
     const contentElement = placeholder.querySelector('.message-content');
 
-    if (contentElement.textContent === 'İvme düşünüyor...') {
+    if (contentElement.textContent === DOM.getText('thinking')) {
         contentElement.innerHTML = '';
     }
 
@@ -238,7 +238,7 @@ export function addAiResponsePlaceholder() {
     streamHasEnded = false;
     isStreamingCancelled = false;
 
-    const messageElement = createMessageElement('assistant', 'İvme düşünüyor...');
+    const messageElement = createMessageElement('assistant', DOM.getText('thinking'));
     messageElement.id = 'ai-streaming-placeholder';
     const avatarWrapper = messageElement.querySelector('.avatar-wrapper');
     avatarWrapper.classList.add('loading');

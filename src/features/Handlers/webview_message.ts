@@ -155,6 +155,8 @@ export class WebviewMessageHandler {
                 setPromptLanguage(data.payload.language);
                 const prompt = createInitialSystemPrompt();
                 this.conversationManager.updateSystemPrompt(prompt);
+                // Webview'e dil değişikliği mesajı gönder
+                this.webview.postMessage({ type: 'languageChanged', payload: { language: data.payload.language } });
                 break;
         }
     }

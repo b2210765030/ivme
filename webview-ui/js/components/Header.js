@@ -5,7 +5,7 @@
 
 import * as DOM from '../utils/dom.js';
 import * as VsCode from '../services/vscode.js';
-import { getState, setAgentMode, setLanguage, setIndexingActive } from '../core/state.js';
+import { getState, setAgentMode, setLanguage, setIndexingActive, updateUITexts } from '../core/state.js';
 
 // --- Public Fonksiyonlar ---
 
@@ -21,10 +21,14 @@ export function init() {
         languageToggle.checked = getState().currentLanguage === 'en';
         setLanguage(getState().currentLanguage);
 
+        // Sayfa yüklendiğinde UI metinlerini güncelle
+        updateUITexts();
+
         VsCode.postMessage('languageChanged', { language: getState().currentLanguage });
         languageToggle.addEventListener('change', () => {
             const lang = languageToggle.checked ? 'en' : 'tr';
             setLanguage(lang);
+            updateUITexts(); // UI metinlerini güncelle
             VsCode.postMessage('languageChanged', { language: lang });
         });
     }
