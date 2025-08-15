@@ -302,26 +302,26 @@
     background-color: var(--vscode-toolbar-hoverBackground);
 }
 
-/* Smaller hit area for indexer buttons */
+/* Indexer buttons - agent bağlam butonu ile aynı boyut */
 #indexer-start-button, #indexer-cancel-button {
-	width: 28px;
-	height: 28px;
+	width: auto;
+	height: auto;
 	z-index: 2;
 	--ring-color: #8ab4f8; /* soft blue */
 }
 
-/* Index icon size remains consistent */
+/* Index icon size - agent bağlam butonu ile aynı */
 #indexer-start-button .index-icon {
-	width: 15px;
-	height: 15px;
+	width: 20px;
+	height: 20px;
 	filter: invert(1);
 }
 
-/* Ring progress: fit to smaller button */
+/* Ring progress: fit to button size */
 #indexer-start-button::after, #indexer-cancel-button::after {
 	content: '';
 	position: absolute;
-	inset: 1px; /* tighter inside the smaller button */
+	inset: 2px; /* adjusted for larger button */
 	border-radius: 50%;
 	display: block;
 	background: conic-gradient(var(--ring-color) calc(var(--ring-progress, 0) * 1%), #0000 0);
@@ -431,34 +431,33 @@
     filter: brightness(1.1);
 }
 
-/* İndeksleme butonları */
+/* İndeksleme butonları - agent bağlam butonu ile aynı stil */
 #indexer-start-button,
 #indexer-cancel-button {
     background: none;
     border: none;
-    color: var(--vscode-button-foreground);
     cursor: pointer;
     padding: 4px;
-    border-radius: 4px;
-    transition: all 0.2s ease;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
+    color: var(--vscode-icon-foreground);
+    opacity: 0.7;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
 }
 
 #indexer-start-button:hover,
 #indexer-cancel-button:hover {
-    background-color: var(--vscode-button-hoverBackground);
+    background-color: var(--vscode-toolbar-hoverBackground);
+    opacity: 1;
 }
 
 #indexer-start-button.indexing-enabled {
     background-color: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    box-shadow: 0 0 0 2px var(--vscode-focusBorder);
-    border: 1px solid var(--vscode-button-border);
+    opacity: 1;
 }
 
 #indexer-start-button.indexing-enabled:hover {
     background-color: var(--vscode-button-hoverBackground);
-    box-shadow: 0 0 0 2px var(--vscode-focusBorder);
 }
