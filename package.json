@@ -128,7 +128,10 @@
           "default": [
             "**/node_modules/**",
             "**/dist/**",
-            "**/out/**"
+            "**/out/**",
+            "**/.git/**",
+            "**/.ivme/**",
+            "**/.vscode/**"
           ],
           "items": {
             "type": "string"

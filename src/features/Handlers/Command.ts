@@ -14,6 +14,7 @@ import { COMMAND_IDS, UI_MESSAGES, EXTENSION_NAME, EXTENSION_ID, API_SERVICES } 
 import { cleanLLMCodeBlock } from '../../core/utils';
 import { ApplyFixArgs} from '../../types/index';
 import { ProjectIndexer } from '../../services/indexer';
+import { PlannerIndexer } from '../../services/planner_indexer';
 import { loadVectorStoreChunks, topKByEmbedding } from '../../services/vector_store';
 import * as path from 'path';
 
@@ -116,6 +117,7 @@ export class CommandHandler {
 
         const providerContext = (this.chatProvider as any)._context as vscode.ExtensionContext;
         const indexer = new ProjectIndexer(this.apiManager, providerContext);
+        const plannerIndexer = new PlannerIndexer(this.apiManager, providerContext);
         
         await vscode.window.withProgress({ 
             location: vscode.ProgressLocation.Notification, 
@@ -127,12 +129,23 @@ export class CommandHandler {
                 this.chatProvider['_view']?.webview.postMessage({ type: 'indexingProgress', payload: { message: 'Dosyalar taranıyor...', percent: 1 } });
                 const result = await indexer.indexWorkspace({
                     report: ({ message, percent }: { message?: string; percent?: number }) => {
-                        this.chatProvider['_view']?.webview.postMessage({ type: 'indexingProgress', payload: { message, percent } });
+                        const clamped = typeof percent === 'number' ? Math.min(95, Math.max(1, Math.round(percent))) : undefined;
+                        this.chatProvider['_view']?.webview.postMessage({ type: 'indexingProgress', payload: { message, percent: clamped } });
                     }
                 } as { report: (arg: { message?: string; percent?: number }) => void });
+
+                // Planner mimari indeksleme ve .indexignore dosyasını oluşturma
+                this.chatProvider['_view']?.webview.postMessage({ type: 'indexingProgress', payload: { message: 'Planner: Mimari index başlatılıyor...', percent: 95 } });
+                await plannerIndexer.buildPlannerIndex({
+                    report: ({ message, percent }: { message?: string; percent?: number }) => {
+                        const p = typeof percent === 'number' ? Math.max(95, Math.min(100, Math.round(percent))) : undefined;
+                        this.chatProvider['_view']?.webview.postMessage({ type: 'indexingProgress', payload: { message, percent: p } });
+                    }
+                });
+
                 this.chatProvider['_view']?.webview.postMessage({ type: 'indexingDone' });
                 console.log(`[Indexer] Tamamlandı. Toplam parça: ${result.chunks.length}`);
-                vscode.window.showInformationMessage(`İndeksleme tamamlandı. ${result.chunks.length} parça bulundu. (${workspaceFolder.name})`);
+                vscode.window.showInformationMessage(`İndeksleme tamamlandı. ${result.chunks.length} parça bulundu ve mimari harita oluşturuldu. (${workspaceFolder.name})`);
             } catch (e: any) {
                 this.chatProvider['_view']?.webview.postMessage({ type: 'indexingDone' });
                 vscode.window.showErrorMessage(`İndeksleme başarısız: ${e?.message || e}`);
