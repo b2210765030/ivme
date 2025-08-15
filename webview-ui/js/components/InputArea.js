@@ -110,28 +110,17 @@ export function updateInputAndButtonState(limitExceeded = false) {
 }
 
 export function setPlaceholder(text = null) {
-    const { isAiResponding, currentLanguage, indexingMessage } = getState();
-    const isEn = currentLanguage === 'en';
+    const { isAiResponding } = getState();
 
     if (text !== null) {
         DOM.input.placeholder = text;
         return;
     }
 
-    // Öncelik: indeksleme mesajı (devam ederken veya tamamlandıktan sonra)
-    if (indexingMessage && indexingMessage.trim().length > 0) {
-        DOM.input.placeholder = indexingMessage;
-        return;
-    }
-
     if (isAiResponding) {
-        DOM.input.placeholder = isEn
-            ? 'İvme is responding, please wait...'
-            : 'İvme yanıtlıyor, lütfen bekleyin...';
+        DOM.input.placeholder = 'İvme yanıtlıyor, lütfen bekleyin...';
     } else {
-        DOM.input.placeholder = isEn
-            ? 'Ask a question or attach a file...'
-            : 'Bir soru sorun veya dosya ekleyin...';
+        DOM.input.placeholder = 'ivmeye soru sorun...';
     }
 }
 

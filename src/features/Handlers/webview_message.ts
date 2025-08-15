@@ -147,6 +147,10 @@ export class WebviewMessageHandler {
                 }
                 break;
 
+            case 'agentBarExpandedChanged':
+                this.settingsManager.saveAgentBarExpandedState(data.payload.isExpanded);
+                break;
+
             case 'languageChanged':
                 setPromptLanguage(data.payload.language);
                 const prompt = createInitialSystemPrompt();
@@ -168,14 +172,27 @@ export class WebviewMessageHandler {
         const { ProjectIndexer } = await import('../../services/indexer.js');
         const indexer = new ProjectIndexer(this.messageHandler['apiManager'], this.conversationManager.getExtensionContext());
         
+        // Workspace'de indexing dosyası var mı kontrol et
+        const isIndexed = await indexer.isWorkspaceIndexed();
         const isEnabled = await indexer.getIndexingEnabled();
         
-        this.webview.postMessage({
-            type: 'indexingStatus',
-            payload: {
-                isEnabled
-            }
-        });
+        // Eğer indexing dosyası yoksa ama enabled true ise, false yap
+        if (!isIndexed && isEnabled) {
+            await indexer.setIndexingEnabled(false);
+            this.webview.postMessage({
+                type: 'indexingStatus',
+                payload: {
+                    isEnabled: false
+                }
+            });
+        } else {
+            this.webview.postMessage({
+                type: 'indexingStatus',
+                payload: {
+                    isEnabled
+                }
+            });
+        }
     }
 
     private handleNewChat() {

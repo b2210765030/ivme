@@ -26,11 +26,14 @@ export class ProjectIndexer {
     constructor(private readonly apiManager: ApiServiceManager, private readonly context: vscode.ExtensionContext) {}
 
     public async isWorkspaceIndexed(): Promise<boolean> {
-        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
-        const customPath = config.get<string>(SETTINGS_KEYS.indexingVectorStorePath);
-        const storageUri = customPath
-            ? vscode.Uri.file(customPath)
-            : vscode.Uri.joinPath(this.context.globalStorageUri, 'vector_store.json');
+        // Workspace-specific vector store path
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            return false;
+        }
+
+        const ivmeDir = vscode.Uri.joinPath(workspaceFolder.uri, '.ivme');
+        const storageUri = vscode.Uri.joinPath(ivmeDir, 'vector_store.json');
 
         try {
             const buf = await vscode.workspace.fs.readFile(storageUri);
@@ -482,22 +485,24 @@ export class ProjectIndexer {
     }
 
     private async writeToLocalVectorStore(chunks: CodeChunkMetadata[]): Promise<void> {
-        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
-        const customPath = config.get<string>(SETTINGS_KEYS.indexingVectorStorePath);
-        const storageUri = customPath
-            ? vscode.Uri.file(customPath)
-            : vscode.Uri.joinPath(this.context.globalStorageUri, 'vector_store.json');
+        // Workspace-specific vector store path
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            throw new Error('Aktif workspace bulunamadı');
+        }
 
-        const dirUri = customPath
-            ? vscode.Uri.file(path.dirname(storageUri.fsPath))
-            : this.context.globalStorageUri;
+        // Workspace root'ta .ivme klasörü oluştur
+        const ivmeDir = vscode.Uri.joinPath(workspaceFolder.uri, '.ivme');
+        const storageUri = vscode.Uri.joinPath(ivmeDir, 'vector_store.json');
 
         try {
-            await vscode.workspace.fs.createDirectory(dirUri);
+            await vscode.workspace.fs.createDirectory(ivmeDir);
         } catch {}
 
         const contentBytes = Buffer.from(JSON.stringify({ chunks }, null, 2), 'utf8');
         await vscode.workspace.fs.writeFile(storageUri, contentBytes);
+        
+        console.log(`[Indexer] Vector store kaydedildi: ${storageUri.fsPath}`);
         
         // İndeksleme tamamlandığında ayarı aktif et
         await this.setIndexingEnabled(true);

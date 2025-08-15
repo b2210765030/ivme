@@ -9,10 +9,10 @@ import { updateInputAndButtonState, setPlaceholder } from '../components/InputAr
 let isAiResponding = false;
 let currentAnimationEffect = 'streaming';
 let isBackgroundVideoEnabled = localStorage.getItem('backgroundVideoEnabled') !== 'false';
-let isAgentModeActive = false; // YENİ: Agent modu durumu
+let isAgentModeActive = localStorage.getItem('agentModeActive') === 'true'; // Agent modu durumu - localStorage'dan yükle
 let currentAgentFileName = '';
 let isAgentSelectionActive = false; // YENİ: Agent modunda seçili alan olup olmadığını gösterir.
-let isAgentBarExpanded = false; // YENİ: Agent bağlam barının açık/kapalı durumu
+let isAgentBarExpanded = localStorage.getItem('agentBarExpanded') === 'true'; // Agent bağlam barının açık/kapalı durumu - localStorage'dan yükle
 
 let currentLanguage = localStorage.getItem('language') || 'tr';
 
@@ -20,7 +20,8 @@ let currentLanguage = localStorage.getItem('language') || 'tr';
 let isIndexing = false;
 let indexingProgress = 0; // 0..100
 let indexingMessage = '';
-let isIndexingEnabled = false; // YENİ: İndeksleme açık/kapalı durumu
+let isIndexingEnabled = localStorage.getItem('indexingEnabled') === 'true'; // İndeksleme açık/kapalı durumu - localStorage'dan yükle
+let currentWorkspaceName = ''; // YENİ: Aktif workspace adı
 
 // Konuşma başladıktan sonra dil ve agent modunun kilitlenmesi için bayrak
 let isConversationLocked = false;
@@ -61,11 +62,15 @@ export function setAiResponding(value) {
 // YENİ: Agent bağlam barı görünürlük bayrağı
 export function setAgentBarExpanded(value) {
     isAgentBarExpanded = !!value;
+    // Bar durumunu localStorage'a kaydet
+    localStorage.setItem('agentBarExpanded', isAgentBarExpanded.toString());
 }
 
 // GÜNCELLENDİ: Agent modunu dosya adına göre güncelleyen fonksiyon
 export function setAgentMode(isActive, activeFileName = '') {
     isAgentModeActive = isActive;
+    // Mod durumunu localStorage'a kaydet
+    localStorage.setItem('agentModeActive', isActive.toString());
     const agentModeButton = document.getElementById('agent-mode-button');
     const agentStatusBar = document.getElementById('agent-status-bar');
     const agentCollapsedBtn = document.getElementById('agent-status-collapsed');
@@ -96,23 +101,23 @@ export function setAgentMode(isActive, activeFileName = '') {
             const text = activeFileName || currentAgentFileName;
             if (text) {
                 agentStatusText.textContent = text;
-                // Bar açık ise barı göster, değilse sadece ikon göster
-                if (agentCollapsedBtn) {
-                    if (isAgentBarExpanded) {
-                        agentCollapsedBtn.classList.add('hidden');
-                        agentStatusBar.classList.remove('hidden');
-                    } else {
-                        agentCollapsedBtn.classList.remove('hidden');
-                        agentStatusBar.classList.add('hidden');
-                    }
-                }
-                // Seçim yokken kaldırma butonunu gizle
-                if (agentRemoveBtn) agentRemoveBtn.classList.add('hidden');
             } else {
-                // Suppressed durumunda metin boş gelirse, barı gizle
-                agentStatusBar.classList.add('hidden');
-                if (agentCollapsedBtn) agentCollapsedBtn.classList.add('hidden');
+                // Dosya adı yoksa varsayılan metin göster
+                agentStatusText.textContent = 'Agent Modu';
             }
+            
+            // Bar açık ise barı göster, değilse sadece ikon göster
+            if (agentCollapsedBtn) {
+                if (isAgentBarExpanded) {
+                    agentCollapsedBtn.classList.add('hidden');
+                    agentStatusBar.classList.remove('hidden');
+                } else {
+                    agentCollapsedBtn.classList.remove('hidden');
+                    agentStatusBar.classList.add('hidden');
+                }
+            }
+            // Seçim yokken kaldırma butonunu gizle
+            if (agentRemoveBtn) agentRemoveBtn.classList.add('hidden');
         }
         // Agent modu açıldığında indeksleme durumunu kontrol et
         checkAndUpdateIndexingState();
@@ -126,7 +131,8 @@ export function setAgentMode(isActive, activeFileName = '') {
         if (agentStatusBar) agentStatusBar.classList.add('hidden');
         if (agentCollapsedBtn) agentCollapsedBtn.classList.add('hidden');
         currentAgentFileName = '';
-        isAgentBarExpanded = false;
+        // isAgentBarExpanded'ı sıfırlamayalım, sadece UI'ı gizleyelim
+        // Index butonunu da sıfırlamayalım, sadece UI'ı gizleyelim
     }
 }
 
@@ -167,6 +173,8 @@ export function updateIndexerProgress(value, message = '') {
 // YENİ: İndeksleme açık/kapalı durumunu ayarlar
 export function setIndexingEnabledState(enabled) {
     isIndexingEnabled = enabled;
+    // İndeksleme durumunu localStorage'a kaydet
+    localStorage.setItem('indexingEnabled', isIndexingEnabled.toString());
     const startBtn = DOM.indexerStartButton;
     if (startBtn) {
         if (enabled) {
@@ -324,9 +332,12 @@ export function setLanguage(lang) {
             : 'Kod geliştirme ve analiz süreçlerinizi yapay zeka ile hızlandırın.';
     }
     if (input) {
-        input.setAttribute('placeholder', (lang === 'en')
-            ? 'Ask a question or attach a file...'
-            : 'Bir soru sorun veya dosya ekleyin...');
+        input.setAttribute('placeholder', 'ivmeye soru sorun...');
     }
     setPlaceholder();
+}
+
+// YENİ: Workspace adını ayarlama fonksiyonu (şimdilik sadece state'de tutuyoruz)
+export function setWorkspaceName(workspaceName) {
+    currentWorkspaceName = workspaceName;
 }

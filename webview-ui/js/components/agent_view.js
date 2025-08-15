@@ -21,6 +21,7 @@ export function init() {
             collapsedBtn.classList.add('hidden');
             setAgentBarExpanded(true);
             VsCode.postMessage('toggleAgentFileSuppressed', { suppressed: false });
+            VsCode.postMessage('agentBarExpandedChanged', { isExpanded: true });
             // Dosya adı metni server tarafından update ediliyor; burada ek işlem yok
         });
     }
@@ -33,41 +34,35 @@ export function init() {
             collapsedBtn.classList.remove('hidden');
             setAgentBarExpanded(false);
             VsCode.postMessage('toggleAgentFileSuppressed', { suppressed: true });
+            VsCode.postMessage('agentBarExpandedChanged', { isExpanded: false });
         });
     }
-        if (modeButton && menu) {
-        // Butona tıklayınca menüyü toggle et
+        if (modeButton) {
+        // Butona tıklayınca direkt mod değiştir
         modeButton.addEventListener('click', (e) => {
             e.stopPropagation();
-            // Konteyner relative olduğundan basitçe butonun altına koy
-            menu.style.left = `${modeButton.offsetLeft}px`;
-            menu.style.top = `${modeButton.offsetTop + modeButton.offsetHeight + 4}px`;
-            menu.classList.toggle('hidden');
+            
+            // Mevcut modu kontrol et ve tersini yap
+            const currentText = modeButton.textContent;
+            const isCurrentlyAgent = currentText === 'Agent';
+            const newIsAgent = !isCurrentlyAgent;
+            
+            // Buton metnini güncelle
+            modeButton.textContent = newIsAgent ? 'Agent' : 'Chat';
+            
+            // VS Code'a mod değişikliğini bildir
+            VsCode.postMessage('agentModeToggled', { isActive: newIsAgent, language: undefined });
+            
+            // UI'ı güncelle
+            if (collapsedBtn && agentStatusBar) {
+                if (newIsAgent) {
+                    collapsedBtn.classList.remove('hidden');
+                    agentStatusBar.classList.add('hidden');
+                } else {
+                    collapsedBtn.classList.add('hidden');
+                    agentStatusBar.classList.add('hidden');
+                }
+            }
         });
-
-        // Menü içi seçim
-        menu.querySelectorAll('.agent-mode-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const mode = item.getAttribute('data-mode');
-                const isAgent = mode === 'agent';
-                modeButton.textContent = isAgent ? 'Agent' : 'Chat';
-                VsCode.postMessage('agentModeToggled', { isActive: isAgent, language: undefined });
-                    menu.classList.add('hidden');
-                    // Mod açılırsa ikon butonu göster, bar gizli kalsın (kullanıcı tıklayana kadar)
-                    if (collapsedBtn && agentStatusBar) {
-                        if (isAgent) {
-                            collapsedBtn.classList.remove('hidden');
-                            agentStatusBar.classList.add('hidden');
-                        } else {
-                            collapsedBtn.classList.add('hidden');
-                            agentStatusBar.classList.add('hidden');
-                        }
-                    }
-            });
-        });
-
-        // Dışarı tıklayınca kapat
-        document.addEventListener('click', () => menu.classList.add('hidden'));
     }
 }

@@ -98,13 +98,22 @@ export class InteractionHandler {
             // YENİ: Talimat oluşturma işlemi `promptBuilder`'a devredildi.
             const contextualContent = createContextualPrompt(lastUserMessage, this.contextManager);
             
-            // Faz 2: retrieval ile bağlam oluştur ve mesaja ekle
-            try {
-                const contextText = await build_context_for_query(this.conversationManager.getExtensionContext(), this.apiManager, lastUserMessage.content);
-                const merged = `${contextualContent}\n\n<retrieved_context>\n${contextText}\n</retrieved_context>`;
-                limitedHistory[lastUserMessageIndex] = { role: 'user', content: merged };
-            } catch (e) {
-                console.warn('[Interaction] Retrieval başarısız, bağlam eklenmeden devam ediliyor:', e);
+            // YENİ: Sadece Agent modunda index retrieval yap
+            // Chat modunda sadece contextual content kullan
+            const isAgentModeActive = config.get<boolean>(SETTINGS_KEYS.agentModeActive, false);
+            
+            if (isAgentModeActive) {
+                // Agent modunda: retrieval ile bağlam oluştur ve mesaja ekle
+                try {
+                    const contextText = await build_context_for_query(this.conversationManager.getExtensionContext(), this.apiManager, lastUserMessage.content);
+                    const merged = `${contextualContent}\n\n<retrieved_context>\n${contextText}\n</retrieved_context>`;
+                    limitedHistory[lastUserMessageIndex] = { role: 'user', content: merged };
+                } catch (e) {
+                    console.warn('[Interaction] Retrieval başarısız, bağlam eklenmeden devam ediliyor:', e);
+                    limitedHistory[lastUserMessageIndex] = { role: 'user', content: contextualContent };
+                }
+            } else {
+                // Chat modunda: sadece contextual content kullan, retrieval yapma
                 limitedHistory[lastUserMessageIndex] = { role: 'user', content: contextualContent };
             }
         }

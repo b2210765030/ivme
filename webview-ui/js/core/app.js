@@ -7,7 +7,7 @@ import { configureLibraries } from '../utils/config.js';
 import { initMessageListener } from './message_router.js';
 import { initComponents } from '../components/index.js';
 // YENİ: Gerekli state fonksiyonu import edildi
-import { applyVideoState } from './state.js';
+import { applyVideoState, setAgentMode, setAgentBarExpanded, setIndexingEnabledState } from './state.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log("İvme Chat UI Başlatılıyor...");
@@ -23,6 +23,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 4. YENİ: Başlangıç arayüz durumlarını uygula
     applyVideoState();
+
+    // 5. YENİ: Kaydedilmiş mod durumunu yükle ve UI'ı güncelle
+    const savedAgentMode = localStorage.getItem('agentModeActive') === 'true';
+    const savedAgentBarExpanded = localStorage.getItem('agentBarExpanded') === 'true';
+    const savedIndexingEnabled = localStorage.getItem('indexingEnabled') === 'true';
+    
+    setAgentMode(savedAgentMode, '');
+    
+    // Agent modu aktifse ve bar durumu kaydedilmişse, bar durumunu da yükle
+    if (savedAgentMode && savedAgentBarExpanded !== null) {
+        setAgentBarExpanded(savedAgentBarExpanded);
+    }
+
+    // İndeksleme durumunu yükle
+    if (savedIndexingEnabled !== null) {
+        setIndexingEnabledState(savedIndexingEnabled);
+    }
 
     console.log("İvme Chat UI Hazır.");
 });

@@ -47,6 +47,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.contextManager = new ContextManager();
         this.settingsManager = new SettingsManager();
 
+        // Extension açılışında kaydedilmiş mod durumunu yükle
+        this.loadSavedAgentMode();
+        
+        // Workspace indexing durumunu kontrol et
+        this.checkWorkspaceIndexingStatus();
+
         this._context.subscriptions.push(
             vscode.window.onDidChangeActiveTextEditor(editor => {
                 this.handleEditorChange(editor);
@@ -54,14 +60,38 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             vscode.window.onDidChangeTextEditorSelection(event => {
                 // Her seçimde doğrudan çalıştırmak yerine debouncer'ı çağır.
                 this.debouncedHandleSelectionChange(event);
+            }),
+            vscode.workspace.onDidChangeWorkspaceFolders(() => {
+                // Workspace değiştiğinde indexing durumunu kontrol et
+                this.checkWorkspaceIndexingStatus();
             })
         );
+    }
+
+    private loadSavedAgentMode() {
+        const savedAgentMode = this.settingsManager.getAgentModeState();
+        this.isAgentModeActive = savedAgentMode;
+    }
+
+    private loadSavedAgentBarState() {
+        const savedAgentBarExpanded = this.settingsManager.getAgentBarExpandedState();
+        return savedAgentBarExpanded;
     }
     
     public setAgentMode(isActive: boolean): void {
         this.isAgentModeActive = isActive;
+        
+        // Mod durumunu kalıcı olarak kaydet
+        this.settingsManager.saveAgentModeState(isActive);
+        
         if (!isActive && this._view) {
+            // Chat moduna geçildiğinde agent bağlamlarını temizle
             this.contextManager.clearAgentContexts(this._view.webview);
+            // Agent bağlam barını gizle
+            this._view.webview.postMessage({
+                type: 'updateAgentStatus',
+                payload: { isActive: false }
+            });
         }
         this.handleEditorChange(vscode.window.activeTextEditor);
     }
@@ -74,10 +104,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             const fileName = path.basename(document.fileName);
             const fileContent = document.getText();
             
-            // Suppressed ise aktif bağlamı güncellemeyelim, sadece UI'a mod durumunu gönderelim
-            if (!this.contextManager.agentFileSuppressed) {
-                this.contextManager.setAgentFileContext(document.uri, fileContent, this._view.webview);
-            }
+            // Dosya bağlamını her zaman yükle, suppressed durumuna göre UI'da göster/gizle
+            this.contextManager.setAgentFileContext(document.uri, fileContent, this._view.webview);
 
             this._view.webview.postMessage({
                 type: 'updateAgentStatus',
@@ -201,6 +229,79 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 this.webviewMessageHandler?.sendIndexingStatus();
             }
         });
+
+        // Webview açıldığında kaydedilmiş mod durumunu gönder
+        this.sendSavedAgentModeToWebview();
+        
+        // Workspace bilgisini gönder
+        this.sendWorkspaceInfoToWebview();
+    }
+
+    private sendSavedAgentModeToWebview() {
+        if (this._view) {
+            const savedAgentBarExpanded = this.loadSavedAgentBarState();
+            
+            // Agent bar durumunu context manager'a bildir
+            this.contextManager.agentFileSuppressed = !savedAgentBarExpanded;
+            
+            this._view.webview.postMessage({
+                type: 'restoreAgentMode',
+                payload: { 
+                    isActive: this.isAgentModeActive,
+                    isBarExpanded: savedAgentBarExpanded
+                }
+            });
+            
+            // Agent modu aktifse ve aktif editör varsa dosya bağlamını yükle
+            if (this.isAgentModeActive) {
+                const activeEditor = vscode.window.activeTextEditor;
+                if (activeEditor) {
+                    this.handleEditorChange(activeEditor);
+                }
+            }
+        }
+    }
+
+    private sendWorkspaceInfoToWebview() {
+        if (this._view) {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (workspaceFolder) {
+                this._view.webview.postMessage({
+                    type: 'workspaceInfo',
+                    payload: { 
+                        workspaceName: workspaceFolder.name
+                    }
+                });
+            }
+        }
+    }
+
+    private async checkWorkspaceIndexingStatus() {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            // Workspace yoksa indexing'i kapat
+            await this.settingsManager.saveIndexingEnabled(false);
+            return;
+        }
+
+        // Workspace'de indexing dosyası var mı kontrol et
+        const ivmeDir = vscode.Uri.joinPath(workspaceFolder.uri, '.ivme');
+        const vectorStorePath = vscode.Uri.joinPath(ivmeDir, 'vector_store.json');
+
+        try {
+            await vscode.workspace.fs.stat(vectorStorePath);
+            // Dosya varsa, önceki indexing durumunu koru
+            console.log(`[ChatViewProvider] Indexing dosyası bulundu: ${vectorStorePath.fsPath}`);
+        } catch (e) {
+            // Dosya yoksa indexing'i kapat
+            console.log(`[ChatViewProvider] Indexing dosyası bulunamadı, indexing kapatılıyor: ${vectorStorePath.fsPath}`);
+            await this.settingsManager.saveIndexingEnabled(false);
+        }
+
+        // Webview'a güncel durumu gönder
+        if (this._view) {
+            this.webviewMessageHandler?.sendIndexingStatus();
+        }
     }
     
     public setActiveContext(uri: vscode.Uri, selection: vscode.Selection, text: string) {

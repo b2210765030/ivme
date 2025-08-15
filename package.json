@@ -171,6 +171,16 @@
           "type": "number",
           "default": 2,
           "description": "Sohbete gönderilecek önceki mesaj sayısı (bir kullanıcı ve bir asistan mesajı 1 sayılır). Modelin bağlamı hatırlaması için kullanılır."
+        },
+        "baykar-ai-fixer.ui.agentModeActive": {
+          "type": "boolean",
+          "default": false,
+          "description": "Agent modunun aktif olup olmadığını belirtir. Bu ayar extension yeniden başlatıldığında mod durumunu korumak için kullanılır."
+        },
+        "baykar-ai-fixer.ui.agentBarExpanded": {
+          "type": "boolean",
+          "default": false,
+          "description": "Agent bağlam barının açık olup olmadığını belirtir. Bu ayar extension yeniden başlatıldığında bar durumunu korumak için kullanılır."
         }
       }
     }

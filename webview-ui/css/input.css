@@ -136,34 +136,7 @@
     border-color: var(--vscode-focusBorder);
 }
 
-/* Mod seçim menüsü */
-.agent-mode-menu {
-    position: fixed;
-    background: var(--vscode-editor-background);
-    border: 1px solid var(--vscode-input-border);
-    border-radius: 8px;
-    padding: 6px;
-    display: flex;
-    gap: 4px;
-    z-index: 1000;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
-}
 
-.agent-mode-menu.hidden { display: none; }
-
-.agent-mode-item {
-    background: var(--vscode-button-secondaryBackground, rgba(255,255,255,0.06));
-    color: var(--vscode-foreground);
-    border: 1px solid var(--vscode-input-border);
-    border-radius: 6px;
-    padding: 4px 8px;
-    cursor: pointer;
-    font-size: 12px;
-}
-
-.agent-mode-item:hover {
-    filter: brightness(1.2);
-}
 
 .character-counter {
     font-size: 11px;
@@ -230,6 +203,8 @@
 	z-index: 3;
 	will-change: background;
 }
+
+
 
 #attach-file-button img {
     width: 24px;

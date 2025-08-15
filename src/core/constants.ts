@@ -42,7 +42,10 @@ export const SETTINGS_KEYS = {
     geminiApiKey: 'gemini.apiKey',
     // Optional reranker (e.g., Cohere)
     cohereApiKey: 'retrieval.cohereApiKey',
-    conversationHistoryLimit: 'chat.conversationHistoryLimit' 
+    conversationHistoryLimit: 'chat.conversationHistoryLimit',
+    // UI State
+    agentModeActive: 'ui.agentModeActive',
+    agentBarExpanded: 'ui.agentBarExpanded'
 };
 
 // --- Gemini Model Adı ---

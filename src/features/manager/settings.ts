@@ -17,7 +17,8 @@ export class SettingsManager {
                 vllmBaseUrl: config.get<string>(SETTINGS_KEYS.vllmBaseUrl, ''),
                 vllmModelName: config.get<string>(SETTINGS_KEYS.vllmModelName, ''),
                 geminiApiKey: config.get<string>(SETTINGS_KEYS.geminiApiKey, ''),
-                conversationHistoryLimit: config.get<number>(SETTINGS_KEYS.conversationHistoryLimit, 2)
+                conversationHistoryLimit: config.get<number>(SETTINGS_KEYS.conversationHistoryLimit, 2),
+                agentModeActive: config.get<boolean>(SETTINGS_KEYS.agentModeActive, false)
             }
         });
     }
@@ -64,5 +65,47 @@ export class SettingsManager {
                 payload: { success: false, message }
             });
         }
+    }
+
+    public async saveAgentModeState(isActive: boolean) {
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        try {
+            await config.update(SETTINGS_KEYS.agentModeActive, isActive, vscode.ConfigurationTarget.Global);
+        } catch (error) {
+            console.error("Failed to save agent mode state:", error);
+        }
+    }
+
+    public getAgentModeState(): boolean {
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        return config.get<boolean>(SETTINGS_KEYS.agentModeActive, false);
+    }
+
+    public async saveAgentBarExpandedState(isExpanded: boolean) {
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        try {
+            await config.update(SETTINGS_KEYS.agentBarExpanded, isExpanded, vscode.ConfigurationTarget.Global);
+        } catch (error) {
+            console.error("Failed to save agent bar expanded state:", error);
+        }
+    }
+
+    public getAgentBarExpandedState(): boolean {
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        return config.get<boolean>(SETTINGS_KEYS.agentBarExpanded, false);
+    }
+
+    public async saveIndexingEnabled(enabled: boolean) {
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        try {
+            await config.update(SETTINGS_KEYS.indexingEnabled, enabled, vscode.ConfigurationTarget.Workspace);
+        } catch (error) {
+            console.error("Failed to save indexing enabled state:", error);
+        }
+    }
+
+    public getIndexingEnabled(): boolean {
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        return config.get<boolean>(SETTINGS_KEYS.indexingEnabled, false);
     }
 }

@@ -105,12 +105,23 @@ export class CommandHandler {
     }
 
     /**
-     * Proje indeksleme akışını başlatır.
+     * Workspace-specific proje indeksleme akışını başlatır.
      */
     public async indexProject() {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            vscode.window.showErrorMessage('Aktif workspace bulunamadı. Lütfen bir klasör açın.');
+            return;
+        }
+
         const providerContext = (this.chatProvider as any)._context as vscode.ExtensionContext;
         const indexer = new ProjectIndexer(this.apiManager, providerContext);
-        await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Proje indeksleniyor...', cancellable: false }, async (progress) => {
+        
+        await vscode.window.withProgress({ 
+            location: vscode.ProgressLocation.Notification, 
+            title: `Proje indeksleniyor: ${workspaceFolder.name}`, 
+            cancellable: false 
+        }, async (progress) => {
             try {
                 // Başlangıç mesajı
                 this.chatProvider['_view']?.webview.postMessage({ type: 'indexingProgress', payload: { message: 'Dosyalar taranıyor...', percent: 1 } });
@@ -121,7 +132,7 @@ export class CommandHandler {
                 } as { report: (arg: { message?: string; percent?: number }) => void });
                 this.chatProvider['_view']?.webview.postMessage({ type: 'indexingDone' });
                 console.log(`[Indexer] Tamamlandı. Toplam parça: ${result.chunks.length}`);
-                vscode.window.showInformationMessage(`İndeksleme tamamlandı. ${result.chunks.length} parça bulundu.`);
+                vscode.window.showInformationMessage(`İndeksleme tamamlandı. ${result.chunks.length} parça bulundu. (${workspaceFolder.name})`);
             } catch (e: any) {
                 this.chatProvider['_view']?.webview.postMessage({ type: 'indexingDone' });
                 vscode.window.showErrorMessage(`İndeksleme başarısız: ${e?.message || e}`);

@@ -8,7 +8,7 @@ import * as FileTags from '../components/file_tags.js';
 import * as HistoryPanel from '../components/history_panel.js';
 import * as InputArea from '../components/InputArea.js';
 import * as SettingsModal from '../components/settings_modal.js';
-import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, getState } from './state.js';
+import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, setWorkspaceName, getState } from './state.js';
 import * as DOM from '../utils/dom.js';
 
 function setRingProgress(percent) {
@@ -36,27 +36,31 @@ export function initMessageListener() {
                 }
                 break;
             case 'indexingDone':
-                const finalMsg = 'Bağlam indekslendi. Artık bu bağlam hakkında soru sorabilirsiniz.';
-                updateIndexerProgress(100, finalMsg);
+                updateIndexerProgress(100, '');
                 setRingProgress(100);
                 setIndexingActive(false, { preserveBar: true });
                 setIndexingEnabledState(true); // İndeksleme tamamlandığında aktif et
-                InputArea.setPlaceholder(finalMsg);
+                // Placeholder mesajını güncelle (sadece "ivmeye soru sorun..." göster)
+                InputArea.setPlaceholder();
                 break;
             case 'indexingToggled':
                 // İndeksleme açık/kapalı durumu değişti
                 setIndexingEnabledState(data.enabled);
                 if (data.enabled) {
                     setIndexingActive(false, { preserveBar: true });
-                    InputArea.setPlaceholder('İndeksleme aktif. Bağlam hakkında soru sorabilirsiniz.');
                 } else {
                     setIndexingActive(false);
-                    InputArea.setPlaceholder('İndeksleme kapalı. Sorgular için bağlam kullanılmayacak.');
                 }
+                // Placeholder mesajını güncelle (sadece "ivmeye soru sorun..." göster)
+                InputArea.setPlaceholder();
                 break;
             case 'indexingStatus':
                 // İndeksleme durumu bilgisi geldi
                 setIndexingEnabledState(data.isEnabled);
+                break;
+            case 'workspaceInfo':
+                // Workspace bilgisi geldi
+                setWorkspaceName(data.workspaceName);
                 break;
             // --- Standart Mesajlar ---
             case 'addResponse':
@@ -77,6 +81,12 @@ export function initMessageListener() {
             // --- Agent durumu mesajı ---
             case 'updateAgentStatus':
                 setAgentMode(data.isActive, data.activeFileName);
+                break;
+            case 'restoreAgentMode':
+                setAgentMode(data.isActive, '');
+                if (data.isBarExpanded !== undefined) {
+                    setAgentBarExpanded(data.isBarExpanded);
+                }
                 break;
             case 'agentSelectionSet':
                 setAgentSelectionStatus(data.fileName, data.startLine, data.endLine);

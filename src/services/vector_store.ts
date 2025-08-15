@@ -21,17 +21,21 @@ export async function loadVectorStoreChunks(context: vscode.ExtensionContext): P
         return [];
     }
 
-    const config = vscode.workspace.getConfiguration(EXTENSION_ID);
-    const customPath = config.get<string>(SETTINGS_KEYS.indexingVectorStorePath);
-    const storageUri = customPath
-        ? vscode.Uri.file(customPath)
-        : vscode.Uri.joinPath(context.globalStorageUri, 'vector_store.json');
+    // Workspace-specific vector store path
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        console.log('[VectorStore] Aktif workspace bulunamadı');
+        return [];
+    }
+
+    const ivmeDir = vscode.Uri.joinPath(workspaceFolder.uri, '.ivme');
+    const storageUri = vscode.Uri.joinPath(ivmeDir, 'vector_store.json');
 
     try {
         const buf = await vscode.workspace.fs.readFile(storageUri);
         const json = JSON.parse(Buffer.from(buf).toString('utf8'));
         const chunks: CodeChunkMetadata[] = json?.chunks || [];
-        console.log(`[VectorStore] Yüklendi: ${chunks.length} chunk`);
+        console.log(`[VectorStore] Yüklendi: ${chunks.length} chunk (${storageUri.fsPath})`);
         return chunks;
     } catch (e) {
         console.warn('[VectorStore] Okuma başarısız:', storageUri.fsPath, e);
