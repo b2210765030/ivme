@@ -64,6 +64,87 @@
     position: relative; /* overlay log için */
 }
 
+/* YENİ: Input wrapper için arka plan progress bar'ı */
+.input-wrapper::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--indexing-progress, 0%);
+    background: rgba(59, 130, 246, 0.08);
+    border-radius: 20px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.3s ease, width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dalga (shimmer) katmanı */
+.input-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--indexing-progress, 0%);
+    border-radius: 20px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    background: linear-gradient(90deg,
+        rgba(255, 255, 255, 0)   0%,
+        rgba(255, 255, 255, 0.06) 20%,
+        rgba(255, 255, 255, 0.12) 50%,
+        rgba(255, 255, 255, 0.06) 80%,
+        rgba(255, 255, 255, 0)   100%
+    );
+    background-size: 200% 100%;
+    animation: inputShimmer 2.8s linear infinite;
+    mix-blend-mode: normal; /* subtle, VSCode theme uyumlu */
+    will-change: background-position;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* İndeksleme aktifken katmanları göster */
+.input-wrapper.indexing-active::before,
+.input-wrapper.indexing-active::after {
+    opacity: 1;
+}
+
+/* Tamamlandı durum stili: çok hafif dolu görünüm, dalga yok */
+.input-wrapper.indexing-complete::before {
+    opacity: 1;
+    width: 100%;
+    background: rgba(59, 130, 246, 0.04);
+}
+.input-wrapper.indexing-complete::after {
+    opacity: 0; /* dalga kapalı */
+    animation: none;
+}
+
+/* Hazır (retrieval açık ama index yok) => çok hafif doluluk */
+.input-wrapper.indexing-ready::before {
+    opacity: 1;
+    width: 10%;
+    background: rgba(59, 130, 246, 0.03);
+}
+.input-wrapper.indexing-ready::after {
+    opacity: 0; /* dalga kapalı */
+    animation: none;
+}
+
+/* Start butonu için no-index stili (yarı şeffaf, uses aria-disabled) */
+.no-index {
+    opacity: 0.5 !important;
+    pointer-events: none !important;
+}
+
+@keyframes inputShimmer {
+    0%   { background-position: -50% 0; }
+    100% { background-position: 150% 0; }
+}
+
 /* Overlay log (arka plan metinleri) */
 .indexer-overlay-log {
     position: absolute;
@@ -75,7 +156,7 @@
     font-size: 11px;
     white-space: pre-wrap;
     overflow: hidden;
-    z-index: 0;
+    z-index: 1; /* Progress bar'ın üstünde kalması için */
 }
 
 .indexer-overlay-log.hidden { display: none; }
@@ -94,7 +175,7 @@
     max-height: 200px;
     overflow-y: auto;
     position: relative;
-    z-index: 1; /* overlay altında kalmasın */
+    z-index: 1; /* Progress bar'ın üstünde kalması için */
 }
 
 #prompt-input::-webkit-scrollbar { width: 4px; }
@@ -106,6 +187,8 @@
     align-items: center;
     padding: 4px 0;
     min-height: 36px;
+    position: relative;
+    z-index: 1; /* Progress bar'ın üstünde kalması için */
 }
 
 .action-group-left, .action-group-right {
@@ -121,13 +204,20 @@
     background: transparent;
     border: 1px solid var(--vscode-input-border);
     color: var(--vscode-input-foreground);
-    padding: 4px 10px;
+    padding: 0 8px;
     border-radius: 12px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1;
     opacity: 0.8;
     transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+    width: auto;
+    min-width: 40px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
 
 #agent-mode-button:hover {
@@ -282,8 +372,8 @@
 #attach-file-button, #send-button, #indexer-start-button, #indexer-cancel-button {
     background: transparent;
     border: none;
-    width: 36px;
-    height: 36px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -304,52 +394,39 @@
 
 /* Indexer buttons - agent bağlam butonu ile aynı boyut */
 #indexer-start-button, #indexer-cancel-button {
-	width: auto;
-	height: auto;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	padding: 0;
 	z-index: 2;
-	--ring-color: #8ab4f8; /* soft blue */
 }
 
 /* Index icon size - agent bağlam butonu ile aynı */
 #indexer-start-button .index-icon {
-	width: 20px;
-	height: 20px;
+	width: 14px;
+	height: 14px;
 	filter: invert(1);
 }
 
-/* Ring progress: fit to button size */
-#indexer-start-button::after, #indexer-cancel-button::after {
-	content: '';
-	position: absolute;
-	inset: 2px; /* adjusted for larger button */
-	border-radius: 50%;
-	display: block;
-	background: conic-gradient(var(--ring-color) calc(var(--ring-progress, 0) * 1%), #0000 0);
-	-webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
-	mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
-	pointer-events: none;
-	z-index: 3;
-	will-change: background;
-}
-
+/* Halka progress'i kaldırıldı - artık sohbet baloncuklarında arka plan progress bar'ı kullanılacak */
 
 
 #attach-file-button img {
-    width: 24px;
-    height: 24px;
+    width: 14px;
+    height: 14px;
     filter: invert(1);
 }
 
 #send-button .send-icon {
-    width: 24px;
-    height: 24px;
+    width: 14px;
+    height: 14px;
     filter: invert(1);
     transition: opacity 0.1s ease-in-out, transform 0.1s ease-in-out;
 }
 
 #send-button .stop-icon {
-    width: 24px;
-    height: 24px;
+    width: 14px;
+    height: 14px;
     fill: currentColor;
     transition: opacity 0.1s ease-in-out, transform 0.1s ease-in-out;
     position: absolute;
@@ -437,14 +514,17 @@
     background: none;
     border: none;
     cursor: pointer;
-    padding: 4px;
-    border-radius: 6px;
+    padding: 0;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--vscode-icon-foreground);
     opacity: 0.7;
     transition: background-color 0.2s ease, opacity 0.2s ease;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
 }
 
 #indexer-start-button:hover,

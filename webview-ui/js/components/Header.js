@@ -5,7 +5,7 @@
 
 import * as DOM from '../utils/dom.js';
 import * as VsCode from '../services/vscode.js';
-import { getState, setAgentMode, setLanguage, setIndexingActive, updateUITexts } from '../core/state.js';
+import { getState, setAgentMode, setLanguage, setIndexingActive, updateUITexts, checkAndUpdateIndexingState, setIndexingEnabledState } from '../core/state.js';
 
 // --- Public Fonksiyonlar ---
 
@@ -47,8 +47,25 @@ export function init() {
         DOM.indexerStartButton.classList.add('icon-button');
         DOM.indexerStartButton.addEventListener('click', () => {
             if (getState().isUiBlocked) return;
-            setIndexingActive(true);
+            const state = getState();
+            const intendedEnable = !state.isIndexingEnabled;
+
+            // Always ask backend to toggle indexing; update UI optimistically.
             VsCode.postMessage('toggleIndexing');
+
+            if (intendedEnable) {
+                if (state.hasIndex) {
+                    // quick complete visually
+                    setIndexingEnabledState(true);
+                } else {
+                    // start real indexing
+                    setIndexingActive(true);
+                }
+            } else {
+                // disabling retrieval
+                setIndexingActive(false);
+                setIndexingEnabledState(false);
+            }
         });
     }
     if (DOM.indexerCancelButton) {
@@ -61,4 +78,7 @@ export function init() {
             VsCode.postMessage('indexProjectCancel');
         });
     }
+
+    // On init, request backend indexing status so UI reflects hasIndex/isIndexingEnabled
+    try { checkAndUpdateIndexingState(); } catch (e) {}
 }

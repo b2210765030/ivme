@@ -8,19 +8,8 @@ import * as FileTags from '../components/file_tags.js';
 import * as HistoryPanel from '../components/history_panel.js';
 import * as InputArea from '../components/InputArea.js';
 import * as SettingsModal from '../components/settings_modal.js';
-import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, setWorkspaceName, getState, setTokenLimit, updateUITexts } from './state.js';
+import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, setWorkspaceName, getState, setTokenLimit, updateUITexts, setHasIndex } from './state.js';
 import * as DOM from '../utils/dom.js';
-
-function setRingProgress(percent) {
-    const p = Math.max(0, Math.min(100, percent || 0));
-    const cssValue = `${p}`; // 0..100
-    if (DOM.indexerStartButton) {
-        DOM.indexerStartButton.style.setProperty('--ring-progress', cssValue);
-    }
-    if (DOM.indexerCancelButton) {
-        DOM.indexerCancelButton.style.setProperty('--ring-progress', cssValue);
-    }
-}
 
 export function initMessageListener() {
     onMessage(message => {
@@ -30,37 +19,51 @@ export function initMessageListener() {
             case 'indexingProgress':
                 setIndexingActive(true);
                 updateIndexerProgress(Math.round(data.percent || 0), data.message || '');
-                setRingProgress(data.percent || 0);
                 if (data.message) {
                     InputArea.setPlaceholder(data.message);
                 }
                 break;
             case 'indexingDone':
+                // Önce hasIndex'i güncelle, sonra UI enable et
+                if (typeof data?.hasIndex !== 'undefined') {
+                    setHasIndex(!!data.hasIndex);
+                } else {
+                    setHasIndex(true);
+                }
                 updateIndexerProgress(100, '');
-                setRingProgress(100);
                 setIndexingActive(false, { preserveBar: true });
-                setIndexingEnabledState(true); // İndeksleme tamamlandığında aktif et
+                setIndexingEnabledState(true); // İndeksleme tamamlandığında active et
                 // Placeholder mesajını güncelle (sadece "ivmeye soru sorun..." göster)
                 InputArea.setPlaceholder();
                 break;
             case 'indexingToggled':
-                // İndeksleme açık/kapalı durumu değişti
-                setIndexingEnabledState(data.enabled);
-                if (data.enabled) {
-                    setIndexingActive(false, { preserveBar: true });
+                // Eğer backend hasIndex bilgisi veriyorsa önce onu uygula
+                if (typeof data?.hasIndex !== 'undefined') {
+                    setHasIndex(!!data.hasIndex);
+                    setIndexingEnabledState(data.enabled);
                 } else {
-                    setIndexingActive(false);
+                    // hasIndex bilgisi yoksa mevcut UI'yı bozmayalım; sadece aktiflik durumunu koru
+                    if (data.enabled === false) {
+                        setIndexingEnabledState(false);
+                    }
                 }
+                setIndexingActive(false, { preserveBar: true });
                 // Placeholder mesajını güncelle (sadece "ivmeye soru sorun..." göster)
                 InputArea.setPlaceholder();
                 break;
             case 'indexingStatus':
                 // İndeksleme durumu bilgisi geldi
+                if (typeof data?.hasIndex !== 'undefined') {
+                    setHasIndex(!!data.hasIndex);
+                }
                 setIndexingEnabledState(data.isEnabled);
                 break;
             case 'workspaceInfo':
                 // Workspace bilgisi geldi
                 setWorkspaceName(data.workspaceName);
+                if (typeof data?.hasIndex !== 'undefined') {
+                    setHasIndex(!!data.hasIndex);
+                }
                 break;
             case 'updateTokenLimit':
                 // Token limiti güncellendi

@@ -41,6 +41,7 @@ function createMessageElement(role, content) {
     const messageClone = messageTemplate.content.cloneNode(true);
     const messageElement = messageClone.querySelector('.message');
     messageElement.classList.add(`${role}-message`, 'fade-in');
+    
     const avatarIcon = messageClone.querySelector('.avatar-icon');
     avatarIcon.src = role === 'user' ? DOM.USER_ICON_URI : DOM.AI_ICON_URI;
     const contentElement = messageClone.querySelector('.message-content');

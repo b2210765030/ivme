@@ -88,7 +88,6 @@ export const i18n = {
         modChange: 'Mod Değiştir',
         indexProject: 'Projeyi İndeksle',
         index: 'İndeksle',
-        stop: 'Durdur',
         showAgentContext: 'Agent bağlamını göster',
         agent: 'Agent',
         agentActive: 'Agent Aktif',
@@ -110,7 +109,11 @@ export const i18n = {
         tokenLimit: 'Token Limiti',
         tokenLimitDesc: 'Maksimum token sayısı. Bu limit aşıldığında yeni mesaj gönderilemez.',
         cancel: 'İptal',
-        save: 'Kaydet'
+        save: 'Kaydet',
+        showPresentation: 'Geliştirme Paketi Sunumunu Göster',
+        history: 'Konuşma Geçmişi',
+        newChat: 'Yeni Konuşma',
+        feedback: 'Geri Bildirim'
     },
     en: {
         thinking: 'İvme is thinking...',
@@ -135,7 +138,6 @@ export const i18n = {
         modChange: 'Change Mode',
         indexProject: 'Index Project',
         index: 'Index',
-        stop: 'Stop',
         showAgentContext: 'Show Agent Context',
         agent: 'Agent',
         agentActive: 'Agent Active',
@@ -157,7 +159,11 @@ export const i18n = {
         tokenLimit: 'Token Limit',
         tokenLimitDesc: 'Maximum number of tokens. New messages cannot be sent when this limit is exceeded.',
         cancel: 'Cancel',
-        save: 'Save'
+        save: 'Save',
+        showPresentation: 'Show Development Package Presentation',
+        history: 'Conversation History',
+        newChat: 'New Chat',
+        feedback: 'Feedback'
     }
 };
 

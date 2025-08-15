@@ -311,7 +311,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     
     private _getHtmlForWebview(webview: vscode.Webview): string {
-        const toUri = (filePath: string) => webview.asWebviewUri(vscode.Uri.joinPath(this._context.extensionUri, 'webview-ui', filePath));
+        const toUri = (filePath: string) => {
+            const uri = vscode.Uri.joinPath(this._context.extensionUri, 'webview-ui', filePath);
+            const webviewUri = webview.asWebviewUri(uri);
+            // Cache busting için timestamp ekle
+            return webviewUri.toString() + '?v=' + Date.now();
+        };
         const htmlPath = path.join(this._context.extensionUri.fsPath, 'webview-ui', 'chat.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf8');
         const nonce = getNonce();
@@ -328,7 +333,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             .replace(/{{ai_icon_uri}}/g, toUri('assets/baykar-icon.svg').toString())
             .replace(/{{user_icon_uri}}/g, toUri('assets/BaykarLogo.svg').toString())
             .replace(/{{logo_uri}}/g, toUri('assets/BaykarLogo.svg').toString())
-            .replace(/{{send_icon_uri}}/g, toUri('assets/baykar-icon.svg').toString())
+            .replace(/{{send_icon_uri}}/g, toUri('assets/send.svg').toString())
             .replace(/{{attach_icon_uri}}/g, toUri('assets/attach.svg').toString())
             .replace(/{{index_icon_uri}}/g, toUri('assets/index.svg').toString())
             .replace(/{{settings_icon_uri}}/g, toUri('assets/settings-icon.svg').toString())

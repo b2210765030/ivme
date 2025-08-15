@@ -3,7 +3,7 @@
    ========================================================================== */
 
 import * as DOM from '../utils/dom.js';
-import { updateInputAndButtonState, setPlaceholder } from '../components/InputArea.js';
+import { updateInputAndButtonState, setPlaceholder, recalculateTotalAndUpdateUI } from '../components/InputArea.js';
 
 // --- Arayüz Durumları ---
 let isAiResponding = false;
@@ -21,6 +21,7 @@ let isIndexing = false;
 let indexingProgress = 0; // 0..100
 let indexingMessage = '';
 let isIndexingEnabled = localStorage.getItem('indexingEnabled') === 'true'; // İndeksleme açık/kapalı durumu - localStorage'dan yükle
+let hasIndex = localStorage.getItem('hasIndex') === 'true'; // Workspace'te index vektörlerinin varlığı (localStorage fallback)
 let currentWorkspaceName = ''; // YENİ: Aktif workspace adı
 
 // Konuşma başladıktan sonra dil ve agent modunun kilitlenmesi için bayrak
@@ -49,6 +50,7 @@ export const getState = () => ({
     indexingProgress,
     indexingMessage,
     isIndexingEnabled // YENİ: İndeksleme açık/kapalı durumu
+    , hasIndex
 });
 
 // --- State Setters (Durumları Güncelleme) ---
@@ -121,6 +123,34 @@ export function setAgentMode(isActive, activeFileName = '') {
         }
         // Agent modu açıldığında indeksleme durumunu kontrol et
         checkAndUpdateIndexingState();
+
+        // UI: Agent moda geçildiğinde input-wrapper üzerindeki index görselini
+        // mevcut state'e göre geri yükle (ör. retrieval açık/kapalı, hasIndex, indexingProgress)
+        try {
+            const inputWrapper = document.querySelector('.input-wrapper');
+            if (inputWrapper) {
+                // Clear any previous transient classes
+                inputWrapper.classList.remove('indexing-active', 'indexing-complete', 'indexing-ready');
+
+                if (isIndexing) {
+                    // ongoing indexing
+                    inputWrapper.classList.add('indexing-active');
+                    inputWrapper.style.setProperty('--indexing-progress', `${indexingProgress}%`);
+                } else if (isIndexingEnabled) {
+                    // retrieval enabled: show complete if hasIndex, else show ready
+                    if (hasIndex) {
+                        inputWrapper.classList.add('indexing-complete');
+                        inputWrapper.style.setProperty('--indexing-progress', '100%');
+                    } else {
+                        inputWrapper.classList.add('indexing-ready');
+                        inputWrapper.style.setProperty('--indexing-progress', '10%');
+                    }
+                } else {
+                    // retrieval not enabled: ensure cleared
+                    inputWrapper.style.setProperty('--indexing-progress', '0%');
+                }
+            }
+        } catch (e) {}
     } else {
         agentModeButton.classList.remove('active');
         if (typeof agentModeButton?.textContent === 'string') {
@@ -133,6 +163,18 @@ export function setAgentMode(isActive, activeFileName = '') {
         currentAgentFileName = '';
         // isAgentBarExpanded'ı sıfırlamayalım, sadece UI'ı gizleyelim
         // Index butonunu da sıfırlamayalım, sadece UI'ı gizleyelim
+        // Eğer agent modundan chat moduna geçiliyorsa, input arka planındaki index visual'ını gizle
+        try {
+            const inputWrapper = document.querySelector('.input-wrapper');
+            if (inputWrapper) {
+                inputWrapper.classList.remove('indexing-active', 'indexing-complete', 'indexing-ready');
+                inputWrapper.style.setProperty('--indexing-progress', '0%');
+            }
+            // Ayrıca message-level kalıntıları temizle
+            document.querySelectorAll('.message').forEach(m => {
+                try { m.style.removeProperty('--indexing-progress'); m.classList.remove('indexing-active','indexing-complete','indexing-ready'); } catch(e){}
+            });
+        } catch(e) {}
     }
 }
 
@@ -185,6 +227,84 @@ export function setIndexingEnabledState(enabled) {
             startBtn.title = 'İndeksleme kapalı - Açmak için tıklayın';
         }
     }
+
+    // Eğer retrieval açılıyorsa ve vektörler zaten varsa, gerçek indeksleme yapmadan
+    // UI tarafında hızlı bir dolum göster (hızlı animasyon) ve tamamlandı durumunu ayarla.
+    const inputWrapper = document.querySelector('.input-wrapper');
+    if (enabled) {
+        if (hasIndex) {
+            // hızlı dolum
+            indexingProgress = 100;
+            indexingMessage = '';
+            updateIndexerProgressUI();
+            // Ensure input wrapper shows complete and any message-level progress is cleared
+            if (inputWrapper) {
+                inputWrapper.classList.remove('indexing-active', 'indexing-ready');
+                inputWrapper.classList.add('indexing-complete');
+                inputWrapper.style.setProperty('--indexing-progress', '100%');
+            }
+            // Clear any leftover per-message progress styles (from old behavior)
+            document.querySelectorAll('.message').forEach(m => {
+                try {
+                    m.style.removeProperty('--indexing-progress');
+                    m.style.removeProperty('background');
+                    m.classList.remove('indexing-active', 'indexing-complete', 'indexing-ready');
+                } catch (e) {}
+            });
+            // ensure indexing flag is false so UI isn't blocked
+            isIndexing = false;
+            if (cancelBtn) cancelBtn.classList.add('hidden');
+            if (startBtn) startBtn.classList.remove('hidden');
+        } else {
+            // vektör yoksa retrieval açık ama index yok: kullanıcının retrieval'ü aktif ettiği durumda
+            // hafif bir hazır/ready göstergesi gösterelim (shimmer yerine subtle renk)
+            if (inputWrapper) {
+                inputWrapper.classList.remove('indexing-complete');
+                inputWrapper.classList.add('indexing-ready');
+                // hafif doldurma (örnek: 10%)
+                inputWrapper.style.setProperty('--indexing-progress', '10%');
+            }
+        }
+    } else {
+        // retrieval kapandıysa tamamlanmış işaretini kaldır
+        if (inputWrapper) {
+            inputWrapper.classList.remove('indexing-complete');
+            inputWrapper.classList.remove('indexing-ready');
+            inputWrapper.style.setProperty('--indexing-progress', '0%');
+        }
+        // Also clear message-level residuals when retrieval disabled
+        document.querySelectorAll('.message').forEach(m => {
+            try { m.style.removeProperty('--indexing-progress'); m.style.removeProperty('background'); m.classList.remove('indexing-active','indexing-complete','indexing-ready'); } catch(e){}
+        });
+        // ensure flags
+        isIndexing = false;
+        if (cancelBtn) cancelBtn.classList.add('hidden');
+        if (startBtn && isAgentModeActive) startBtn.classList.remove('hidden');
+    }
+}
+
+// Workspace'te index vektörlerinin olup olmadığını ayarla
+export function setHasIndex(value) {
+    hasIndex = !!value;
+    // persist for quick UI decisions before backend confirms
+    try { localStorage.setItem('hasIndex', hasIndex.toString()); } catch(e){}
+    const startBtn = DOM.indexerStartButton;
+    if (startBtn) {
+        if (!hasIndex) {
+            startBtn.classList.add('no-index');
+            startBtn.setAttribute('aria-disabled', 'true');
+        } else {
+            startBtn.classList.remove('no-index');
+            startBtn.removeAttribute('aria-disabled');
+        }
+    }
+    // Eğer retrieval açıksa ve şimdi vektör oluştuysa input'ı tamamlanmış yap
+    const inputWrapper = document.querySelector('.input-wrapper');
+    if (inputWrapper && isIndexingEnabled && hasIndex) {
+        inputWrapper.classList.remove('indexing-ready');
+        inputWrapper.classList.add('indexing-complete');
+        inputWrapper.style.setProperty('--indexing-progress', '100%');
+    }
 }
 
 // YENİ: VS Code ayarlarından indeksleme durumunu kontrol eder
@@ -203,6 +323,35 @@ function updateIndexerProgressUI() {
     const text = DOM.indexerProgressText;
     if (fill) fill.style.width = `${indexingProgress}%`;
     if (text) text.textContent = indexingMessage ? `${indexingMessage}` : '';
+    
+    // YENİ: Input wrapper'daki progress'i güncelle
+    const inputWrapper = document.querySelector('.input-wrapper');
+    const progressValue = `${indexingProgress}%`;
+    
+    if (inputWrapper) {
+        // Yumuşak geçiş için CSS transition kullan
+        inputWrapper.style.setProperty('--indexing-progress', progressValue);
+        
+        // Durumları yönet
+        if (indexingProgress > 0 && indexingProgress < 100) {
+            // Aktif indeksleme: dalga açık, complete kapalı
+            if (!inputWrapper.classList.contains('indexing-active')) {
+                inputWrapper.classList.add('indexing-active');
+            }
+            inputWrapper.classList.remove('indexing-complete');
+        } else if (indexingProgress >= 100) {
+            // Tamamlandı: dalga kapalı, hafif renkli temel dolum açık
+            inputWrapper.classList.remove('indexing-active');
+            if (!inputWrapper.classList.contains('indexing-complete')) {
+                inputWrapper.classList.add('indexing-complete');
+            }
+        } else {
+            // 0 veya negatif: her ikisini kapat ve genişliği sıfırla
+            inputWrapper.classList.remove('indexing-active');
+            inputWrapper.classList.remove('indexing-complete');
+            inputWrapper.style.setProperty('--indexing-progress', '0%');
+        }
+    }
 }
 
 // YENİ: Agent seçim durumunu göster/gizle
@@ -347,11 +496,41 @@ export function updateUITexts() {
     
     // HTML metinlerini güncelle
     updateHTMLTexts();
+    
+    // Token tooltip'ini güncelle
+    updateTokenTooltip();
+}
+
+// Token tooltip'ini güncelle
+function updateTokenTooltip() {
+    // InputArea'daki recalculateTotalAndUpdateUI fonksiyonunu çağır
+    // Bu fonksiyon doğru token hesaplaması yapar ve tooltip'i günceller
+    recalculateTotalAndUpdateUI();
 }
 
 // HTML metinlerini güncelle
 function updateHTMLTexts() {
     // Buton title'larını güncelle
+    const logoButton = document.getElementById('logo-button');
+    if (logoButton) {
+        logoButton.title = DOM.getText('showPresentation');
+    }
+
+    const historyButton = document.getElementById('history-button');
+    if (historyButton) {
+        historyButton.title = DOM.getText('history');
+    }
+
+    const newChatButton = document.getElementById('new-chat-button');
+    if (newChatButton) {
+        newChatButton.title = DOM.getText('newChat');
+    }
+
+    const feedbackButton = document.getElementById('feedback-button');
+    if (feedbackButton) {
+        feedbackButton.title = DOM.getText('feedback');
+    }
+
     const attachFileButton = document.getElementById('attach-file-button');
     if (attachFileButton) {
         attachFileButton.title = DOM.getText('attachFile');
