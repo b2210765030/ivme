@@ -139,16 +139,144 @@
 
 
 .character-counter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 11px;
     color: var(--vscode-input-placeholderForeground);
     opacity: 0.7;
     padding: 0 8px;
     transition: color 0.2s ease;
+    cursor: help; /* Tooltip için cursor */
 }
 
 .character-counter.limit-exceeded {
     color: var(--vscode-errorForeground);
     font-weight: bold;
+}
+
+/* Döngüsel progress bar */
+.token-progress-ring {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: help;
+    /* Tarayıcı tooltip'ini engelle */
+    pointer-events: auto;
+}
+
+/* Tooltip stilleri */
+.token-progress-ring::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-editor-foreground);
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-family: var(--vscode-font-family);
+    white-space: pre-line;
+    text-align: left;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--vscode-panel-border);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+    z-index: 1000;
+    min-width: 240px;
+    max-width: 340px;
+    line-height: 1.6;
+    margin-bottom: 10px;
+    backdrop-filter: blur(4px);
+}
+
+.token-progress-ring:hover::before {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-4px);
+}
+
+/* Boş tooltip'i gizle */
+.token-progress-ring[data-tooltip=""]::before,
+.token-progress-ring[data-tooltip=""]::after {
+    display: none;
+}
+
+/* Tooltip ok işareti */
+.token-progress-ring::after {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--vscode-editor-background);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+    z-index: 1000;
+    margin-bottom: 2px;
+}
+
+.token-progress-ring:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-4px);
+}
+
+.token-progress-ring svg {
+    width: 28px;
+    height: 28px;
+    transform: rotate(-90deg);
+}
+
+.token-progress-ring .progress-bg {
+    fill: none;
+    stroke: var(--vscode-input-placeholderForeground);
+    stroke-width: 2;
+    opacity: 0.2;
+}
+
+.token-progress-ring .progress-fill {
+    fill: none;
+    stroke: var(--vscode-button-background);
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: stroke-dasharray 0.4s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.3s ease;
+}
+
+.token-progress-ring.limit-exceeded .progress-fill {
+    stroke: var(--vscode-errorForeground);
+}
+
+/* Yüksek kullanımda uyarı rengi (80% üzeri) */
+.token-progress-ring.warning .progress-fill {
+    stroke: var(--vscode-warningForeground);
+}
+
+.token-progress-ring .percentage-text {
+    position: absolute;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--vscode-input-foreground);
+    pointer-events: none;
+    line-height: 1;
+    transition: color 0.3s ease;
+}
+
+.token-progress-ring.warning .percentage-text {
+    color: var(--vscode-warningForeground);
+}
+
+.token-progress-ring.limit-exceeded .percentage-text {
+    color: var(--vscode-errorForeground);
 }
 
 #attach-file-button, #send-button, #indexer-start-button, #indexer-cancel-button {

@@ -43,6 +43,7 @@ export const SETTINGS_KEYS = {
     // Optional reranker (e.g., Cohere)
     cohereApiKey: 'retrieval.cohereApiKey',
     conversationHistoryLimit: 'chat.conversationHistoryLimit',
+    tokenLimit: 'chat.tokenLimit',
     // UI State
     agentModeActive: 'ui.agentModeActive',
     agentBarExpanded: 'ui.agentBarExpanded'

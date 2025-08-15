@@ -8,7 +8,7 @@ import * as FileTags from '../components/file_tags.js';
 import * as HistoryPanel from '../components/history_panel.js';
 import * as InputArea from '../components/InputArea.js';
 import * as SettingsModal from '../components/settings_modal.js';
-import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, setWorkspaceName, getState } from './state.js';
+import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, setWorkspaceName, getState, setTokenLimit } from './state.js';
 import * as DOM from '../utils/dom.js';
 
 function setRingProgress(percent) {
@@ -61,6 +61,11 @@ export function initMessageListener() {
             case 'workspaceInfo':
                 // Workspace bilgisi geldi
                 setWorkspaceName(data.workspaceName);
+                break;
+            case 'updateTokenLimit':
+                // Token limiti güncellendi
+                setTokenLimit(data.tokenLimit);
+                InputArea.recalculateTotalAndUpdateUI();
                 break;
             // --- Standart Mesajlar ---
             case 'addResponse':

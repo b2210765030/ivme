@@ -160,11 +160,11 @@ export class WebviewMessageHandler {
     }
 
     public sendContextSize() {
-        const conversationSize = this.conversationManager.getActiveConversationSize();
-        const filesSize = this.contextManager.getUploadedFilesSize() + this.contextManager.getAgentFileSize();
+        const conversationTokens = this.conversationManager.getActiveConversationSize();
+        const filesTokens = this.contextManager.getUploadedFilesSize() + this.contextManager.getAgentFileSize();
         this.webview.postMessage({
             type: 'updateContextSize',
-            payload: { conversationSize, filesSize }
+            payload: { conversationSize: conversationTokens, filesSize: filesTokens }
         });
     }
 

@@ -172,6 +172,11 @@
           "default": 2,
           "description": "Sohbete gönderilecek önceki mesaj sayısı (bir kullanıcı ve bir asistan mesajı 1 sayılır). Modelin bağlamı hatırlaması için kullanılır."
         },
+        "baykar-ai-fixer.chat.tokenLimit": {
+          "type": "number",
+          "default": 12000,
+          "description": "Maksimum token sayısı. Bu limit aşıldığında yeni mesaj gönderilemez."
+        },
         "baykar-ai-fixer.ui.agentModeActive": {
           "type": "boolean",
           "default": false,

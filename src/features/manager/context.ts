@@ -8,6 +8,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { EXTENSION_ID } from '../../core/constants';
+import { countTokensGPT } from '../../core/tokenizer';
 
 
 export class ContextManager {
@@ -169,11 +170,11 @@ export class ContextManager {
     }
 
     public getAgentFileSize(): number {
-        return this.agentFileContext?.content.length || 0;
+        return this.agentFileContext?.content ? countTokensGPT(this.agentFileContext.content) : 0;
     }
 
     public getUploadedFilesSize(): number {
-        return this.uploadedFileContexts.reduce((total, file) => total + file.content.length, 0);
+        return this.uploadedFileContexts.reduce((total, file) => total + countTokensGPT(file.content), 0);
     }
 
     /**

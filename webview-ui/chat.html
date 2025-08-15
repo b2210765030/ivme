@@ -98,7 +98,15 @@
 
                     </div>
                     <div class="action-group-right">
-                        <div id="character-counter" class="character-counter">0 / 10000</div>
+                        <div id="character-counter" class="character-counter">
+                            <div class="token-progress-ring" data-tooltip="📊 Token Kullanımı&#10;0 / 12000 tokens (0%)&#10;&#10;📋 Detay:&#10;• Konuşma: 0 tokens&#10;• Dosyalar: 0 tokens&#10;• Prompt: 0 tokens&#10;• Kalan: 12000 tokens">
+                                <svg viewBox="0 0 36 36">
+                                    <circle class="progress-bg" cx="18" cy="18" r="16"></circle>
+                                    <circle class="progress-fill" cx="18" cy="18" r="16" stroke-dasharray="0 100"></circle>
+                                </svg>
+                                <span class="percentage-text">0%</span>
+                            </div>
+                        </div>
                         
                         <button id="send-button" title="Gönder">
                             <img src="{{send_icon_uri}}" alt="Gönder" class="send-icon"/>
@@ -154,6 +162,7 @@
                     </div>
                     <div id="pane-general" class="settings-pane">
                         <div class="form-group"><label for="history-limit">Konuşma Geçmişi Limiti</label><input type="number" id="history-limit" min="0" placeholder="2"><p class="form-group-description">Sohbete gönderilecek önceki mesaj sayısı. Modelin bağlamı hatırlaması için kullanılır.</p></div>
+                        <div class="form-group"><label for="token-limit">Token Limiti</label><input type="number" id="token-limit" min="1000" max="50000" placeholder="12000"><p class="form-group-description">Maksimum token sayısı. Bu limit aşıldığında yeni mesaj gönderilemez.</p></div>
                     </div>
                     <div class="modal-actions"><button type="button" id="cancel-settings-button" class="secondary-button">İptal</button><button type="submit" class="primary-button">Kaydet</button></div>
                 </form>

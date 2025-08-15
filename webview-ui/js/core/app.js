@@ -8,6 +8,7 @@ import { initMessageListener } from './message_router.js';
 import { initComponents } from '../components/index.js';
 // YENİ: Gerekli state fonksiyonu import edildi
 import { applyVideoState, setAgentMode, setAgentBarExpanded, setIndexingEnabledState } from './state.js';
+import { recalculateTotalAndUpdateUI } from '../components/InputArea.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log("İvme Chat UI Başlatılıyor...");
@@ -40,6 +41,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedIndexingEnabled !== null) {
         setIndexingEnabledState(savedIndexingEnabled);
     }
+
+    // 6. YENİ: Başlangıçta tooltip'i ayarla
+    setTimeout(() => {
+        recalculateTotalAndUpdateUI();
+    }, 200);
 
     console.log("İvme Chat UI Hazır.");
 });

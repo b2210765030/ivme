@@ -6,6 +6,7 @@ import * as DOM from '../utils/dom.js';
 import * as VsCode from '../services/vscode.js';
 import { getState, setAiResponding } from '../core/state.js';
 import { addUserMessage, stopStreaming, addAiResponsePlaceholder } from './chat_view.js';
+import { calculateTokenUsage, calculateTotalTokenUsage } from '../utils/tokenizer.js';
 
 function handleSendMessage() {
     if (getState().isUiBlocked) return;
@@ -50,6 +51,11 @@ export function init() {
         if (getState().isUiBlocked) return;
         VsCode.postMessage('requestFileUpload');
     });
+    
+    // İlk yüklemede tooltip'i ayarla
+    setTimeout(() => {
+        recalculateTotalAndUpdateUI();
+    }, 100);
 }
 
 export function autoResize() {
@@ -58,20 +64,63 @@ export function autoResize() {
 }
 
 export function recalculateTotalAndUpdateUI() {
-    const { conversationSize, filesSize, CONTEXT_LIMIT } = getState();
-    const promptSize = DOM.input.value.length;
-    let totalSize = conversationSize + filesSize + promptSize;
-
-    if (totalSize > CONTEXT_LIMIT) {
-        const overage = totalSize - CONTEXT_LIMIT;
-        DOM.input.value = DOM.input.value.slice(0, DOM.input.value.length - overage);
-        totalSize = conversationSize + filesSize + DOM.input.value.length;
+    const { conversationTokens, filesTokens, TOKEN_LIMIT } = getState();
+    const promptText = DOM.input.value;
+    
+    // Mevcut konuşma ve dosya token sayılarını hesapla
+    const conversationAndFilesTokens = conversationTokens + filesTokens;
+    
+    // Prompt için token sayısını hesapla
+    const promptTokenUsage = calculateTokenUsage(promptText, TOKEN_LIMIT);
+    
+    // Toplam token sayısı
+    let totalTokens = conversationAndFilesTokens + promptTokenUsage.tokenCount;
+    
+    // Limit aşılırsa metni kısalt
+    if (totalTokens > TOKEN_LIMIT) {
+        const overage = totalTokens - TOKEN_LIMIT;
+        // Metni karakter bazında kısalt (yaklaşık hesaplama)
+        const charsToRemove = Math.ceil(overage * 4); // 1 token ≈ 4 karakter
+        DOM.input.value = DOM.input.value.slice(0, Math.max(0, DOM.input.value.length - charsToRemove));
+        
+        // Yeniden hesapla
+        const newPromptTokenUsage = calculateTokenUsage(DOM.input.value, TOKEN_LIMIT);
+        totalTokens = conversationAndFilesTokens + newPromptTokenUsage.tokenCount;
     }
 
-    const isLimitExceeded = totalSize >= CONTEXT_LIMIT;
+    const isLimitExceeded = totalTokens >= TOKEN_LIMIT;
     
-    DOM.characterCounter.textContent = `${totalSize} / ${CONTEXT_LIMIT}`;
+    // Yüzde hesapla
+    const percentage = Math.min(100, Math.round((totalTokens / TOKEN_LIMIT) * 100));
+    
+    // Progress ring'i güncelle
+    const circumference = 2 * Math.PI * 16; // r=16
+    const strokeDasharray = `${(percentage / 100) * circumference} ${circumference}`;
+    
+    if (DOM.tokenProgressFill) {
+        DOM.tokenProgressFill.style.strokeDasharray = strokeDasharray;
+    }
+    
+    if (DOM.tokenPercentageText) {
+        DOM.tokenPercentageText.textContent = `${percentage}%`;
+    }
+    
+    // Limit aşıldığında renk değiştir
+    if (DOM.tokenProgressRing) {
+        DOM.tokenProgressRing.classList.remove('warning', 'limit-exceeded');
+        if (isLimitExceeded) {
+            DOM.tokenProgressRing.classList.add('limit-exceeded');
+        } else if (percentage >= 80) {
+            DOM.tokenProgressRing.classList.add('warning');
+        }
+    }
     DOM.characterCounter.classList.toggle('limit-exceeded', isLimitExceeded);
+    
+    // Tooltip ile detaylı bilgi göster
+    const tooltipText = `📊 Token Kullanımı\n${totalTokens} / ${TOKEN_LIMIT} tokens (${percentage}%)\n\n📋 Detay:\n• Konuşma: ${conversationTokens} tokens\n• Dosyalar: ${filesTokens} tokens\n• Prompt: ${promptTokenUsage.tokenCount} tokens\n• Kalan: ${Math.max(0, TOKEN_LIMIT - totalTokens)} tokens`;
+    if (DOM.tokenProgressRing) {
+        DOM.tokenProgressRing.setAttribute('data-tooltip', tooltipText);
+    }
     
     updateInputAndButtonState(isLimitExceeded);
 }

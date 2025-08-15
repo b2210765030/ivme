@@ -87,7 +87,8 @@ export function init() {
             vllmBaseUrl: DOM.vllmUrlInput.value,
             vllmModelName: DOM.vllmModelInput.value,
             geminiApiKey: DOM.geminiKeyInput.value,
-            conversationHistoryLimit: DOM.historyLimitInput.value
+            conversationHistoryLimit: DOM.historyLimitInput.value,
+            tokenLimit: DOM.tokenLimitInput.value
         };
         VsCode.postMessage('saveSettings', settingsPayload);
     });
@@ -118,6 +119,7 @@ export function loadConfig(config) {
     DOM.vllmModelInput.value = config.vllmModelName;
     DOM.geminiKeyInput.value = config.geminiApiKey;
     DOM.historyLimitInput.value = config.conversationHistoryLimit;
+    DOM.tokenLimitInput.value = config.tokenLimit || 12000;
     DOM.serviceSelect.value = config.activeApiService;
     handleServiceChange();
 }

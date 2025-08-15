@@ -44,6 +44,7 @@ export const vllmModelInput = document.getElementById('vllm-model');
 export const geminiSettings = document.getElementById('gemini-settings');
 export const geminiKeyInput = document.getElementById('gemini-key');
 export const historyLimitInput = document.getElementById('history-limit');
+export const tokenLimitInput = document.getElementById('token-limit');
 export const navButtons = document.querySelectorAll('.nav-button');
 export const settingsPanes = document.querySelectorAll('.settings-pane');
 
@@ -58,6 +59,9 @@ export const APPLY_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="curr
 
 // --- Karakter Sayacı ---
 export const characterCounter = document.getElementById('character-counter');
+export const tokenProgressRing = document.querySelector('.token-progress-ring');
+export const tokenProgressFill = document.querySelector('.token-progress-ring .progress-fill');
+export const tokenPercentageText = document.querySelector('.token-progress-ring .percentage-text');
 
 // --- UI Metinleri ---
 export const i18n = {

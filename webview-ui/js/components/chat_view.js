@@ -6,6 +6,7 @@ import * as DOM from '../utils/dom.js';
 import { getState, setAiResponding, incrementConversationSize, setContextSize, resetChatState, lockConversation } from '../core/state.js';
 import { postMessage } from '../services/vscode.js';
 import { recalculateTotalAndUpdateUI, setPlaceholder, focus as focusInput } from './InputArea.js';
+import { countTokensGPT } from '../utils/tokenizer.js';
 
 // --- Değişkenler ---
 let streamingBuffer = '';
@@ -209,7 +210,11 @@ export function addUserMessage(text) {
     const p = document.createElement('p');
     p.textContent = text;
     createMessageElement('user', p.outerHTML);
-    incrementConversationSize(text.length);
+    
+    // Token sayısını hesapla ve ekle
+    const tokenCount = countTokensGPT(text);
+    incrementConversationSize(tokenCount);
+    
     lockConversation();
     recalculateTotalAndUpdateUI();
     setAiResponding(true);
@@ -297,21 +302,22 @@ export function load(messages) {
     if (conversationMessages.length > 0) {
         DOM.welcomeContainer.classList.add('hidden');
         DOM.chatContainer.classList.remove('hidden');
-        let newConversationSize = 0;
+        let newConversationTokens = 0;
         conversationMessages.forEach(msg => {
             const content = (msg.role === 'assistant') ? marked.parse(msg.content) : `<p>${msg.content}</p>`;
             const elem = createMessageElement(msg.role, content);
             addCodeBlockActions(elem);
-            newConversationSize += msg.content.length;
+            // Token sayısını hesapla
+            newConversationTokens += countTokensGPT(msg.content);
         });
-        setContextSize(newConversationSize, getState().filesSize);
+        setContextSize(newConversationTokens, getState().filesTokens);
         lockConversation();
 
         DOM.chatContainer.querySelectorAll('pre code').forEach(block => {
             hljs.highlightElement(block);
         });
     } else {
-        setContextSize(0, getState().filesSize);
+        setContextSize(0, getState().filesTokens);
     }
     recalculateTotalAndUpdateUI();
     focusInput();

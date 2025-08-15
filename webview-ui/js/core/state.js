@@ -27,10 +27,10 @@ let currentWorkspaceName = ''; // YENİ: Aktif workspace adı
 let isConversationLocked = false;
 
 
-// --- Karakter Sayacı ve Limit Durumu ---
-const CONTEXT_LIMIT = 10000;
-let conversationSize = 0;
-let filesSize = 0;
+// --- Token Sayacı ve Limit Durumu ---
+let TOKEN_LIMIT = 12000; // 12 bin token limiti (varsayılan)
+let conversationTokens = 0;
+let filesTokens = 0;
 
 // --- State Getters (Durumları Okuma) ---
 export const getState = () => ({
@@ -41,9 +41,9 @@ export const getState = () => ({
     isAgentModeActive,
     currentLanguage,
     isConversationLocked,
-    CONTEXT_LIMIT,
-    conversationSize,
-    filesSize,
+    TOKEN_LIMIT,
+    conversationTokens,
+    filesTokens,
     isAgentSelectionActive, // YENİ: Agent seçim durumunu ekle
     isIndexing,
     indexingProgress,
@@ -267,21 +267,21 @@ export function applyVideoState() {
     }
 }
 
-export function setContextSize(newConversationSize, newFilesSize) {
-    conversationSize = newConversationSize;
-    filesSize = newFilesSize;
+export function setContextSize(newConversationTokens, newFilesTokens) {
+    conversationTokens = newConversationTokens;
+    filesTokens = newFilesTokens;
 }
 
-export function incrementConversationSize(size) {
-    conversationSize += size;
+export function incrementConversationSize(tokens) {
+    conversationTokens += tokens;
 }
 
 export function resetConversationSize() {
-    conversationSize = 0;
+    conversationTokens = 0;
 }
 
 export function resetFilesSize() {
-    filesSize = 0;
+    filesTokens = 0;
 }
 
 
@@ -299,8 +299,8 @@ export function unlockConversation() {
 
 
 export function resetChatState() {
-    conversationSize = 0;
-    filesSize = 0;
+    conversationTokens = 0;
+    filesTokens = 0;
     isAiResponding = false;
     DOM.fileContextArea.innerHTML = '';
     updateInputAndButtonState();
@@ -340,4 +340,9 @@ export function setLanguage(lang) {
 // YENİ: Workspace adını ayarlama fonksiyonu (şimdilik sadece state'de tutuyoruz)
 export function setWorkspaceName(workspaceName) {
     currentWorkspaceName = workspaceName;
+}
+
+// Token limitini ayarlardan al
+export function setTokenLimit(limit) {
+    TOKEN_LIMIT = limit || 12000;
 }

@@ -10,6 +10,7 @@ import { Conversation, ChatMessage } from '../../types/index';
 import { generateUUID } from '../../core/utils';
 import { EXTENSION_ID, SETTINGS_KEYS } from '../../core/constants';
 import { createInitialSystemPrompt } from '../../system_prompts';
+import { countTokensGPT } from '../../core/tokenizer';
 
 export class ConversationManager {
     private conversations: Conversation[] = [];
@@ -65,7 +66,7 @@ export class ConversationManager {
         const messagesWithoutSystem = activeConv.messages.filter(m => m.role !== 'system');
         const limitedMessages = messagesWithoutSystem.slice(-(historyLimit * 2));
 
-        return limitedMessages.reduce((total, message) => total + message.content.length, 0);
+        return limitedMessages.reduce((total, message) => total + countTokensGPT(message.content), 0);
     }
 
     public addMessage(role: 'user' | 'assistant', content: string): void {
