@@ -1,0 +1,12 @@
+/* ==========================================================================
+   ANA STİL DOSYASI - TÜM PARÇALARI İÇE AKTARIR
+   ========================================================================== */
+
+@import url('./base.css');
+@import url('./header.css');
+@import url('./history.css');
+@import url('./welcome.css');
+@import url('./message.css');
+@import url('./input.css');
+@import url('./modal.css');
+@import url('./diff.css'); /* YENİ EKLENEN SATIR */

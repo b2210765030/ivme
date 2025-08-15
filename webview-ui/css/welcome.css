@@ -1,0 +1,50 @@
+/* ==========================================================================
+   WELCOME (KARŞILAMA EKRANI) STİLLERİ
+   ========================================================================== */
+
+#welcome-container {
+    flex-grow: 1; 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    position: relative; 
+    overflow: hidden; 
+}
+
+/* DİKKAT: #welcome-video stilleri buradan tamamen kaldırıldı. */
+
+.welcome-box {
+    max-width: 400px;
+    background-color: rgba(25, 25, 25, 0.5); /* Yarı saydam arka plan */
+    backdrop-filter: blur(4px); /* Buzlu cam efekti */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 40px;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); 
+}
+
+#welcome-logo {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 20px;
+    filter: invert(1);
+}
+
+#welcome-container h1 {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0 0 10px 0;
+    color: var(--vscode-editor-foreground);
+}
+
+#welcome-container p {
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0;
+    color: var(--vscode-input-placeholderForeground);
+}

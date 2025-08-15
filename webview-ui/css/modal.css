@@ -1,0 +1,222 @@
+/* ==========================================================================
+   SETTINGS MODAL (AYARLAR MODALI) STİLLERİ
+   ========================================================================== */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    width: 90%;
+    max-width: 650px;
+    min-height: 380px;
+    background-color: var(--vscode-sideBar-background);
+    color: var(--vscode-foreground);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    border: 1px solid var(--vscode-widget-border);
+    display: flex;
+    overflow: hidden;
+    padding: 0;
+}
+
+.modal-sidebar {
+    width: 180px;
+    flex-shrink: 0;
+    background-color: var(--vscode-editor-background);
+    border-right: 1px solid var(--vscode-sideBar-border);
+    padding: 15px 0;
+}
+
+.modal-header {
+    padding: 5px 15px 15px 15px;
+    border-bottom: 1px solid var(--vscode-sideBar-border);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.modal-nav {
+    list-style: none;
+    margin: 10px 0 0 0;
+    padding: 0;
+}
+
+.nav-button {
+    display: block;
+    width: 100%;
+    padding: 10px 15px;
+    background: none;
+    border: none;
+    color: var(--vscode-foreground);
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    border-left: 3px solid transparent;
+}
+
+.nav-button:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.nav-button.active {
+    background-color: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+    font-weight: 600;
+    border-left-color: var(--vscode-focusBorder);
+}
+
+.modal-main-content {
+    flex-grow: 1;
+    padding: 25px;
+    display: flex;
+    flex-direction: column;
+}
+
+#settings-form {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.settings-pane {
+    display: none;
+    flex-grow: 1;
+}
+
+.settings-pane.active {
+    display: block;
+}
+
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+.form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid var(--vscode-input-border); background-color: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px; box-sizing: border-box; }
+.form-group-description { font-size: 12px; color: var(--vscode-input-placeholderForeground); margin-top: 8px; opacity: 0.8; }
+
+/* YENİ EKLENEN STİL */
+.form-group-error {
+    font-size: 12px;
+    color: var(--vscode-errorForeground);
+    margin-top: 8px;
+    background-color: rgba(255, 0, 0, 0.1);
+    border: 1px solid var(--vscode-input-border);
+    padding: 8px;
+    border-radius: 4px;
+    white-space: pre-wrap; /* Uzun hata mesajlarının düzgün görünmesi için */
+    word-break: break-all;
+}
+
+.modal-actions {
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid var(--vscode-sideBar-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.primary-button, .secondary-button { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+.primary-button { background-color: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+.primary-button:hover { background-color: var(--vscode-button-hoverBackground); }
+.secondary-button { background-color: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+.secondary-button:hover { background-color: var(--vscode-button-secondaryHoverBackground); }
+
+/* --- YENİ EKLENEN STİLLER --- */
+.form-group-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.form-group-toggle .toggle-label-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form-group-toggle .toggle-label-group label {
+    margin-bottom: 0;
+}
+
+.form-group-toggle .form-group-description {
+    flex-basis: 100%;
+    width: 100%;
+    margin-top: 8px;
+}
+
+.version-tag {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.form-group.disabled {
+    opacity: 0.5;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 20px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border);
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--vscode-icon-foreground);
+    transition: .4s;
+}
+
+input:checked + .slider {
+    background-color: var(--vscode-button-background);
+}
+
+input:checked + .slider:before {
+    transform: translateX(14px);
+}
+
+.slider.round {
+    border-radius: 20px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}

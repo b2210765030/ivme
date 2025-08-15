@@ -1,0 +1,209 @@
+{
+  "name": "ivme-ivme",
+  "displayName": "İvme",
+  "description": "LLM kullanarak kod hatalarını otomatik düzelten bir VS Code eklentisi.",
+  "version": "1.0.6",
+  "publisher": "ivme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bakisahin0128/AI.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "*",
+    "onView:baykar-ai-fixer.chatView"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "baykar-ai-fixer.applyFix",
+        "title": "İvme: Düzeltmeyi Uygula"
+      },
+      {
+        "command": "baykar.showPresentation",
+        "title": "Baykar: Baykar: Geliştirme Paketi Sunumunu Göster"
+      },
+      {
+        "command": "baykar-ai.showChat",
+        "title": "İvme Sohbetini Göster"
+      },
+      {
+        "command": "baykar-ai.sendToChat",
+        "title": "✈️ İvme'ye Gönder"
+      },
+      {
+        "command": "baykar-ai-fixer.checkVllmStatus",
+        "title": "İvme: Aktif Sunucu Durumunu Kontrol Et"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "baykar-ai-chat-container",
+          "title": "İvme",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "baykar-ai-chat-container": [
+        {
+          "id": "baykar-ai-fixer.chatView",
+          "name": "İvme",
+          "type": "webview",
+          "icon": "webview-ui/baykar-icon.svg"
+        }
+      ]
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "when": "resourceLangId",
+          "command": "baykar-ai.showChat",
+          "group": "navigation",
+          "icon": {
+            "light": "webview-ui/baykar-icon.svg",
+            "dark": "webview-ui/baykar-icon.svg"
+          }
+        }
+      ],
+      "editor/context": [
+        {
+          "when": "editorHasSelection",
+          "command": "baykar-ai.sendToChat",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "baykar-ai.sendToChat",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "editorHasSelection"
+      }
+    ],
+    "configuration": {
+      "title": "İvme Ayarları",
+      "properties": {
+        "baykar-ai-fixer.api.activeService": {
+          "type": "string",
+          "enum": [
+            "vLLM",
+            "Gemini"
+          ],
+          "default": "vLLM",
+          "description": "Kod analizi ve üretimi için kullanılacak yapay zeka servisi."
+        },
+        "baykar-ai-fixer.indexing.sourceName": {
+          "type": "string",
+          "default": "workspace",
+          "description": "Indekslenen kaynağın adı (örn: my-project-v1)."
+        },
+        "baykar-ai-fixer.indexing.includeGlobs": {
+          "type": "array",
+          "default": [
+            "**/*.ts",
+            "**/*.tsx",
+            "**/*.js",
+            "**/*.jsx",
+            "**/*.py",
+            "**/*.{c,cc,cpp,cxx,h,hpp,hxx,c++}",
+            "**/*.json",
+            "**/*.css"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "İndeksleme sırasında dahil edilecek glob desenleri."
+        },
+        "baykar-ai-fixer.indexing.excludeGlobs": {
+          "type": "array",
+          "default": [
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/out/**"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "İndeksleme sırasında hariç tutulacak glob desenleri."
+        },
+        "baykar-ai-fixer.indexing.vectorStorePath": {
+          "type": "string",
+          "default": "",
+          "description": "Yerel vektör veritabanı dosya yolu (boş bırakılırsa extension storage kullanılır)."
+        },
+        "baykar-ai-fixer.indexing.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "İndeksleme özelliğini açar veya kapatır. Kapalıyken retrieval işlemi yapılmaz."
+        },
+        "baykar-ai-fixer.vllm.baseUrl": {
+          "type": "string",
+          "default": "http://ivme.baykar.tech/coder/v1",
+          "description": "Yerel vLLM sunucusunun OpenAI uyumlu adresi."
+        },
+        "baykar-ai-fixer.vllm.modelName": {
+          "type": "string",
+          "default": "o3-Qwen3-Coder-30B-A3B-Instruct",
+          "description": "vLLM sunucusunda kullanılacak modelin adı."
+        },
+        "baykar-ai-fixer.gemini.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Google Gemini API anahtarınız.",
+          "markdownDescription": "Google AI Studio üzerinden alacağınız API anahtarı. Bu anahtar gizli tutulmalıdır."
+        },
+        "baykar-ai-fixer.retrieval.cohereApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Opsiyonel: Cohere Rerank API anahtarınız. Doldurulursa sonuçlar hassas yeniden sıralanır.",
+          "markdownDescription": "Opsiyonel: Cohere Rerank için API anahtarı. Belirtilmezse yalnızca vektör benzerlik skorları kullanılır."
+        },
+        "baykar-ai-fixer.chat.conversationHistoryLimit": {
+          "type": "number",
+          "default": 2,
+          "description": "Sohbete gönderilecek önceki mesaj sayısı (bir kullanıcı ve bir asistan mesajı 1 sayılır). Modelin bağlamı hatırlaması için kullanılır."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint .",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/babel__generator": "^7.27.0",
+    "@types/babel__traverse": "^7.28.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "18.x",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^7.7.1",
+    "@typescript-eslint/parser": "^7.7.1",
+    "@vscode/test-cli": "^0.0.9",
+    "@vscode/test-electron": "^2.3.9",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@babel/generator": "^7.25.0",
+    "@babel/parser": "^7.25.0",
+    "@babel/traverse": "^7.25.0",
+    "@babel/types": "^7.25.0",
+    "@google/generative-ai": "^0.11.3",
+    "axios": "^1.7.2",
+    "cohere-ai": "^7.18.1",
+    "css": "^3.0.0"
+  }
+}

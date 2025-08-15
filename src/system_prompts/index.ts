@@ -1,0 +1,27 @@
+import * as tr from './tr';
+import * as en from './en';
+import { ContextManager } from '../features/manager/context';
+import { ChatMessage } from '../types';
+
+export type PromptLanguage = 'tr' | 'en';
+
+let currentLanguage: PromptLanguage = 'tr';
+
+export function setPromptLanguage(lang: PromptLanguage) {
+    currentLanguage = lang;
+}
+
+function getModule() {
+    return currentLanguage === 'en' ? en : tr;
+}
+
+export const createInitialSystemPrompt = () => getModule().createInitialSystemPrompt();
+export const createFixErrorPrompt = (
+    errorMessage: string,
+    lineNumber: number,
+    fullCode: string
+) => getModule().createFixErrorPrompt(errorMessage, lineNumber, fullCode);
+export const createContextualPrompt = (
+    lastUserMessage: ChatMessage,
+    contextManager: ContextManager
+) => getModule().createContextualPrompt(lastUserMessage, contextManager);

@@ -1,0 +1,86 @@
+/* ==========================================================================
+   GENEL STİLLER, TEMEL YARDIMCILAR VE ANİMASYONLAR
+   ========================================================================== */
+
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--vscode-editor-foreground);
+    background-color: transparent; /* Arka planı şeffaf yap */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* YENİ EKLENECEK STİLLER */
+#background-video {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    min-width: 100%;
+    min-height: 100%;
+    z-index: -1;
+    object-fit: cover;
+    
+    /* DİKKAT: Stil değişiklikleri burada */
+    opacity: 0.2; /* Normal opaklık değeri */
+    transition: opacity 0.5s ease-in-out; /* Geçiş animasyonu */
+}
+
+/* YENİ EKLENEN SINIF: Bu sınıf eklendiğinde video kaybolacak */
+#background-video.video-hidden {
+    opacity: 0;
+}
+
+.main-content-wrapper {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: transparent;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.invisible {
+    visibility: hidden !important;
+}
+
+/* --- Animasyonlar --- */
+
+.avatar-wrapper.loading::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    right: -3px;
+    bottom: -3px;
+    border-radius: 50%;
+    border: 3px solid var(--vscode-focusBorder);
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message.fade-in {
+    animation: fadeInUp 0.4s ease-out;
+}

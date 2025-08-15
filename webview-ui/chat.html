@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src {{cspSource}}; script-src 'nonce-{{nonce}}'; img-src {{cspSource}} https:; media-src {{cspSource}};">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="{{highlight_css_uri}}">
+    <link href="{{chat_css_uri}}" rel="stylesheet">
+    
+    <script src="{{diff_js_uri}}" nonce="{{nonce}}"></script>
+    
+    <title>İvme Chat</title>
+</head>
+<body data-ai-icon-uri="{{ai_icon_uri}}" data-user-icon-uri="{{user_icon_uri}}">
+    
+    <video autoplay muted loop id="background-video" src="{{welcome_video_uri}}"></video>
+
+    <div class="main-content-wrapper">
+        <header class="chat-header">
+            <button id="logo-button" class="header-logo-title" title="Geliştirme Paketi Sunumunu Göster">
+                <img src="{{logo_uri}}" alt="Logo" class="header-logo"/>
+                <span>İvme</span>
+            </button>
+            <div class="header-actions">
+
+                <div class="language-toggle">
+                    <input type="checkbox" id="language-toggle" />
+                    <label for="language-toggle" class="toggle-bubble">
+                        <span class="lang-option tr">TR</span>
+                        <span class="lang-option en">EN</span>
+                    </label>
+                </div>
+
+                <button id="history-button" class="icon-button" title="Konuşma Geçmişi">
+                    <img src="{{history_icon_uri}}" alt="Konuşma Geçmişi"/>
+                </button>
+                <button id="new-chat-button" class="icon-button" title="Yeni Konuşma">
+                    <img src="{{new_chat_icon_uri}}" alt="Yeni Konuşma"/>
+                </button>
+                <!-- Eski header indeks butonu kaldırıldı -->
+                <button id="feedback-button" class="icon-button" title="Geri Bildirim">
+                    <img src="{{feedback_icon_uri}}" alt="Geri Bildirim"/>
+                </button>
+                <button id="settings-button" class="icon-button" title="Ayarlar">
+                    <img src="{{settings_icon_uri}}" alt="Ayarlar"/>
+                </button>
+            </div>
+        </header>
+
+        <div id="history-panel" class="history-panel hidden">
+            <div id="history-list-container" class="history-list-container"></div>
+        </div>
+
+        <div id="welcome-container">
+            <div class="welcome-box">
+                <img src="{{logo_uri}}" alt="İvme Logo" id="welcome-logo"/>
+                <h1>İvme</h1>
+                <p id="welcome-subtitle">Kod geliştirme ve analiz süreçlerinizi yapay zeka ile hızlandırın.</p>
+            </div>
+        </div>
+
+        <div id="chat-container" class="hidden"></div>
+        
+        <div id="file-context-area"></div>
+
+        <div id="language-warning" class="language-warning">Daha iyi sonuçlar için "EN" mod önerilir.</div>
+
+
+        <div class="input-area">
+            <div class="input-wrapper">
+                <!-- Yeni: indeksleme overlay log alanı -->
+                <div id="indexer-overlay-log" class="indexer-overlay-log hidden"></div>
+                <textarea id="prompt-input" rows="1" placeholder="Bir soru sorun veya dosya ekleyin..."></textarea>
+                <div class="input-actions-bar">
+                    <div class="action-group-left">
+
+                        <button id="attach-file-button" title="Dosya Ekle">
+                            <img src="{{attach_icon_uri}}" alt="Dosya Ekle" />
+                        </button>
+
+                        <button id="agent-mode-button" title="Mod Seç">Chat</button>
+                        <div id="agent-mode-menu" class="agent-mode-menu hidden">
+                            <button class="agent-mode-item" data-mode="chat">Chat</button>
+                            <button class="agent-mode-item" data-mode="agent">Agent</button>
+                        </div>
+
+                        <!-- Yeni: Agent mod aktifken görünecek indeksleme butonları -->
+                        <button id="indexer-start-button" class="hidden" title="Projeyi İndeksle" aria-label="Projeyi İndeksle">
+                            <img src="{{index_icon_uri}}" alt="İndeksle" class="index-icon"/>
+                        </button>
+                        <button id="indexer-cancel-button" class="hidden" title="Durdur" aria-label="Durdur"></button>
+
+                        <button id="agent-status-collapsed" class="icon-button hidden" title="Agent bağlamını göster">
+                            <img src="{{agent_icon_uri}}" class="agent-status-icon" alt="Agent"/>
+                        </button>
+                        <div id="agent-status-bar" class="agent-status-bar hidden" title="Aktif bağlam">
+                            <img src="{{agent_icon_uri}}" class="agent-status-icon" alt="Agent Aktif"/>
+                            <span id="agent-status-text"></span>
+                            <button id="agent-status-hide" class="remove-selection-button" title="Bağlamı gizle">×</button>
+                        </div>
+
+                    </div>
+                    <div class="action-group-right">
+                        <div id="character-counter" class="character-counter">0 / 10000</div>
+                        
+                        <button id="send-button" title="Gönder">
+                            <img src="{{send_icon_uri}}" alt="Gönder" class="send-icon"/>
+                            <svg class="stop-icon hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+                                <path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>
+                            </svg>
+                        </button>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div> 
+    
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-sidebar">
+                <div class="modal-header"><h2>Ayarlar</h2></div>
+                <ul class="modal-nav">
+                    <li><button class="nav-button active" data-target="pane-services">Servisler</button></li>
+                    <li><button class="nav-button" data-target="pane-interface">Arayüz</button></li>
+                    <li><button class="nav-button" data-target="pane-general">Genel</button></li>
+                </ul>
+            </div>
+            <div class="modal-main-content">
+                <form id="settings-form">
+                    <div id="pane-services" class="settings-pane active">
+                        <div class="form-group"><label for="service-select">Aktif Servis</label><select id="service-select"><option value="vLLM">vLLM</option><option value="Gemini">Gemini</option></select></div>
+                        <div id="vllm-settings">
+                            <div class="form-group">
+                                <label for="vllm-url">vLLM Sunucu Adresi</label>
+                                <input type="text" id="vllm-url" placeholder="http://localhost:8000/v1">
+                                <p id="vllm-connection-error" class="form-group-error hidden"></p>
+                            </div>
+                            <div class="form-group">
+                                <label for="vllm-model">vLLM Model Adı</label>
+                                <input type="text" id="vllm-model" placeholder="Qwen/Qwen1.5-7B-Chat">
+                            </div>
+                        </div>                      
+                        <div id="gemini-settings" class="hidden"><div class="form-group"><label for="gemini-key">Gemini API Anahtarı</label><input type="password" id="gemini-key" placeholder="API Anahtarınızı girin"></div></div>
+                    </div>
+                    <div id="pane-interface" class="settings-pane">
+                        <div class="form-group form-group-toggle">
+                            <div class="toggle-label-group">
+                                <label for="video-toggle-switch">Arka Plan Videosu</label>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="video-toggle-switch" checked>
+                                <span class="slider round"></span>
+                            </label>
+                            <p class="form-group-description">Karşılama ekranında oynatılan arka plan videosunu açar veya kapatır.</p>
+                        </div>
+                    </div>
+                    <div id="pane-general" class="settings-pane">
+                        <div class="form-group"><label for="history-limit">Konuşma Geçmişi Limiti</label><input type="number" id="history-limit" min="0" placeholder="2"><p class="form-group-description">Sohbete gönderilecek önceki mesaj sayısı. Modelin bağlamı hatırlaması için kullanılır.</p></div>
+                    </div>
+                    <div class="modal-actions"><button type="button" id="cancel-settings-button" class="secondary-button">İptal</button><button type="submit" class="primary-button">Kaydet</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <template id="message-template">
+        <div class="message">
+            <div class="avatar-wrapper">
+                <img class="avatar-icon" src="" alt="Avatar">
+            </div>
+            <div class="message-content">
+            </div>
+        </div>
+    </template>
+
+    <template id="history-card-template">
+        <div class="history-card">
+            <span class="history-title"></span>
+            <button class="delete-chat-button" title="Sohbeti Sil">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06z"/></svg>
+            </button>
+        </div>
+    </template>
+
+    <script src="{{marked_js_uri}}" nonce="{{nonce}}"></script>
+    <script src="{{highlight_js_uri}}" nonce="{{nonce}}"></script>
+    
+    <script type="module" src="{{chat_js_uri}}" nonce="{{nonce}}" data-agent-icon-uri="{{agent_icon_uri}}"></script>
+</body>
+</html>

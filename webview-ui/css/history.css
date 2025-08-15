@@ -1,0 +1,72 @@
+/* ==========================================================================
+   HISTORY PANEL (GEÇMİŞ PANELİ) STİLLERİ
+   DÜZELTME: Sekme değiştirildiğinde yarım kalma sorununu çözmek için
+             max-height animasyonu kaldırıldı, display:none kullanıldı.
+   ========================================================================== */
+
+.history-panel {
+    background-color: var(--vscode-sideBar-background);
+    border-bottom: 1px solid var(--vscode-widget-border);
+    padding: 12px 15px;
+    position: relative;
+    z-index: 10;
+    /* max-height, overflow ve transition animasyonları kaldırıldı */
+}
+
+.history-panel.hidden {
+    display: none;
+}
+
+.history-list-container {
+    display: flex;
+    overflow-x: auto;
+    gap: 12px;
+    padding-bottom: 10px;
+}
+
+.history-list-container::-webkit-scrollbar { height: 6px; }
+.history-list-container::-webkit-scrollbar-track { background: transparent; }
+.history-list-container::-webkit-scrollbar-thumb { background-color: var(--vscode-scrollbarSlider-background); border-radius: 3px; }
+.history-list-container::-webkit-scrollbar-thumb:hover { background-color: var(--vscode-scrollbarSlider-hoverBackground); }
+
+.history-card {
+    flex: 0 0 180px;
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-sideBar-border);
+    border-radius: 6px;
+    padding: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    position: relative;
+}
+
+.history-card:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+    border-color: var(--vscode-focusBorder);
+}
+
+.delete-chat-button {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: none;
+    border: none;
+    color: var(--vscode-icon-foreground);
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.5;
+}
+
+.delete-chat-button:hover {
+    opacity: 1;
+    background-color: var(--vscode-button-secondaryBackground);
+}
