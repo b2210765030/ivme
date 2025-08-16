@@ -140,3 +140,30 @@ pre code.hljs {
     transition: opacity 0.2s ease-in-out;
     will-change: content; /* Performans ipucu */
 }
+
+/* --- Streaming Placeholder Shimmer Efekti (sadece placeholder alanı) --- */
+/* Sadece placeholder ve shimmer-active sınıfı birlikteyken nazik bir puls (parla/sön) uygula */
+#ai-streaming-placeholder.shimmer-active .message-content {
+    position: relative;
+    color: #8a8a8a; /* koyu gri taban */
+    animation: aiPulse 1.2s ease-in-out infinite;
+    will-change: color, text-shadow, opacity;
+}
+
+@keyframes aiPulse {
+    0%, 100% {
+        color: #8a8a8a;
+        opacity: 0.94;
+        text-shadow: 0 0 0 rgba(255, 255, 255, 0);
+    }
+    50% {
+        color: #d6d6d6; /* hafifçe daha açık gri */
+        opacity: 1;
+        text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+    }
+}
+
+/* "İvme planladı" metni için soft gri (pulse yok) */
+.planned-soft {
+    color: #8a8a8a;
+}

@@ -21,6 +21,8 @@ export type PlannerPlanStep = {
 	step: number;
 	action: string;
 	thought: string;
+	/** UI'da gösterilecek kısa, tek cümlelik açıklama (opsiyonel) */
+	ui_text?: string;
 	// Opsiyonel alanlar (LLM ekleyebilir)
 	files_to_edit?: string[];
 	notes?: string;
@@ -229,11 +231,12 @@ export function createPlannerPrompt(plannerContext: string, userQuery: string): 
 		`- Think step-by-step.\n` +
 		`- Optimize for minimal changes while ensuring correctness.\n` +
 		`- Prefer editing existing files over creating new ones unless necessary.\n` +
+		`- For each step, include a concise Turkish one-sentence summary in the field ".ui_text" that will be shown directly in the UI. Keep it short and human-friendly.\n` +
 		`- Output strictly valid JSON following the schema below. Do not include any prose outside JSON.\n\n` +
 		`# JSON OUTPUT SCHEMA\n` +
 		`{\n` +
 		`  "steps": [\n` +
-		`    { "step": <number>, "action": <string>, "thought": <string>, "files_to_edit": <string[]|optional>, "notes": <string|optional> }\n` +
+		`    { "step": <number>, "action": <string>, "thought": <string>, "ui_text": <string|optional>, "files_to_edit": <string[]|optional>, "notes": <string|optional> }\n` +
 		`  ]\n` +
 		`}`
 	);
@@ -261,24 +264,59 @@ export function parse_and_validate_plan(rawResponse: string): PlannerPlan {
 		if (typeof s.step !== 'number' || typeof s.action !== 'string' || typeof s.thought !== 'string') {
 			throw new Error(`Plan adımı ${idx} zorunlu alanları içermiyor (step:number, action:string, thought:string).`);
 		}
-		steps.push({ step: s.step, action: s.action, thought: s.thought, files_to_edit: s.files_to_edit, notes: s.notes });
+		const uiText = typeof s.ui_text === 'string' ? s.ui_text : undefined;
+		steps.push({ step: s.step, action: s.action, thought: s.thought, ui_text: uiText, files_to_edit: s.files_to_edit, notes: s.notes });
 	}
 
 	return { steps };
 }
 
 /** Uçtan uca: Bağlamı inşa eder, prompt'u kurar, LLM'i çağırır ve planı döndürür. */
-export async function run_planner(context: vscode.ExtensionContext, api: ApiServiceManager, userQuery: string): Promise<PlannerPlan> {
-	// Sadece indeksleme aktifken devreye girsin
-	const config = vscode.workspace.getConfiguration(EXTENSION_ID);
-	const indexingEnabled = config.get<boolean>(SETTINGS_KEYS.indexingEnabled, false);
-	if (!indexingEnabled) {
-		throw new Error('Planner yalnızca indeksleme aktifken çalışır. Lütfen Index düğmesini etkinleştirin.');
-	}
-
+export async function run_planner(
+	context: vscode.ExtensionContext,
+	api: ApiServiceManager,
+	userQuery: string,
+	onUiEmit?: (stepNo: number | undefined, uiText: string, isFinal?: boolean) => Promise<void> | void,
+	cancellationSignal?: AbortSignal
+): Promise<PlannerPlan> {
+	// GEÇİCİ: Planner her zaman çalışsın (indeksleme açık olmasa da). Bağlam üretimi indeks yoksa temel içerik döndürür.
 	const plannerContext = await build_planner_context(context, userQuery);
 	const prompt = createPlannerPrompt(plannerContext, userQuery);
+	console.log('[Planner] Prompt sent to LLM (truncated to 2000 chars):', prompt.slice(0, 2000));
+
+	if (typeof onUiEmit === 'function') {
+		const messages = [{ role: 'user' as const, content: prompt }];
+		let buffer = '';
+		let fullRaw = '';
+		const emittedOffsets = new Set<number>();
+		const reUi = /\"ui_text\"\s*:\s*\"((?:\\\\.|[^\"\\\\])*)\"/g;
+
+		const onChunk = (chunk: string) => {
+			if ((cancellationSignal as any)?.aborted) return;
+			buffer += chunk;
+			fullRaw += chunk;
+
+			let m: RegExpExecArray | null;
+			while ((m = reUi.exec(buffer)) !== null) {
+				const idx = m.index;
+				if (emittedOffsets.has(idx)) continue;
+				emittedOffsets.add(idx);
+				const before = buffer.slice(Math.max(0, idx - 200), idx + m[0].length);
+				const stepMatch = /\"step\"\s*:\s*(\d+)/.exec(before);
+				const stepNo = stepMatch ? Number(stepMatch[1]) : undefined;
+				const rawUi = m[1].replace(/\\\\\"/g, '"').replace(/\\\\\\/g, '\\');
+				try { onUiEmit(stepNo, rawUi, true); } catch (e) { console.warn('[Planner] onUiEmit error', e); }
+			}
+			if (buffer.length > 20000) buffer = buffer.slice(-10000);
+		};
+
+		await api.generateChatContent(messages, onChunk, cancellationSignal as any);
+		console.log('[Planner] Raw response from LLM (truncated to 2000 chars):', String(fullRaw).slice(0, 2000));
+		return parse_and_validate_plan(fullRaw);
+	}
+
 	const raw = await api.generateContent(prompt);
+	console.log('[Planner] Raw response from LLM (truncated to 2000 chars):', String(raw).slice(0, 2000));
 	return parse_and_validate_plan(raw);
 }
 

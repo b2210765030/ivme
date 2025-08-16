@@ -18,6 +18,8 @@ let charBuffer = '';
 let lastRenderTime = 0;
 let targetCharsPerSecond = 80; // Dinamik ölçüm için başlangıç
 let rateWindow = [];
+let finalReplaceText = null;
+let planTimerStartMs = null;
 
 let shouldAutoScroll = true;
 
@@ -167,7 +169,12 @@ function processTypingQueue() {
             const toAdd = charBuffer.slice(0, allow);
             charBuffer = charBuffer.slice(allow);
             streamingBuffer += toAdd;
-            contentElement.innerHTML = marked.parse(streamingBuffer);
+            // Planner streaming modunda markdown parse etme; düz metin göster
+            if (placeholder.classList.contains('planner-streaming')) {
+                contentElement.textContent = streamingBuffer;
+            } else {
+                contentElement.innerHTML = marked.parse(streamingBuffer);
+            }
             if (shouldAutoScroll) DOM.chatContainer.scrollTop = DOM.chatContainer.scrollHeight;
             lastRenderTime = timestamp;
         }
@@ -189,6 +196,11 @@ function runFinalizationLogic() {
 
     placeholder.querySelector('.avatar-wrapper')?.classList.remove('loading');
     const contentElement = placeholder.querySelector('.message-content');
+    // Final metin ayarlanmışsa, içerik onu göstersin
+    if (finalReplaceText && typeof finalReplaceText === 'string') {
+        contentElement.textContent = finalReplaceText;
+        finalReplaceText = null;
+    }
     
     contentElement.querySelectorAll('pre code').forEach(block => {
         hljs.highlightElement(block);
@@ -243,6 +255,77 @@ export function addAiResponsePlaceholder() {
     messageElement.id = 'ai-streaming-placeholder';
     const avatarWrapper = messageElement.querySelector('.avatar-wrapper');
     avatarWrapper.classList.add('loading');
+    // Shimmer efektini başlangıçta aktif et
+    messageElement.classList.add('shimmer-active');
+    // Plan süresi ölçümü için başlangıç zamanı kaydet
+    try { planTimerStartMs = performance.now(); } catch { planTimerStartMs = Date.now(); }
+}
+
+// YENİ: Akış finalize olurken placeholder içeriğini özel bir metinle değiştirmek için
+export function setFinalReplaceText(text) {
+    finalReplaceText = typeof text === 'string' ? text : '';
+}
+
+// YENİ: Planner streaming başlığı değiştirme
+export function replaceStreamingPlaceholderHeader(text) {
+    const placeholder = document.getElementById('ai-streaming-placeholder');
+    if (!placeholder) {
+        addAiResponsePlaceholder();
+    }
+    const el = document.getElementById('ai-streaming-placeholder');
+    if (!el) return;
+    const contentElement = el.querySelector('.message-content');
+    // Yeni adım başlarken önce mevcut streaming durumunu sıfırla ve başlığı buffer'a yaz (düz metin)
+    streamingBuffer = text || '';
+    charBuffer = '';
+    rateWindow = [];
+    targetCharsPerSecond = 80;
+    // Devam eden animasyon varsa aynı döngü çalışmaya devam etsin; sadece zamanlamayı sıfırla
+    lastRenderTime = 0;
+    contentElement.textContent = streamingBuffer; // düz metin ("ivme düşünüyor" ile aynı tip)
+}
+
+// YENİ: Planner streaming state işareti (UI davranışı için kullanılabilir)
+export function setPlannerStreaming(active) {
+    const el = document.getElementById('ai-streaming-placeholder');
+    if (!el) return;
+    if (active) {
+        el.classList.add('planner-streaming');
+    } else {
+        el.classList.remove('planner-streaming');
+    }
+}
+
+// YENİ: Placeholder shimmer efektini aç/kapat
+export function setShimmerActive(active) {
+    const el = document.getElementById('ai-streaming-placeholder');
+    if (!el) return;
+    if (active) {
+        el.classList.add('shimmer-active');
+    } else {
+        el.classList.remove('shimmer-active');
+    }
+}
+
+// YENİ: Plan tamamlandığında placeholder metnini soft gri renkte (pulse olmadan) sabitle
+export function replaceStreamingPlaceholderWithPlanned(text) {
+    const el = document.getElementById('ai-streaming-placeholder');
+    if (!el) return;
+    const contentElement = el.querySelector('.message-content');
+    // Pulse kapalı ve sabit yumuşak gri renk
+    el.classList.remove('shimmer-active');
+    contentElement.style.animation = 'none';
+    // Streaming state'i planned metinle senkronize et (yalnızca planned satır gri olsun)
+    const safe = String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    streamingBuffer = `<span class="planned-soft">${safe}</span>\n\n`;
+    charBuffer = '';
+    // Metni doğrudan yaz (HTML içerir)
+    contentElement.innerHTML = streamingBuffer;
+}
+
+// YENİ: Plan zamanlayıcısını dışarıya verir
+export function getPlanTimerStartMs() {
+    return planTimerStartMs;
 }
 
 export function appendResponseChunk(chunk) {
@@ -326,10 +409,7 @@ export function load(messages) {
 
 // YENİ: Değişikliği Uygula butonunun görünürlüğünü güncelleyen fonksiyon
 function updateApplyButtonVisibility(button) {
+    if (!button) return; // Kod bloğu olmayan mesajlarda buton yoktur
     const { isAgentModeActive, isAgentSelectionActive } = getState();
-    if (isAgentModeActive && isAgentSelectionActive) {
-        button.style.display = ''; // Göster
-    } else {
-        button.style.display = 'none'; // Gizle
-    }
+    button.style.display = (isAgentModeActive && isAgentSelectionActive) ? '' : 'none';
 }

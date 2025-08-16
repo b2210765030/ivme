@@ -14,9 +14,10 @@ import { ChatMessage } from '../../types/index';
 import { EXTENSION_ID, SETTINGS_KEYS } from '../../core/constants';
 import { createContextualPrompt } from '../../system_prompts';
 import { build_context_for_query } from '../../services/orchestrator';
-import { run_planner } from '../../services/planner';
+import { run_planner, PlannerPlan } from '../../services/planner';
 export class InteractionHandler {
     private currentRequestController: AbortController | null = null;
+    private lastPlannerPlan: PlannerPlan | null = null;
 
     constructor(
         private conversationManager: ConversationManager,
@@ -39,21 +40,110 @@ export class InteractionHandler {
         }
         
         this.conversationManager.addMessage('user', instruction);
-        // Eğer indexing etkinse, önce Planner'ı çalıştır ve retrieval akışını Bypass et
-        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
-        const indexingEnabled = config.get<boolean>(SETTINGS_KEYS.indexingEnabled, false);
-        if (indexingEnabled) {
-            try {
-                const plan = await run_planner(this.conversationManager.getExtensionContext(), this.apiManager, instruction);
-                // Planı UI'da göster
-                this.webview.postMessage({ type: 'plannerResult', payload: { plan } });
-                return; // Şimdilik chat LLM akışını başlatma
-            } catch (e) {
-                console.warn('[Interaction] Planner çalıştırılırken hata oluştu, sohbet akışına dönülüyor:', e);
-            }
-        }
+        console.log('[Planner] User instruction:', instruction);
+        // Koşullu: Sadece Agent Modu aktif VE indeksleme (index butonu) açıkken planner akışı çalışsın
+        try {
+            this.currentRequestController = new AbortController();
+            const cancellationSignal = this.currentRequestController.signal;
 
-        await this.streamStandardChat();
+            const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+            const isAgentActive = config.get<boolean>(SETTINGS_KEYS.agentModeActive, false);
+            const isIndexEnabled = config.get<boolean>(SETTINGS_KEYS.indexingEnabled, false);
+
+            if (isAgentActive && isIndexEnabled) {
+                // Streaming: ui_text parçalarını anında UI'a ilet
+                const plan = await run_planner(
+                    this.conversationManager.getExtensionContext(),
+                    this.apiManager,
+                    instruction,
+                    (stepNo, uiText, isFinal) => {
+                        // Tipografik/daktilo efekti için parça olarak gönderme yerine UI tarafında efekt verilecek
+                        this.webview.postMessage({ type: 'plannerUiChunk', payload: { stepNo, uiText, isFinal } });
+                    },
+                    cancellationSignal as any
+                );
+                // Plan tamamlandığında nihai sonucu da gönder
+                this.webview.postMessage({ type: 'plannerResult', payload: { plan } });
+                // Planı hafızada tut
+                this.lastPlannerPlan = plan;
+                this.currentRequestController = null;
+
+                // Plan finalize edildikten sonra, aynı placeholder altında açıklamayı stream et
+                setTimeout(() => {
+                    this.streamPlanExplanationInline(plan).catch(err => console.error('[Interaction] Plan explanation error:', err));
+                }, 50);
+            } else {
+                // Standart sohbet akışına geri dön
+                await this.streamStandardChat();
+                return;
+            }
+        } catch (e) {
+            console.error('[Interaction] Planner çalıştırılırken hata oluştu:', e);
+            // Hata durumunda kullanıcıya bilgi ver
+            const errorMessage = e instanceof Error ? e.message : 'Planner çalıştırılırken hata oluştu.';
+            this.webview.postMessage({ type: 'addResponse', payload: `**Hata:** ${errorMessage}` });
+            this.webview.postMessage({ type: 'streamEnd' });
+        }
+    }
+
+    /**
+     * Plan çıktılarını çok kısa, sade Türkçe cümlelerle adım adım açıklar ve webview'e stream eder.
+     */
+    private async streamPlanExplanationInline(plan: PlannerPlan) {
+        // Yeni bir akış başlatılacağı için önce varsa önceki isteği iptal et
+        if (this.currentRequestController) {
+            try { this.currentRequestController.abort(); } catch {}
+        }
+        this.currentRequestController = new AbortController();
+        const cancellationSignal = this.currentRequestController.signal;
+        // Yeni placeholder açma — aynı mesajda devam edeceğiz, sadece markdown açıklama gelecek
+
+        // Promptu hazırla
+        const planJson = JSON.stringify(plan, null, 2);
+        const systemInstruction = [
+            'Türkçe konuşan bir yazılım asistanısın.',
+            'Kullanıcıya sunulacak kısa ve güzel bir açıklama metni üret: önce tek cümlelik bir GİRİŞ (ör. "Adımlarımız şunlardır:"),',
+            'ardından her plan adımını KISA ve NET bir cümleyle NUMARALANDIRILMIŞ olarak ver (1) 2) ...).',
+            'Son olarak kısa bir GENEL ÖZET/SONUÇ cümlesi ekle.',
+            'Dil akıcı, profesyonel ve samimi olsun; gereksiz detaya girmesin; toplam metin kısa kalsın.',
+            'Markdown kullanımı serbest (başlık/paragraf/list), ancak kod bloğu kullanma.'
+        ].join(' ');
+
+        const userRequest = [
+            "Aşağıda plan JSON'u var. Lütfen aşağıdaki formatta çıktı üret:",
+            "Giriş cümlesi\n\n1) Kısa cümle\n2) Kısa cümle\n...\n\nÖzet: Kısa sonuç cümlesi",
+            'Plan(JSON):',
+            '```json',
+            planJson,
+            '```'
+        ].join('\n');
+
+        const messages = [
+            { role: 'system' as const, content: systemInstruction },
+            { role: 'user' as const, content: userRequest }
+        ];
+
+        try {
+            await this.apiManager.generateChatContent(
+                messages,
+                (chunk) => {
+                    if ((cancellationSignal as any)?.aborted) return;
+                    this.webview.postMessage({ type: 'addResponseChunk', payload: chunk });
+                },
+                cancellationSignal as any
+            );
+        } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                console.log('[Interaction] Plan explanation aborted by user.');
+            } else {
+                console.error('[Interaction] Plan explanation stream error:', error);
+                const errorMessage = error instanceof Error ? error.message : 'Açıklama oluşturulurken bir hata oluştu.';
+                this.webview.postMessage({ type: 'addResponse', payload: `**Hata:** ${errorMessage}` });
+            }
+        } finally {
+            this.webview.postMessage({ type: 'streamEnd' });
+            this.currentRequestController = null;
+        }
     }
 
     private async streamStandardChat() {
@@ -113,52 +203,8 @@ export class InteractionHandler {
             // YENİ: Talimat oluşturma işlemi `promptBuilder`'a devredildi.
             const contextualContent = createContextualPrompt(lastUserMessage, this.contextManager);
             
-            // YENİ: Sadece Agent modunda index retrieval yap
-            // Chat modunda sadece contextual content kullan
-            const isAgentModeActive = config.get<boolean>(SETTINGS_KEYS.agentModeActive, false);
-            
-            if (isAgentModeActive) {
-                // Agent modunda: eğer indexing etkinse önce Planner çalışsın (retrieval öncesi)
-                const config = vscode.workspace.getConfiguration(EXTENSION_ID);
-                const indexingEnabled = config.get<boolean>(SETTINGS_KEYS.indexingEnabled, false);
-
-                if (indexingEnabled) {
-                    try {
-                        // Planner'ı çalıştır (doğrudan LLM'e gider)
-                        const plan = await run_planner(this.conversationManager.getExtensionContext(), this.apiManager, lastUserMessage.content);
-                        // UI'ya planı göster
-                        this.webview.postMessage({ type: 'plannerResult', payload: { plan } });
-
-                        // Planner çıktısını kullanıcı mesajına ekle (LLM'e gönderilecek sohbet bağlamına)
-                        const merged = `${contextualContent}\n\n<planner_result>\n${JSON.stringify(plan, null, 2)}\n</planner_result>`;
-                        limitedHistory[lastUserMessageIndex] = { role: 'user', content: merged };
-                    } catch (e) {
-                        console.warn('[Interaction] Planner çalıştırılırken hata oluştu, normal akışa dönülüyor:', e);
-                        // Fallback: retrieval ile bağlam oluştur
-                        try {
-                            const contextText = await build_context_for_query(this.conversationManager.getExtensionContext(), this.apiManager, lastUserMessage.content);
-                            const merged = `${contextualContent}\n\n<retrieved_context>\n${contextText}\n</retrieved_context>`;
-                            limitedHistory[lastUserMessageIndex] = { role: 'user', content: merged };
-                        } catch (e2) {
-                            console.warn('[Interaction] Retrieval başarısız, bağlam eklenmeden devam ediliyor:', e2);
-                            limitedHistory[lastUserMessageIndex] = { role: 'user', content: contextualContent };
-                        }
-                    }
-                } else {
-                    // Index kapalıysa eski davranış (retrieval)
-                    try {
-                        const contextText = await build_context_for_query(this.conversationManager.getExtensionContext(), this.apiManager, lastUserMessage.content);
-                        const merged = `${contextualContent}\n\n<retrieved_context>\n${contextText}\n</retrieved_context>`;
-                        limitedHistory[lastUserMessageIndex] = { role: 'user', content: merged };
-                    } catch (e) {
-                        console.warn('[Interaction] Retrieval başarısız, bağlam eklenmeden devam ediliyor:', e);
-                        limitedHistory[lastUserMessageIndex] = { role: 'user', content: contextualContent };
-                    }
-                }
-            } else {
-                // Chat modunda: sadece contextual content kullan, retrieval yapma
-                limitedHistory[lastUserMessageIndex] = { role: 'user', content: contextualContent };
-            }
+            // GEÇİCİ: Retrieval'ı tamamen bypass ediyoruz; sadece contextual content kullanıyoruz.
+            limitedHistory[lastUserMessageIndex] = { role: 'user', content: contextualContent };
         }
 
         return systemPrompt ? [systemPrompt, ...limitedHistory] : limitedHistory;

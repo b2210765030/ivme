@@ -67,6 +67,8 @@ export const tokenPercentageText = document.querySelector('.token-progress-ring 
 export const i18n = {
     tr: {
         thinking: 'İvme düşünüyor...',
+        planned: 'İvme planladı',
+        planExplaining: 'Plan açıklaması',
         responding: 'İvme yanıtlıyor, lütfen bekleyin...',
         placeholder: 'ivmeye soru sorun...',
         welcomeSubtitle: 'Kod geliştirme ve analiz süreçlerinizi yapay zeka ile hızlandırın.',
@@ -117,6 +119,8 @@ export const i18n = {
     },
     en: {
         thinking: 'İvme is thinking...',
+        planned: 'İvme planned',
+        planExplaining: 'Plan explanation',
         responding: 'İvme is responding, please wait...',
         placeholder: 'ask İvme a question...',
         welcomeSubtitle: 'Accelerate your code development and analysis with AI.',

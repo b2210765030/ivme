@@ -18,10 +18,15 @@ export function cleanLLMCodeBlock(rawResponse: string): string {
  * @returns Temizlenmiş JSON string'i.
  */
 export function cleanLLMJsonBlock(rawResponse: string): string {
-    // 1. Önce standart markdown bloğunu ara
-    const jsonMatch = rawResponse.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-        return jsonMatch[1].trim();
+    // 1. Önce ```json ile başlayan bir blok arayın ve kapanışı en sondaki ``` olarak kabul edin
+    const fenceStart = rawResponse.indexOf('```json');
+    if (fenceStart !== -1) {
+        // Başlangıçtan sonra ilk satır sonunu geç (```json\n ...)
+        const afterStart = rawResponse.indexOf('\n', fenceStart);
+        const fenceEnd = rawResponse.lastIndexOf('```'); // iç içe kod blokları varsa ilk kapanış yerine en sondakini al
+        if (afterStart !== -1 && fenceEnd > afterStart) {
+            return rawResponse.substring(afterStart + 1, fenceEnd).trim();
+        }
     }
 
     // 2. Markdown bloğu yoksa, ilk açılan ve son kapanan süslü parantezi bul
