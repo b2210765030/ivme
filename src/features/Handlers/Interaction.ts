@@ -110,17 +110,16 @@ export class InteractionHandler {
         const planJson = JSON.stringify(plan, null, 2);
         const systemInstruction = [
             'Türkçe konuşan bir yazılım asistanısın.',
-            'Verilen plan JSON\'unu kullanıcıya bilgi amaçlı, birinci şahıs (modelin yapacağı işi ifade eden) dilde kısa açıklamalar halinde sun.',
-            'Her adımı birinci şahıs olarak, gelecek zaman veya şimdiki devam eden eylem olarak yaz (örnek: "Yeni bir Python dosyası oluşturacağım.", "Merge sort fonksiyonunu implement edeceğim.", "Dosyayı seçeceğim").',
-            'Emir kipi/kişiye yönelik talimat ("Oluşturun", "Create ...") kullanma; kullanıcıya görev vermekten kaçın.',
-            'Cümleler kısa, net ve numaralandırılmış olsun. Her adımı yalnızca bir cümleyle açıkla; gerekirse kısa bir notu "notes" alanına koy.',
-            'Başlangıçta kısa bir GİRİŞ cümlesi, sonunda kısa bir ÖZET cümlesi ver.',
-            'Dil samimi, profesyonel ve öz olsun; gereksiz detaya girmesin; kod bloğu kullanma.'
+            'Kullanıcıya sunulacak kısa ve güzel bir açıklama metni üret: önce tek cümlelik bir GİRİŞ (ör. "Adımlarımız şunlardır:"),',
+            'ardından her plan adımını KISA ve NET bir cümleyle NUMARALANDIRILMIŞ olarak ver (1) 2) ...).',
+            'Son olarak kısa bir GENEL ÖZET/SONUÇ cümlesi ekle.',
+            'Dil akıcı, profesyonel ve samimi olsun; gereksiz detaya girmesin; toplam metin kısa kalsın.',
+            'Markdown kullanımı serbest (başlık/paragraf/list), ancak kod bloğu kullanma.'
         ].join(' ');
 
         const userRequest = [
-            "Aşağıda plan JSON'u var. Lütfen aşağıdaki formatta çıktı üret: Her cümleyi birinci şahıs (modelin yapacağını belirten) şekilde yaz.",
-            "Giriş cümlesi\n\n1) Kısa cümle (birinci şahıs)\n2) Kısa cümle (birinci şahıs)\n...\n\nÖzet: Kısa sonuç cümlesi (birinci şahıs)",
+            "Aşağıda plan JSON'u var. Lütfen aşağıdaki formatta çıktı üret:",
+            "Giriş cümlesi\n\n1) Kısa cümle\n2) Kısa cümle\n...\n\nÖzet: Kısa sonuç cümlesi",
             'Plan(JSON):',
             '```json',
             planJson,
