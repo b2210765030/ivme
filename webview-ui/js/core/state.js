@@ -238,10 +238,17 @@ export function setIndexingEnabledState(enabled) {
             indexingMessage = '';
             updateIndexerProgressUI();
             // Ensure input wrapper shows complete and any message-level progress is cleared
+            // Only apply visual changes to the input wrapper when Agent mode is active.
             if (inputWrapper) {
-                inputWrapper.classList.remove('indexing-active', 'indexing-ready');
-                inputWrapper.classList.add('indexing-complete');
-                inputWrapper.style.setProperty('--indexing-progress', '100%');
+                if (isAgentModeActive) {
+                    inputWrapper.classList.remove('indexing-active', 'indexing-ready');
+                    inputWrapper.classList.add('indexing-complete');
+                    inputWrapper.style.setProperty('--indexing-progress', '100%');
+                } else {
+                    // If not in Agent mode, ensure no residual indexing visuals remain
+                    inputWrapper.classList.remove('indexing-active', 'indexing-complete', 'indexing-ready');
+                    inputWrapper.style.setProperty('--indexing-progress', '0%');
+                }
             }
             // Clear any leftover per-message progress styles (from old behavior)
             document.querySelectorAll('.message').forEach(m => {
@@ -259,15 +266,22 @@ export function setIndexingEnabledState(enabled) {
             // vektör yoksa retrieval açık ama index yok: kullanıcının retrieval'ü aktif ettiği durumda
             // hafif bir hazır/ready göstergesi gösterelim (shimmer yerine subtle renk)
             if (inputWrapper) {
-                inputWrapper.classList.remove('indexing-complete');
-                inputWrapper.classList.add('indexing-ready');
-                // hafif doldurma (örnek: 10%)
-                inputWrapper.style.setProperty('--indexing-progress', '10%');
+                if (isAgentModeActive) {
+                    inputWrapper.classList.remove('indexing-complete');
+                    inputWrapper.classList.add('indexing-ready');
+                    // hafif doldurma (örnek: 10%)
+                    inputWrapper.style.setProperty('--indexing-progress', '10%');
+                } else {
+                    // Not agent mode -> clear any indexing visual
+                    inputWrapper.classList.remove('indexing-active', 'indexing-complete', 'indexing-ready');
+                    inputWrapper.style.setProperty('--indexing-progress', '0%');
+                }
             }
         }
     } else {
         // retrieval kapandıysa tamamlanmış işaretini kaldır
         if (inputWrapper) {
+            // Always clear visual when retrieval disabled regardless of mode
             inputWrapper.classList.remove('indexing-complete');
             inputWrapper.classList.remove('indexing-ready');
             inputWrapper.style.setProperty('--indexing-progress', '0%');
@@ -331,24 +345,31 @@ function updateIndexerProgressUI() {
     if (inputWrapper) {
         // Yumuşak geçiş için CSS transition kullan
         inputWrapper.style.setProperty('--indexing-progress', progressValue);
-        
-        // Durumları yönet
-        if (indexingProgress > 0 && indexingProgress < 100) {
-            // Aktif indeksleme: dalga açık, complete kapalı
-            if (!inputWrapper.classList.contains('indexing-active')) {
-                inputWrapper.classList.add('indexing-active');
-            }
-            inputWrapper.classList.remove('indexing-complete');
-        } else if (indexingProgress >= 100) {
-            // Tamamlandı: dalga kapalı, hafif renkli temel dolum açık
-            inputWrapper.classList.remove('indexing-active');
-            if (!inputWrapper.classList.contains('indexing-complete')) {
-                inputWrapper.classList.add('indexing-complete');
+
+        // Sadece Agent modu aktifse input üzerindeki indexing görsellerini uygula.
+        // Diğer modlarda hiçbir pulse/index görseli bırakılmasın.
+        if (isAgentModeActive) {
+            if (indexingProgress > 0 && indexingProgress < 100) {
+                // Aktif indeksleme: dalga açık, complete kapalı
+                if (!inputWrapper.classList.contains('indexing-active')) {
+                    inputWrapper.classList.add('indexing-active');
+                }
+                inputWrapper.classList.remove('indexing-complete');
+            } else if (indexingProgress >= 100) {
+                // Tamamlandı: dalga kapalı, hafif renkli temel dolum açık
+                inputWrapper.classList.remove('indexing-active');
+                if (!inputWrapper.classList.contains('indexing-complete')) {
+                    inputWrapper.classList.add('indexing-complete');
+                }
+            } else {
+                // 0 veya negatif: her ikisini kapat ve genişliği sıfırla
+                inputWrapper.classList.remove('indexing-active');
+                inputWrapper.classList.remove('indexing-complete');
+                inputWrapper.style.setProperty('--indexing-progress', '0%');
             }
         } else {
-            // 0 veya negatif: her ikisini kapat ve genişliği sıfırla
-            inputWrapper.classList.remove('indexing-active');
-            inputWrapper.classList.remove('indexing-complete');
+            // Agent modu değilse tüm indexing sınıflarını ve görsellerini temizle
+            inputWrapper.classList.remove('indexing-active', 'indexing-complete', 'indexing-ready');
             inputWrapper.style.setProperty('--indexing-progress', '0%');
         }
     }

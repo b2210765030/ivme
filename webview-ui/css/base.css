@@ -39,6 +39,14 @@ body, html {
     display: flex;
     flex-direction: column;
     background-color: transparent;
+    position: relative; /* ensure absolutely positioned welcome box is positioned relative to this container */
+}
+
+/* safe bottom space to avoid content being hidden by the input area
+   can be updated dynamically via JS by setting --input-safe-bottom on
+   the .main-content-wrapper element */
+:root {
+    --input-safe-bottom: 260px; /* default reserve space for input */
 }
 
 .hidden {

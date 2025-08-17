@@ -61,6 +61,21 @@ export function init() {
 export function autoResize() {
     DOM.input.style.height = 'auto';
     DOM.input.style.height = `${DOM.input.scrollHeight}px`;
+    // update CSS variable on container so chat content can reserve space
+    try {
+        const wrapper = document.querySelector('.main-content-wrapper');
+        if (wrapper) {
+            const rect = DOM.input.getBoundingClientRect();
+            // distance from bottom of viewport to top of input wrapper
+            const inputWrapper = document.querySelector('.input-wrapper');
+            const inputBottom = inputWrapper ? (window.innerHeight - inputWrapper.getBoundingClientRect().top) : (rect.height + 40);
+            // If input is fixed, inputWrapper.getBoundingClientRect().top gives distance
+            // from viewport top, so inputBottom is the height from top to bottom of input area.
+            // We want the safe bottom space (height of area from bottom of viewport up to top of input)
+            const safeBottom = Math.ceil(window.innerHeight - (inputWrapper ? inputWrapper.getBoundingClientRect().top : (rect.top)) + 20);
+            document.documentElement.style.setProperty('--input-safe-bottom', `${safeBottom}px`);
+        }
+    } catch (e) {}
 }
 
 export function recalculateTotalAndUpdateUI() {

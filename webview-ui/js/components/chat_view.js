@@ -255,8 +255,15 @@ export function addAiResponsePlaceholder() {
     messageElement.id = 'ai-streaming-placeholder';
     const avatarWrapper = messageElement.querySelector('.avatar-wrapper');
     avatarWrapper.classList.add('loading');
-    // Shimmer efektini başlangıçta aktif et
-    messageElement.classList.add('shimmer-active');
+    // Shimmer efektini yalnızca Agent modu ve indexing izinliyse aktif et
+    try {
+        const { isAgentModeActive, isIndexingEnabled } = getState();
+        if (isAgentModeActive && isIndexingEnabled) {
+            messageElement.classList.add('shimmer-active');
+        }
+    } catch (e) {
+        // fallback: ekleme yapma
+    }
     // Plan süresi ölçümü için başlangıç zamanı kaydet
     try { planTimerStartMs = performance.now(); } catch { planTimerStartMs = Date.now(); }
 }

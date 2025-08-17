@@ -50,7 +50,15 @@ export class InteractionHandler {
             const isAgentActive = config.get<boolean>(SETTINGS_KEYS.agentModeActive, false);
             const isIndexEnabled = config.get<boolean>(SETTINGS_KEYS.indexingEnabled, false);
 
-            if (isAgentActive && isIndexEnabled) {
+            // Fallback: bazen UI state ile ayarlar arasındaki senkronizasyon gecikebilir.
+            // Eğer agentMode aktif olarak kaydedilmemişse ama contextManager üzerinde
+            // agent dosya/selection bağlamı varsa planner yolunu yine çalıştır.
+            const agentContextPresent = !!(this.contextManager.agentFileContext || this.contextManager.agentSelectionContext);
+            const shouldUsePlanner = (isAgentActive || agentContextPresent) && isIndexEnabled;
+
+            console.log('[Interaction] Planner decision:', { isAgentActive, agentContextPresent, isIndexEnabled, shouldUsePlanner });
+
+            if (shouldUsePlanner) {
                 // Streaming: ui_text parçalarını anında UI'a ilet
                 const plan = await run_planner(
                     this.conversationManager.getExtensionContext(),
