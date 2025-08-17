@@ -8,6 +8,7 @@
   align-items: center;
   padding: 10px 15px;
   flex-shrink: 0;
+  position: relative; /* allow absolutely positioned child (history panel) to align relative to header */
 }
 
 /* ----------------------------- Logo & Title ----------------------------- */

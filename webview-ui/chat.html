@@ -46,11 +46,12 @@
                     <img src="{{settings_icon_uri}}" alt="Ayarlar"/>
                 </button>
             </div>
-        </header>
+            
+            <div id="history-panel" class="history-panel hidden">
+                <div id="history-list-container" class="history-list-container"></div>
+            </div>
 
-        <div id="history-panel" class="history-panel hidden">
-            <div id="history-list-container" class="history-list-container"></div>
-        </div>
+        </header>
 
         <div id="welcome-container">
             <div class="welcome-box">
@@ -181,11 +182,17 @@
     </template>
 
     <template id="history-card-template">
-        <div class="history-card">
-            <span class="history-title"></span>
-            <button class="delete-chat-button" title="Sohbeti Sil">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06z"/></svg>
-            </button>
+        <div class="history-card" role="button" tabindex="0">
+            <div class="history-meta">
+                <div class="history-title"></div>
+                <div class="history-snippet"></div>
+            </div>
+            <div class="history-right">
+                <div class="history-time"></div>
+                <button class="delete-chat-button" title="Sohbeti Sil" aria-label="Sohbeti sil">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06z"/></svg>
+                </button>
+            </div>
         </div>
     </template>
 

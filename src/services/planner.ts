@@ -228,11 +228,17 @@ export function createPlannerPrompt(plannerContext: string, userQuery: string): 
 		`# USER REQUEST\n` +
 		`"${userQuery}"\n\n` +
 		`# INSTRUCTIONS\n` +
-		`- Think step-by-step.\n` +
-		`- Optimize for minimal changes while ensuring correctness.\n` +
-		`- Prefer editing existing files over creating new ones unless necessary.\n` +
-		`- For each step, include a concise Turkish one-sentence summary in the field ".ui_text" that will be shown directly in the UI. Keep it short and human-friendly.\n` +
-		`- Output strictly valid JSON following the schema below. Do not include any prose outside JSON.\n\n` +
+		`- Think step-by-step and produce a short sequence of concrete steps the agent will perform.\n` +
+		`- For each step:\n` +
+		`  * Set "step" to a consecutive integer.\n` +
+		`  * Set "action" to a concise short label written from the agent's perspective (use first-person phrasing like "Create merge_sort.py" or preferably "I will create merge_sort.py"). Do NOT phrase actions as instructions the user must perform.\n` +
+		`  * Set "thought" to a first-person plan describing exactly what the agent will do next (use future or present-continuous tense). Examples: "I will create a new file named merge_sort.py.", "I will implement the merge sort function in merge_sort.py and add unit tests.", "I will run the test suite to verify correctness."\n` +
+		`  * Include a short Turkish one-sentence summary in ".ui_text" also written from the agent's perspective (e.g. "Yeni dosya oluşturacağım: merge_sort.py").\n` +
+		`  * Do not include any instruction phrased to the user (avoid "Create a file", "Implement the function" directed at the user).\n` +
+		`  * Do not output any plain-language summary, headings, bullet lists, or prose outside the JSON. The entire response MUST be a single valid JSON object that follows the schema below. If you want to include a short human-readable note, place it in the "notes" field of an appropriate step.\n` +
+		`- Prefer minimal, safe edits to existing files; only create new files if necessary.\n` +
+		`- Keep each step small and actionable so the agent can execute them one-by-one.\n` +
+		`- Output strictly valid JSON following the schema below. Do not include any prose outside the JSON.\n\n` +
 		`# JSON OUTPUT SCHEMA\n` +
 		`{\n` +
 		`  "steps": [\n` +

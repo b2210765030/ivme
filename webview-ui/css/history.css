@@ -5,11 +5,22 @@
    ========================================================================== */
 
 .history-panel {
-    background-color: var(--vscode-sideBar-background);
-    border-bottom: 1px solid var(--vscode-widget-border);
-    padding: 12px 15px;
-    position: relative;
-    z-index: 10;
+    /* Frosted glass / translucent overlay to match welcome box and input area */
+    background-color: rgba(25, 25, 25, 0.5); /* yarı saydam arka plan */
+    backdrop-filter: blur(4px); /* buzlu cam efekti (hafif azaltıldı) */
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 8px 12px; /* daha sıkışık görünüm için azaltıldı */
+    position: absolute; /* overlay olarak üstte açılması için */
+    top: calc(100% + 8px); /* header'ın hemen altına gelmesi için */
+    left: 12px; /* sayfanın solundan küçük bir boşluk bırak */
+    right: 12px; /* sayfanın sağından küçük bir boşluk bırak */
+    width: auto; /* içerik genişliğine bağlı kalma, left/right ile tam yayılmasını sağlar */
+    max-width: none;
+    box-sizing: border-box;
+    z-index: 30;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
     /* max-height, overflow ve transition animasyonları kaldırıldı */
 }
 
@@ -20,28 +31,49 @@
 .history-list-container {
     display: flex;
     overflow-x: auto;
-    gap: 12px;
-    padding-bottom: 10px;
+    gap: 8px;
+    padding-bottom: 8px;
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
 }
 
-.history-list-container::-webkit-scrollbar { height: 6px; }
-.history-list-container::-webkit-scrollbar-track { background: transparent; }
-.history-list-container::-webkit-scrollbar-thumb { background-color: var(--vscode-scrollbarSlider-background); border-radius: 3px; }
-.history-list-container::-webkit-scrollbar-thumb:hover { background-color: var(--vscode-scrollbarSlider-hoverBackground); }
+/* Thin, rounded horizontal scrollbar for WebKit/Blink */
+.history-list-container::-webkit-scrollbar {
+    height: 6px; /* thinner */
+}
+.history-list-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+.history-list-container::-webkit-scrollbar-thumb {
+    background-color: rgba(255,255,255,0.08); /* subtle by default */
+    border-radius: 999px;
+    min-width: 28px; /* ensure thumb is easy to grab */
+    border: 3px solid transparent; /* create padding so thumb looks thinner */
+    background-clip: padding-box;
+    transition: background-color 0.12s ease, transform 0.12s ease;
+}
+.history-list-container::-webkit-scrollbar-thumb:hover {
+    background-color: var(--vscode-scrollbarSlider-hoverBackground);
+    transform: scaleY(1.05);
+}
 
 .history-card {
-    flex: 0 0 180px;
+    flex: 0 0 110px; /* daha küçük kart genişliği */
     background-color: var(--vscode-editor-background);
     border: 1px solid var(--vscode-sideBar-border);
     border-radius: 6px;
-    padding: 10px;
+    padding: 6px; /* iç boşluk daha da azaltıldı */
     cursor: pointer;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
+    transition: background-color 0.12s ease, border-color 0.12s ease; /* lift/box-shadow kaldırıldı */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
+    font-size: 10px; /* metin daha küçük */
     position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .history-card:hover {
@@ -50,23 +82,67 @@
 }
 
 .delete-chat-button {
-    position: absolute;
-    top: 2px;
-    right: 2px;
+    position: static; /* artık history-right içinde yer alıyor */
+    margin-left: 6px;
     background: none;
     border: none;
     color: var(--vscode-icon-foreground);
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    display: flex;
+    border-radius: 4px;
+    padding: 2px; /* küçük iç boşluk */
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    opacity: 0.5;
+    opacity: 0.8; /* daha görünür */
+    font-size: 10px; /* metin ile uyumlu */
+    line-height: 1;
 }
 
 .delete-chat-button:hover {
     opacity: 1;
     background-color: var(--vscode-button-secondaryBackground);
+}
+
+/* Card meta and layout */
+.history-meta {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.history-title {
+    font-weight: 600;
+    font-size: 10px; /* küçültüldü */
+    color: var(--vscode-editor-foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-snippet {
+    font-size: 9px; /* küçültüldü */
+    color: var(--vscode-input-placeholderForeground);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 3px;
+}
+
+.history-right {
+    display: flex;
+    flex-direction: row; /* yan yana: zaman ve silme butonu */
+    align-items: center; /* dikey ortala */
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.history-time {
+    font-size: 10px;
+    color: var(--vscode-input-placeholderForeground);
+}
+
+.delete-chat-button svg {
+    width: 1em;
+    height: 1em;
+    display: block;
 }
