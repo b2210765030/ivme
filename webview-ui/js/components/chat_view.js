@@ -20,6 +20,7 @@ let targetCharsPerSecond = 80; // Dinamik ölçüm için başlangıç
 let rateWindow = [];
 let finalReplaceText = null;
 let planTimerStartMs = null;
+let lastPlannerStepsCache = [];
 
 let shouldAutoScroll = true;
 
@@ -201,7 +202,57 @@ function runFinalizationLogic() {
         contentElement.textContent = finalReplaceText;
         finalReplaceText = null;
     }
-    
+    // Eğer içerikte numaralandırılmış adımlar varsa, bunları ayıkla ve
+    // placeholder'ın hemen üzerine yeni bir baloncuk olarak ekle
+    try {
+        const rawText = (contentElement.textContent || '').trim();
+        if (rawText) {
+            // Regex: 1. ..., 1) ... biçimindeki adımları yakala (multiline, dotAll)
+            const stepRegex = /(^|\n)\s*(\d+)\s*(?:\.|\))\s*(.+?)(?=(?:\n\s*\d+\s*(?:\.|\))\s*)|$)/gms;
+            const steps = [];
+            let m;
+            while ((m = stepRegex.exec(rawText)) !== null) {
+                const stepText = (m[3] || '').trim();
+                if (stepText.length > 0) steps.push({ n: Number(m[2]), text: stepText });
+            }
+
+            if (steps.length > 0) {
+                // Küçük bir yardımcı: HTML escape
+                const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const olItems = steps
+                    .sort((a, b) => a.n - b.n)
+                    .map(s => `<li>${escapeHtml(s.text)}</li>`)
+                    .join('');
+
+                const stepsHtml = `<div class="planner-steps"><ol>${olItems}</ol></div>`;
+
+                // Template klonla ve placeholder'ın üzerine yerleştir
+                const messageTemplate = document.getElementById('message-template');
+                if (messageTemplate && placeholder.parentNode) {
+                    const clone = messageTemplate.content.cloneNode(true);
+                    const stepsElem = clone.querySelector('.message');
+                    if (stepsElem) {
+                        stepsElem.classList.add('assistant-message', 'planner-steps-message', 'fade-in');
+                        const avatarIcon = clone.querySelector('.avatar-icon');
+                        if (avatarIcon) avatarIcon.src = DOM.AI_ICON_URI;
+                        const contentEl = clone.querySelector('.message-content');
+                        if (contentEl) contentEl.innerHTML = stepsHtml;
+                        // Insert before the placeholder so it appears above
+                        placeholder.parentNode.insertBefore(clone, placeholder);
+                        try {
+                            // Ayrıca uzun paneli doldur (sadece Agent+Index modunda görünür yap)
+                            const stepTexts = steps.sort((a,b)=>a.n-b.n).map(s=>s.text);
+                            showPlannerPanel(stepTexts);
+                        } catch(e) { console.warn('showPlannerPanel error', e); }
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        // parsing hatası varsa yoksay
+        console.warn('Planner steps parsing error', e);
+    }
+
     contentElement.querySelectorAll('pre code').forEach(block => {
         hljs.highlightElement(block);
     });
@@ -213,6 +264,26 @@ function runFinalizationLogic() {
     recalculateTotalAndUpdateUI();
     focusInput();
     postMessage('requestContextSize');
+}
+
+// Planner panel ve kısa baloncukları sıfırla
+function resetPlannerUI() {
+    try {
+        lastPlannerStepsCache = [];
+        const panel = document.getElementById('planner-panel');
+        const content = document.getElementById('planner-panel-content');
+        const list = document.getElementById('planner-steps-list');
+        if (panel) {
+            panel.classList.add('hidden');
+            panel.classList.add('collapsed');
+            panel.classList.remove('expanded');
+        }
+        if (content) content.classList.add('hidden');
+        if (list) list.innerHTML = '';
+        document.querySelectorAll('.planner-steps-message').forEach(el => {
+            try { el.remove(); } catch(e){}
+        });
+    } catch (e) { console.warn('resetPlannerUI error', e); }
 }
 
 // --- Public Fonksiyonlar ---
@@ -330,6 +401,90 @@ export function replaceStreamingPlaceholderWithPlanned(text) {
     contentElement.innerHTML = streamingBuffer;
 }
 
+// Yeni: Planner panel göster/gizle ve adımları doldurma
+export function showPlannerPanel(steps) {
+    try {
+        const panel = document.getElementById('planner-panel');
+        const content = document.getElementById('planner-panel-content');
+        const list = document.getElementById('planner-steps-list');
+        if (!panel || !content || !list) return;
+        const { isAgentModeActive, isIndexingEnabled } = getState();
+        // Sadece Agent modu ve index açıkken paneli göster
+        if (!(isAgentModeActive && isIndexingEnabled)) {
+            // görünürlüğü kapat ama adımları cache'le
+            lastPlannerStepsCache = Array.isArray(steps) ? steps.slice() : [];
+            panel.classList.add('hidden');
+            return;
+        }
+        // Cache'i güncelle
+        lastPlannerStepsCache = Array.isArray(steps) ? steps.slice() : [];
+
+        // Temizle
+        list.innerHTML = '';
+
+        for (const s of steps) {
+            const li = document.createElement('li');
+            li.textContent = typeof s === 'string' ? s : (s?.text || '');
+            list.appendChild(li);
+        }
+
+        panel.classList.remove('hidden');
+        // İlk oluşturulduğunda kapalı (collapsed) başlasın
+        content.classList.add('hidden');
+        panel.classList.add('collapsed');
+        panel.classList.remove('expanded');
+
+        // Toggle buton handler (bir kez ekle)
+        const toggle = document.getElementById('planner-panel-toggle');
+        if (toggle && !toggle.dataset.bound) {
+            toggle.addEventListener('click', () => {
+                const isHidden = content.classList.toggle('hidden');
+                if (isHidden) {
+                    panel.classList.add('collapsed');
+                    panel.classList.remove('expanded');
+                } else {
+                    panel.classList.remove('collapsed');
+                    panel.classList.add('expanded');
+                }
+            });
+            toggle.dataset.bound = '1';
+        }
+    } catch (e) { console.warn('showPlannerPanel error', e); }
+}
+
+// Gizle fonksiyonu
+export function hidePlannerPanel() {
+    const panel = document.getElementById('planner-panel');
+    if (panel) panel.classList.add('hidden');
+}
+
+// Agent ve Index state değişimlerinde paneli yönetmek için yardımcı
+export function refreshPlannerPanelVisibility() {
+    const panel = document.getElementById('planner-panel');
+    const content = document.getElementById('planner-panel-content');
+    const list = document.getElementById('planner-steps-list');
+    if (!panel || !content || !list) return;
+    const { isAgentModeActive, isIndexingEnabled } = getState();
+    if (isAgentModeActive && isIndexingEnabled) {
+        // Adımlar önceden cache'lenmişse aynı planla tekrar göster
+        if (Array.isArray(lastPlannerStepsCache) && lastPlannerStepsCache.length > 0) {
+            list.innerHTML = '';
+            for (const s of lastPlannerStepsCache) {
+                const li = document.createElement('li');
+                li.textContent = typeof s === 'string' ? s : (s?.text || '');
+                list.appendChild(li);
+            }
+            panel.classList.remove('hidden');
+            // Mod değiştirilip geri gelindiğinde kapalı (collapsed) başlasın
+            content.classList.add('hidden');
+            panel.classList.add('collapsed');
+            panel.classList.remove('expanded');
+        }
+    } else {
+        panel.classList.add('hidden');
+    }
+}
+
 // YENİ: Plan zamanlayıcısını dışarıya verir
 export function getPlanTimerStartMs() {
     return planTimerStartMs;
@@ -371,6 +526,8 @@ export function clear(playVideo = true) {
     DOM.chatContainer.classList.add('hidden');
     DOM.welcomeContainer.classList.remove('hidden');
     shouldAutoScroll = true;
+    // Planner UI'ı da sıfırla
+    resetPlannerUI();
 
     if (DOM.welcomeVideo) {
         if (playVideo) {
@@ -389,6 +546,8 @@ export function clear(playVideo = true) {
 
 export function load(messages) {
     clear(false);
+    // Planner UI temiz kalsın
+    resetPlannerUI();
     const conversationMessages = messages.filter(m => m.role !== 'system');
     if (conversationMessages.length > 0) {
         DOM.welcomeContainer.classList.add('hidden');

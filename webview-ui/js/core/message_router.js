@@ -25,6 +25,7 @@ export function initMessageListener() {
                 if (data.message) {
                     InputArea.setPlaceholder(data.message);
                 }
+                try { ChatView.refreshPlannerPanelVisibility(); } catch(e) {}
                 break;
             case 'indexingDone':
                 // Önce hasIndex'i güncelle, sonra UI enable et
@@ -38,6 +39,7 @@ export function initMessageListener() {
                 setIndexingEnabledState(true); // İndeksleme tamamlandığında active et
                 // Placeholder mesajını güncelle (sadece "ivmeye soru sorun..." göster)
                 InputArea.setPlaceholder();
+                try { ChatView.refreshPlannerPanelVisibility(); } catch(e) {}
                 break;
             case 'indexingToggled':
                 // Eğer backend hasIndex bilgisi veriyorsa önce onu uygula
@@ -53,6 +55,13 @@ export function initMessageListener() {
                 setIndexingActive(false, { preserveBar: true });
                 // Placeholder mesajını güncelle (sadece "ivmeye soru sorun..." göster)
                 InputArea.setPlaceholder();
+                try { ChatView.refreshPlannerPanelVisibility(); } catch(e) {}
+                // disable durumunda planner steps balonunu da kaldır
+                try {
+                    if (data?.enabled === false) {
+                        document.querySelectorAll('.planner-steps-message').forEach(el => el.remove());
+                    }
+                } catch(e) {}
                 break;
             case 'indexingStatus':
                 // İndeksleme durumu bilgisi geldi
@@ -60,6 +69,8 @@ export function initMessageListener() {
                     setHasIndex(!!data.hasIndex);
                 }
                 setIndexingEnabledState(data.isEnabled);
+                // Panel görünürlüğünü güncelle
+                try { ChatView.refreshPlannerPanelVisibility(); } catch(e) {}
                 break;
             case 'workspaceInfo':
                 // Workspace bilgisi geldi
@@ -153,6 +164,11 @@ export function initMessageListener() {
                     // "İvme planladı" anından sonra shimmer'ı kapat
                     ChatView.setShimmerActive(false);
                     ChatView.replaceStreamingPlaceholderWithPlanned(plannedText);
+                    // Paneli doldurup göster (ui_text varsa onu kullan, yoksa action)
+                    try {
+                        const stepsForPanel = (plan.steps||[]).map(s => (typeof s?.ui_text === 'string' && s.ui_text.trim().length>0) ? s.ui_text.trim() : (typeof s?.action === 'string' ? s.action : ''));
+                        ChatView.showPlannerPanel(stepsForPanel);
+                    } catch(e) { console.warn('showPlannerPanel error', e); }
                     break;
                 }
                 // Streaming yoksa da tek placeholder üzerinde sırayla yaz ve finalize et
@@ -185,6 +201,10 @@ export function initMessageListener() {
                     ChatView.setPlannerStreaming(false);
                     ChatView.setShimmerActive(false);
                     ChatView.replaceStreamingPlaceholderWithPlanned(plannedText);
+                    try {
+                        const stepsForPanel = (plan.steps||[]).map(s => (typeof s?.ui_text === 'string' && s.ui_text.trim().length>0) ? s.ui_text.trim() : (typeof s?.action === 'string' ? s.action : ''));
+                        ChatView.showPlannerPanel(stepsForPanel);
+                    } catch(e) { console.warn('showPlannerPanel error', e); }
                 })();
                 break;
             }
@@ -192,12 +212,14 @@ export function initMessageListener() {
             // --- Agent durumu mesajı ---
             case 'updateAgentStatus':
                 setAgentMode(data.isActive, data.activeFileName);
+                try { ChatView.refreshPlannerPanelVisibility(); } catch(e) {}
                 break;
             case 'restoreAgentMode':
                 setAgentMode(data.isActive, '');
                 if (data.isBarExpanded !== undefined) {
                     setAgentBarExpanded(data.isBarExpanded);
                 }
+                try { ChatView.refreshPlannerPanelVisibility(); } catch(e) {}
                 break;
             case 'languageChanged':
                 // Dil değişikliği sırasında UI metinlerini güncelle
@@ -247,6 +269,8 @@ export function initMessageListener() {
                 break;
 
             case 'loadConversation':
+                // Yeni sayfa/konuşma yüklenirken eski planner adımları görünmesin
+                try { ChatView.hidePlannerPanel(); } catch(e) {}
                 ChatView.load(data);
                 break;
 

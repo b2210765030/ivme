@@ -151,6 +151,12 @@ export function setAgentMode(isActive, activeFileName = '') {
                 }
             }
         } catch (e) {}
+        // Planner panel görsellerini de input-wrapper ile senkronize et
+        try { updatePlannerPanelVisual(); } catch(e) {}
+        try { window?.requestAnimationFrame?.(() => {
+            const { refreshPlannerPanelVisibility } = require('../components/chat_view.js');
+            refreshPlannerPanelVisibility();
+        }); } catch(e) {}
     } else {
         agentModeButton.classList.remove('active');
         if (typeof agentModeButton?.textContent === 'string') {
@@ -175,6 +181,12 @@ export function setAgentMode(isActive, activeFileName = '') {
                 try { m.style.removeProperty('--indexing-progress'); m.classList.remove('indexing-active','indexing-complete','indexing-ready'); } catch(e){}
             });
         } catch(e) {}
+        // Planner paneli de temizle
+        try { updatePlannerPanelVisual(); } catch(e) {}
+        try { window?.requestAnimationFrame?.(() => {
+            const { refreshPlannerPanelVisibility } = require('../components/chat_view.js');
+            refreshPlannerPanelVisibility();
+        }); } catch(e) {}
     }
 }
 
@@ -204,6 +216,11 @@ export function setIndexingActive(active, options) {
     }
     setPlaceholder();
     updateInputAndButtonState();
+    try { updatePlannerPanelVisual(); } catch(e) {}
+    try { window?.requestAnimationFrame?.(() => {
+        const { refreshPlannerPanelVisibility } = require('../components/chat_view.js');
+        refreshPlannerPanelVisibility();
+    }); } catch(e) {}
 }
 
 export function updateIndexerProgress(value, message = '') {
@@ -290,11 +307,29 @@ export function setIndexingEnabledState(enabled) {
         document.querySelectorAll('.message').forEach(m => {
             try { m.style.removeProperty('--indexing-progress'); m.style.removeProperty('background'); m.classList.remove('indexing-active','indexing-complete','indexing-ready'); } catch(e){}
         });
+        // Planner UI'ı kesin kapat: paneli gizle ve varsa steps balonunu kaldır
+        try {
+            const panel = document.getElementById('planner-panel');
+            if (panel) panel.classList.add('hidden');
+            document.querySelectorAll('.planner-steps-message').forEach((el) => {
+                try { el.parentNode && el.parentNode.removeChild(el); } catch(e){}
+            });
+        } catch(e) {}
         // ensure flags
         isIndexing = false;
         if (cancelBtn) cancelBtn.classList.add('hidden');
         if (startBtn && isAgentModeActive) startBtn.classList.remove('hidden');
+        // Paneli kesin gizle (mod kapandı)
+        try {
+            const panel = document.getElementById('planner-panel');
+            if (panel) panel.classList.add('hidden');
+        } catch(e) {}
     }
+    try { updatePlannerPanelVisual(); } catch(e) {}
+    try { window?.requestAnimationFrame?.(() => {
+        const { refreshPlannerPanelVisibility } = require('../components/chat_view.js');
+        refreshPlannerPanelVisibility();
+    }); } catch(e) {}
 }
 
 // Workspace'te index vektörlerinin olup olmadığını ayarla
@@ -319,6 +354,11 @@ export function setHasIndex(value) {
         inputWrapper.classList.add('indexing-complete');
         inputWrapper.style.setProperty('--indexing-progress', '100%');
     }
+    try { updatePlannerPanelVisual(); } catch(e) {}
+    try { window?.requestAnimationFrame?.(() => {
+        const { refreshPlannerPanelVisibility } = require('../components/chat_view.js');
+        refreshPlannerPanelVisibility();
+    }); } catch(e) {}
 }
 
 // YENİ: VS Code ayarlarından indeksleme durumunu kontrol eder
@@ -373,6 +413,34 @@ function updateIndexerProgressUI() {
             inputWrapper.style.setProperty('--indexing-progress', '0%');
         }
     }
+    try { updatePlannerPanelVisual(); } catch(e) {}
+}
+
+// Planner panel görsellerini input-wrapper ile aynı kurallara göre uygular
+export function updatePlannerPanelVisual() {
+    const panel = document.getElementById('planner-panel');
+    if (!panel) return;
+    try {
+        panel.classList.remove('indexing-active', 'indexing-complete', 'indexing-ready');
+        if (isAgentModeActive) {
+            if (isIndexing) {
+                panel.classList.add('indexing-active');
+                panel.style.setProperty('--indexing-progress', `${indexingProgress}%`);
+            } else if (isIndexingEnabled) {
+                if (hasIndex) {
+                    panel.classList.add('indexing-complete');
+                    panel.style.setProperty('--indexing-progress', '100%');
+                } else {
+                    panel.classList.add('indexing-ready');
+                    panel.style.setProperty('--indexing-progress', '10%');
+                }
+            } else {
+                panel.style.setProperty('--indexing-progress', '0%');
+            }
+        } else {
+            panel.style.setProperty('--indexing-progress', '0%');
+        }
+    } catch (e) {}
 }
 
 // YENİ: Agent seçim durumunu göster/gizle

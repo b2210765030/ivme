@@ -169,3 +169,146 @@ pre code.hljs {
 .planned-soft {
     color: #8a8a8a;
 }
+
+/* Planner steps message (küçük listeler için) */
+.planner-steps-message .message-content ol {
+    margin: 0;
+    padding-left: 18px;
+}
+.planner-steps-message .message-content li {
+    margin: 6px 0;
+    font-size: 13px;
+    color: var(--vscode-editor-foreground);
+}
+
+/* Uzun ince planner panel - input'un hemen üzerinde */
+#planner-panel {
+    position: fixed;
+    left: 25px;
+    right: 25px;
+    bottom: 140px; /* daha yukarı: input-area'nın üstünde görünmesi için */
+    max-height: 220px;
+    border-radius: 20px; /* input-wrapper ile aynı */
+    background-color: rgba(25, 25, 25, 0.2); /* input-wrapper ile aynı renk */
+    backdrop-filter: blur(4px); /* buz efekti */
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.1); /* input-wrapper ile aynı çerçeve */
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+    z-index: 8; /* input-area z-index:10 olduğundan daha altta kalsın; token tooltip üstte görünür */
+    overflow: hidden; /* köşeleri düzgün kırpmak için */
+    transition: transform 0.18s ease, opacity 0.18s ease;
+    opacity: 0.98;
+    display: flex;
+    flex-direction: column; /* içerik bölümü kalan yüksekliği alsın */
+}
+
+/* Planner panel progress/renk katmanları (input-wrapper ile eşleşen) */
+#planner-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--indexing-progress, 0%);
+    background: rgba(59, 130, 246, 0.08);
+    border-radius: 20px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.3s ease, width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#planner-panel::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--indexing-progress, 0%);
+    border-radius: 20px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    background: linear-gradient(90deg,
+        rgba(255, 255, 255, 0)   0%,
+        rgba(255, 255, 255, 0.06) 20%,
+        rgba(255, 255, 255, 0.12) 50%,
+        rgba(255, 255, 255, 0.06) 80%,
+        rgba(255, 255, 255, 0)   100%
+    );
+    background-size: 200% 100%;
+    animation: inputShimmer 2.8s linear infinite;
+    mix-blend-mode: normal;
+    will-change: background-position;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#planner-panel.indexing-active::before,
+#planner-panel.indexing-active::after {
+    opacity: 1;
+}
+
+#planner-panel.indexing-complete::before {
+    opacity: 1;
+    width: 100%;
+    background: rgba(59, 130, 246, 0.04);
+}
+#planner-panel.indexing-complete::after {
+    opacity: 0;
+    animation: none;
+}
+
+#planner-panel.indexing-ready::before {
+    opacity: 1;
+    width: 10%;
+    background: rgba(59, 130, 246, 0.03);
+}
+#planner-panel.indexing-ready::after {
+    opacity: 0;
+    animation: none;
+}
+
+#planner-panel.hidden { display: none; }
+
+@media (max-height: 720px) {
+    #planner-panel { bottom: 110px; max-height: 180px; }
+}
+
+
+.planner-panel-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.08); /* input-wrapper estetiğine yakın */
+}
+.planner-panel-bar #planner-panel-toggle svg {
+    transition: transform 0.2s ease;
+}
+#planner-panel.collapsed #planner-panel-toggle svg {
+    transform: rotate(180deg); /* kapalıyken ok yukarı baksın */
+}
+#planner-panel.expanded #planner-panel-toggle svg {
+    transform: rotate(0deg); /* açıkkken ok aşağı baksın */
+}
+.planner-panel-title {
+    font-size: 13px;
+    color: var(--vscode-input-placeholderForeground);
+}
+.planner-panel-content {
+    padding: 10px 14px;
+    overflow-y: auto;
+    max-height: 180px; /* başlık yüksekliği düşülmüş yaklaşık alan */
+    min-height: 0; /* flex konteyner içinde taşma hesabı için gerekli */
+    -webkit-overflow-scrolling: touch;
+}
+.planner-steps-list {
+    margin: 0;
+    padding-left: 18px;
+}
+.planner-steps-list li {
+    margin: 8px 0;
+    font-size: 13px;
+    color: var(--vscode-editor-foreground);
+    line-height: 1.4;
+}
