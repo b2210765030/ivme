@@ -139,14 +139,39 @@ export function createPlannerSystemPrompt(plannerContext: string, userQuery: str
         `"${userQuery}"\n\n` +
         `# INSTRUCTIONS\n` +
         `- Think step-by-step.\n` +
-        `- Optimize for minimal changes while ensuring correctness.\n` +
-        `- Prefer editing existing files over creating new ones unless necessary.\n` +
-        `- For each step, include a concise Turkish one-sentence summary in the field ".ui_text" that will be shown directly in the UI. Keep it short and human-friendly.\n` +
-        `- Output strictly valid JSON following the schema below. Do not include any prose outside JSON.\n\n` +
+        `- Her yüksek seviyeli görevi, MÜMKÜN OLAN EN KÜÇÜK, atomik, uygulanabilir adımlara böl. Tek bir mantıksal işlem birden fazla alt işlem içeriyorsa, bunları ayrı numaralı adımlara ayır. Ayrı işlemleri tek bir adımda BİRLEŞTİRMEYİN.\n` +
+        `- Her adımı, geliştiricinin sırayla uygulayabileceği mikro-adımlar olacak şekilde yaz (ör. "dosya X'i aç", "satır Y'i değiştir", "import Z ekle", "test A'yı çalıştır").\n` +
+        `- KESİNLİKLE hiçbir alanda kod, pseudo-code veya çok satırlı kod blokları üretme. Alanlarda backtick (\`\`\`) kullanma. Plan sadece NE yapılacağını tarif etsin, kodun kendisini değil.\n` +
+        `- Doğruluğu sağlarken minimum değişikliği tercih et.\n` +
+        `- Yeni dosya oluşturmadan önce mevcut dosyaları düzenlemeyi tercih et.\n` +
+        `- Her adım için UI'da gösterilecek ".ui_text" alanına kısa bir cümle yaz. Kullanıcıya gösterilecek metin kısa ve anlaşılır olsun.\n` +
+        `- İsterseniz "files_to_edit" alanını düzenlenecek dosya yolları ile, "notes" alanını ise kısa tahmini efor veya gerekçe ile doldurun.\n` +
+        `- Çıktıyı sadece aşağıdaki JSON şemasına uygun, geçerli JSON olarak verin. JSON dışında başka metin yazmayın.\n\n` +
+        `# KULLANILABİLİR ARAÇLAR (TOOLS)\n` +
+        `- check_index: { args: { file?: string, files?: string[] } } -> Planner index içinde belirtilen dosya(ların) varlığını kontrol eder; hangileri var/hangileri eksik döner.\n` +
+        `- search: { args: { keywords?: string[], query?: string, top_k?: number } } -> Plan aşamasında anahtar kelimelerle arama niyeti. Anahtar kelimeleri ver; sistem retrieval çalıştırır ve sonucu sonraki adımlar için önbelleğe alır.\n` +
+        `- locate_code: { args: { name?: string, pattern?: string, path?: string, save_as?: string } } -> Bir fonksiyon/parça adını veya regex'i kullanarak bulunduğu dosyada tam satır aralığını (başlangıç-bitiş) tespit et ve sonraki düzenlemeler için bir anahtar adıyla kaydet.\n` +
+        `- retrieve_chunks: { args: { query: string, top_k?: number } } -> Vektör indeksinden ilgili kod/doküman parçalarını getirir. Dosya/konumdan emin değilsen önce bunu kullan.\n` +
+        `- create_file: { args: { path: string, content_spec?: string } } -> Yeni dosya oluştur; KOD YAZMA. İçeriği 'content_spec' alanında gereksinim/özet olarak tarif et, kodun kendisini yazma.\n` +
+        `- edit_file: { args: { path?: string, find_spec?: string, change_spec?: string, use_saved_range?: string } } -> Mevcut dosyayı düzenle; KOD YAZMA. Path yoksa en iyi eşleşen chunk kullanılır ve sadece o chunk güncellenir.\n` +
+        `- append_file: { args: { path: string, content_spec?: string, position?: "end"|"beginning" } } -> Dosya başına/sonuna ekle; KOD YAZMA. Eklenecek içeriği 'content_spec' ile tarif et.\n\n` +
+        `# ÖNEMLİ INDEX İPUÇLARI\n` +
+        `- Kullanıcının belirttiği dosya index'te YOKSA (CONTEXT içindeki 'Index Hints' bölümüne bak), bu dosya için arama/retrieval yapma. İlk adım MUTLAKA create_file olmalı.\n` +
+        `- Arama/retrieval sadece mevcut dosyalar ve tam konum bilinmediğinde kullanılmalı.\n` +
         `# JSON OUTPUT SCHEMA\n` +
         `{\n` +
         `  "steps": [\n` +
-        `    { "step": <number>, "action": <string>, "thought": <string>, "ui_text": <string|optional>, "files_to_edit": <string[]|optional>, "notes": <string|optional> }\n` +
+        `    {\n` +
+        `      "step": <number>,\n` +
+        `      "action": <string>,\n` +
+        `      "thought": <string>,\n` +
+        `      "ui_text": <string|optional>,\n` +
+        `      "tool": <"search"|"locate_code"|"retrieve_chunks"|"create_file"|"edit_file"|"append_file"|optional>,\n` +
+        `      "args": <object|optional>,  // *spec* alanlarını kullan (content_spec, change_spec, find_spec). KOD YAZMA.\n` +
+        `      "tool_calls": <Array<{ tool: string, args: object }>|optional>,\n` +
+        `      "files_to_edit": <string[]|optional>,\n` +
+        `      "notes": <string|optional>\n` +
+        `    }\n` +
         `  ]\n` +
         `}`
     );
@@ -168,11 +193,31 @@ export function createPlannerPrompt(plannerContext: string, userQuery: string): 
         `- Doğruluğu sağlarken minimum değişikliği tercih et.\n` +
         `- Yeni dosya oluşturmadan önce mevcut dosyaları düzenlemeyi tercih et.\n` +
         `- Her adım için UI'da gösterilecek ".ui_text" alanına kısa bir cümle yaz.\n` +
+        `- Her yüksek seviyeli görevi en küçük atomik adımlara böl; ayrı işlemleri tek adımda birleştirme.\n` +
+        `- Kod ÜRETME: Adımlarda kod, pseudo-code, snippet veya \u0060\u0060\u0060 blokları yazma. Her zaman sadece yapılacak işlemi ve gerekli tool/args bilgisini belirt.\n` +
         `- Sadece JSON çıktısı ver; sistemde belirtilen şemadan sapma yapma.\n\n` +
+        `# INDEX'E GÖRE DOSYA VARLIĞI KURALI\n` +
+        `- CONTEXT içindeki 'Index Hints' bölümünde 'Missing requested files' listeleniyorsa, bu dosyalar için arama/retrieval YAPMA. İlk adım MUTLAKA create_file olmalı.\n` +
+        `- Sadece mevcut dosyalar için search/retrieve kullan.\n\n` +
+        `# KULLANILABİLİR ARAÇLAR (TOOLS)\n` +
+        `- retrieve_chunks: { args: { query: string, top_k?: number } }\n` +
+        `- create_file: { args: { path: string, content_spec?: string } }\n` +
+        `- edit_file: { args: { path?: string, find_spec?: string, change_spec?: string, use_saved_range?: string } }\n` +
+        `- append_file: { args: { path: string, content_spec?: string, position?: "end"|"beginning" } }\n\n` +
         `# JSON ÇIKTI ŞEMASI\n` +
         `{\n` +
         `  "steps": [\n` +
-        `    { "step": <number>, "action": <string>, "thought": <string>, "ui_text": <string|optional>, "files_to_edit": <string[]|optional>, "notes": <string|optional> }\n` +
+        `    {\n` +
+        `      "step": <number>,\n` +
+        `      "action": <string>,\n` +
+        `      "thought": <string>,\n` +
+        `      "ui_text": <string|optional>,\n` +
+        `      "tool": <"retrieve_chunks"|"create_file"|"edit_file"|"append_file"|optional>,\n` +
+        `      "args": <object|optional>,\n` +
+        `      "tool_calls": <Array<{ tool: string, args: object }>|optional>,\n` +
+        `      "files_to_edit": <string[]|optional>,\n` +
+        `      "notes": <string|optional>\n` +
+        `    }\n` +
         `  ]\n` +
         `}`
     );

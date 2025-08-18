@@ -21,6 +21,9 @@ let rateWindow = [];
 let finalReplaceText = null;
 let planTimerStartMs = null;
 let lastPlannerStepsCache = [];
+let summaryTargetEl = null;
+let summaryContainerEl = null;
+let summaryMessageEl = null;
 
 let shouldAutoScroll = true;
 
@@ -291,6 +294,17 @@ function resetPlannerUI() {
 export function init() {}
 
 export function addUserMessage(text) {
+    try {
+        const existing = document.getElementById('ai-streaming-placeholder');
+        if (existing) {
+            existing.classList.remove('shimmer-active');
+            existing.classList.remove('planner-streaming');
+            try { existing.querySelector('.avatar-wrapper')?.classList.remove('loading'); } catch (e) {}
+            existing.id = '';
+        }
+    } catch (e) {}
+    try { summaryTargetEl = null; } catch (e) {}
+    try { summaryContainerEl = null; } catch (e) {}
     const p = document.createElement('p');
     p.textContent = text;
     createMessageElement('user', p.outerHTML);
@@ -322,7 +336,7 @@ export function addAiResponsePlaceholder() {
     streamHasEnded = false;
     isStreamingCancelled = false;
 
-    const messageElement = createMessageElement('assistant', DOM.getText('thinking'));
+    const messageElement = createMessageElement('assistant', '');
     messageElement.id = 'ai-streaming-placeholder';
     const avatarWrapper = messageElement.querySelector('.avatar-wrapper');
     avatarWrapper.classList.add('loading');
@@ -422,9 +436,13 @@ export function showPlannerPanel(steps) {
         // Temizle
         list.innerHTML = '';
 
-        for (const s of steps) {
+        for (let i = 0; i < steps.length; i++) {
+            const s = steps[i];
             const li = document.createElement('li');
-            li.textContent = typeof s === 'string' ? s : (s?.text || '');
+            const text = typeof s === 'string' ? s : (s?.text || '');
+            const span = document.createElement('span');
+            span.textContent = text;
+            li.appendChild(span);
             list.appendChild(li);
         }
 
@@ -433,6 +451,7 @@ export function showPlannerPanel(steps) {
         content.classList.add('hidden');
         panel.classList.add('collapsed');
         panel.classList.remove('expanded');
+        panel.classList.remove('completed');
 
         // Toggle buton handler (bir kez ekle)
         const toggle = document.getElementById('planner-panel-toggle');
@@ -448,6 +467,31 @@ export function showPlannerPanel(steps) {
                 }
             });
             toggle.dataset.bound = '1';
+            // Add single run-all checkbox button to the left of the toggle (only once)
+            try {
+                if (!document.getElementById('planner-run-all-toggle')) {
+                    const runAllBtn = document.createElement('button');
+                    runAllBtn.id = 'planner-run-all-toggle';
+                    runAllBtn.className = 'icon-button planner-run-all';
+                    runAllBtn.title = 'Tüm adımları uygula';
+                    runAllBtn.innerText = '✔';
+                    // small left margin so it's just left of the toggle label
+                    runAllBtn.style.marginLeft = '4px';
+                    runAllBtn.addEventListener('click', () => { try { postMessage('executePlannerAll'); } catch (e) {} });
+                    // Insert the run-all button into the planner bar immediately before the toggle
+                    try {
+                        const titleEl = toggle.parentNode.querySelector('.planner-panel-title');
+                        if (titleEl) {
+                            titleEl.appendChild(runAllBtn); // place inside title so it stays right next to text
+                        } else {
+                            const bar = toggle.closest('.planner-panel-bar') || toggle.parentNode;
+                            bar.insertBefore(runAllBtn, toggle); // fallback: left of toggle
+                        }
+                    } catch (e) {
+                        try { toggle.parentNode.insertBefore(runAllBtn, toggle); } catch(e){}
+                    }
+                }
+            } catch (e) { /* ignore */ }
         }
     } catch (e) { console.warn('showPlannerPanel error', e); }
 }
@@ -479,15 +523,186 @@ export function refreshPlannerPanelVisibility() {
             content.classList.add('hidden');
             panel.classList.add('collapsed');
             panel.classList.remove('expanded');
+            panel.classList.remove('completed');
         }
     } else {
         panel.classList.add('hidden');
     }
 }
 
+// Panel tamamlandı (ince çizgi) durumunu ayarlayan yardımcı
+export function setPlannerPanelCompleted(done) {
+    try {
+        const panel = document.getElementById('planner-panel');
+        if (!panel) return;
+        if (done) {
+            panel.classList.add('completed');
+        } else {
+            panel.classList.remove('completed');
+        }
+    } catch (e) {}
+}
+
 // YENİ: Plan zamanlayıcısını dışarıya verir
 export function getPlanTimerStartMs() {
     return planTimerStartMs;
+}
+
+// --- Step execution placeholder helpers ---
+let inlineSummaryBuffer = '';
+let inlineSummaryRenderTimer = null;
+const INLINE_SUMMARY_RENDER_DEBOUNCE_MS = 120; // render stream at most ~8-9 times/sec
+// Inline typing stream state (for summary) - gradual typing into raw markdown container
+let inlineCharBuffer = '';
+let inlineIsTyping = false;
+let inlineLastRenderTime = 0;
+let inlineTargetCharsPerSecond = 200;
+let inlineStreamHasEnded = false;
+let inlineStreamingBuffer = '';
+let inlineGenerationId = 0;
+export function showStepExecutionPlaceholder(label) {
+    if (!document.getElementById('ai-streaming-placeholder')) {
+        addAiResponsePlaceholder();
+    }
+    setPlannerStreaming(true);
+    setShimmerActive(true);
+    const el = document.getElementById('ai-streaming-placeholder');
+    try { summaryTargetEl = el; } catch (e) {}
+    const contentElement = el?.querySelector('.message-content');
+    if (contentElement) {
+        // Her adım için ayrı blok satır kullan (display: block)
+        const line = document.createElement('div');
+        line.className = 'step-line running-line';
+        line.textContent = String(label || '');
+        contentElement.appendChild(line);
+    }
+}
+
+export function finishStepExecutionPlaceholder(label, elapsedMs, error) {
+    const el = document.getElementById('ai-streaming-placeholder');
+    if (!el) return;
+    setPlannerStreaming(false);
+    setShimmerActive(false);
+    const contentElement = el.querySelector('.message-content');
+    if (!contentElement) return;
+    const seconds = Math.max(0, Number(elapsedMs || 0) / 1000).toFixed(2);
+    const finalText = `${label} (${seconds}s)` + (error ? ` — Hata: ${error}` : '');
+    const running = contentElement.querySelector('.running-line');
+    const soft = document.createElement('div');
+    soft.className = 'step-line planned-soft';
+    soft.textContent = finalText;
+    if (running && running.parentNode === contentElement) {
+        contentElement.replaceChild(soft, running);
+    } else {
+        contentElement.appendChild(soft);
+    }
+}
+
+// --- Inline summary (same placeholder, no pulse) ---
+export function startInlineSummary() {
+    // Yeni özet akışı başlıyor: tüm inline state'i sıfırla ve önceki döngüyü iptal et
+    inlineGenerationId++;
+    inlineIsTyping = false;
+    inlineLastRenderTime = 0;
+    inlineSummaryBuffer = '';
+    inlineCharBuffer = '';
+    inlineStreamingBuffer = '';
+    inlineStreamHasEnded = false;
+
+    // Özet için HER ZAMAN yeni bir mesaj balonu oluştur
+    const messageEl = createMessageElement('assistant', '');
+    const target = messageEl?.querySelector('.message-content');
+    if (!target) return;
+    const hr = document.createElement('div');
+    hr.className = 'step-line';
+    hr.textContent = '';
+    target.appendChild(hr);
+    const container = document.createElement('div');
+    try { container.id = 'inline-summary-' + String(Date.now()) + '-' + String(Math.random()).slice(2); } catch (e) {}
+    target.appendChild(container);
+    try { summaryContainerEl = container; } catch (e) {}
+    try { summaryMessageEl = messageEl; } catch (e) {}
+}
+
+export function appendInlineSummary(chunk) {
+    const container = (summaryContainerEl && summaryContainerEl.isConnected) ? summaryContainerEl : null;
+    if (!container) return;
+    // For smoother typing effect, feed into inlineCharBuffer and use typing queue
+    inlineSummaryBuffer += String(chunk || '');
+    inlineCharBuffer += String(chunk || '');
+    inlineStreamHasEnded = false;
+    if (!inlineIsTyping) processInlineTypingQueue();
+}
+
+function processInlineTypingQueue() {
+    if (inlineIsTyping) return;
+    inlineIsTyping = true;
+    inlineLastRenderTime = 0;
+
+    const container = (summaryContainerEl && summaryContainerEl.isConnected) ? summaryContainerEl : null;
+    if (!container) { inlineIsTyping = false; return; }
+    const myGenId = inlineGenerationId;
+
+    function step(ts) {
+        try {
+            if (myGenId !== inlineGenerationId) { inlineIsTyping = false; return; }
+            if (inlineLastRenderTime === 0) inlineLastRenderTime = ts;
+            const elapsed = ts - inlineLastRenderTime;
+            let allow = Math.max(1, Math.floor(inlineTargetCharsPerSecond * (elapsed / 1000)));
+            if (allow > inlineCharBuffer.length) allow = inlineCharBuffer.length;
+            if (allow > 0) {
+                const toAdd = inlineCharBuffer.slice(0, allow);
+                inlineCharBuffer = inlineCharBuffer.slice(allow);
+                // append to streaming buffer
+                inlineStreamingBuffer += toAdd;
+                // render markdown incrementally
+                try {
+                    container.innerHTML = marked.parse(inlineStreamingBuffer);
+                    container.querySelectorAll('pre code').forEach(block => { try { hljs.highlightElement(block); } catch(e){} });
+                } catch (e) {
+                    // fallback: append plain text
+                    container.textContent = (container.textContent || '') + toAdd;
+                }
+                inlineLastRenderTime = ts;
+            }
+            if (myGenId !== inlineGenerationId) { inlineIsTyping = false; return; }
+            if (inlineCharBuffer.length > 0 || !inlineStreamHasEnded) {
+                requestAnimationFrame(step);
+            } else {
+                inlineIsTyping = false;
+            }
+        } catch (e) { inlineIsTyping = false; }
+    }
+
+    requestAnimationFrame(step);
+}
+
+export function finishInlineSummary() {
+    inlineStreamHasEnded = true;
+    // ensure any remaining buffered chars are processed by typing queue
+    if (!inlineIsTyping) {
+        try {
+            const container = (summaryContainerEl && summaryContainerEl.isConnected) ? summaryContainerEl : null;
+            if (container) {
+                container.innerHTML = marked.parse(inlineSummaryBuffer || container.textContent || '');
+                container.querySelectorAll('pre code').forEach(block => { try { hljs.highlightElement(block); } catch(e){} });
+                try { addCodeBlockActions(summaryMessageEl || container); } catch (e) {}
+            }
+        } catch (e) {}
+    }
+    // Finalize the placeholder to enable new messages
+    try {
+        const ph = document.getElementById('ai-streaming-placeholder');
+        if (ph) {
+            ph.classList.remove('shimmer-active');
+            const avatar = ph.querySelector('.avatar-wrapper');
+            if (avatar) avatar.classList.remove('loading');
+        }
+    } catch (e) {}
+    runFinalizationLogic();
+    try { summaryTargetEl = null; } catch (e) {}
+    try { summaryContainerEl = null; } catch (e) {}
+    try { summaryMessageEl = null; } catch (e) {}
 }
 
 export function appendResponseChunk(chunk) {
@@ -528,6 +743,18 @@ export function clear(playVideo = true) {
     shouldAutoScroll = true;
     // Planner UI'ı da sıfırla
     resetPlannerUI();
+
+    // Remove any placeholder and inline summary state so new chat starts clean
+    try {
+        const ph = document.getElementById('ai-streaming-placeholder');
+        if (ph && ph.parentNode) ph.parentNode.removeChild(ph);
+    } catch (e) {}
+    try { inlineSummaryBuffer = ''; } catch(e){}
+    try { inlineCharBuffer = ''; } catch(e){}
+    try { inlineStreamingBuffer = ''; } catch(e){}
+    try { inlineIsTyping = false; } catch(e){}
+    try { inlineStreamHasEnded = false; } catch(e){}
+    try { const ins = document.getElementById('inline-summary'); if (ins && ins.parentNode) ins.parentNode.removeChild(ins); } catch(e){}
 
     if (DOM.welcomeVideo) {
         if (playVideo) {

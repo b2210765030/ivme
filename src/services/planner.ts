@@ -18,12 +18,22 @@ import * as systemPrompts from '../system_prompts';
 
 type PlannerIndex = Record<string, string>;
 
+export type PlannerToolCall = {
+	tool: 'check_index' | 'search' | 'locate_code' | 'retrieve_chunks' | 'open_file' | 'create_file' | 'edit_file' | 'append_file';
+	args: any; // Gelecekte ayrıntılı argüman tipleri eklenebilir (ör. { keywords: string[] } | { query: string } | ...)
+};
+
 export type PlannerPlanStep = {
 	step: number;
 	action: string;
 	thought: string;
 	/** UI'da gösterilecek kısa, tek cümlelik açıklama (opsiyonel) */
 	ui_text?: string;
+	/** Tek adımlı aracı çağrısı (atomik adımlar için önerilir) */
+	tool?: PlannerToolCall['tool'];
+	args?: PlannerToolCall['args'];
+	/** Gerekirse bir adımda birden çok aracı çağrısı */
+	tool_calls?: PlannerToolCall[];
 	// Opsiyonel alanlar (LLM ekleyebilir)
 	files_to_edit?: string[];
 	notes?: string;
@@ -32,6 +42,72 @@ export type PlannerPlanStep = {
 export type PlannerPlan = {
 	steps: PlannerPlanStep[];
 };
+
+/**
+ * Planner argümanlarını temizler; kod içeren alanları kaldırır veya spec alanlarına taşır.
+ */
+function sanitizePlannerArgs(tool: string | undefined, argsRaw: any): any | undefined {
+    if (!argsRaw || typeof argsRaw !== 'object') return argsRaw;
+    const args = { ...argsRaw };
+    const stripCode = (v: any) => typeof v === 'string' ? v.replace(/```[\s\S]*?```/g, '').trim() : v;
+    const looksCodeLike = (text: string): boolean => {
+        const t = text.trim();
+        if (t.includes('\n') && (t.includes('{') || t.includes('}') || t.includes(';'))) return true;
+        if (/\b(function|class|interface|def|import|package|public|private|return)\b/.test(t)) return true;
+        return false;
+    };
+
+    // Her araç için kod içerebilecek alanları sterilize et
+    if (tool === 'create_file') {
+        if (typeof args.content === 'string') {
+            // content -> content_spec (kod yerine gereksinim)
+            const cleaned = stripCode(args.content);
+            args.content_spec = typeof cleaned === 'string' && !looksCodeLike(cleaned) ? cleaned : undefined;
+            delete args.content;
+        }
+    }
+    if (tool === 'edit_file') {
+        if (typeof args.snippet === 'string') {
+            // snippet -> change_spec
+            const cleaned = stripCode(args.snippet);
+            args.change_spec = typeof cleaned === 'string' && !looksCodeLike(cleaned) ? cleaned : undefined;
+            delete args.snippet;
+        }
+        if (typeof args.replace === 'string') {
+            const cleaned = stripCode(args.replace);
+            args.change_spec = typeof cleaned === 'string' && !looksCodeLike(cleaned) ? cleaned : undefined;
+            delete args.replace;
+        }
+        if (typeof args.find === 'string') {
+            const cleaned = stripCode(args.find);
+            args.find_spec = typeof cleaned === 'string' && !looksCodeLike(cleaned) ? cleaned : undefined;
+            delete args.find;
+        }
+    }
+    if (tool === 'append_file') {
+        if (typeof args.content === 'string') {
+            const cleaned = stripCode(args.content);
+            args.content_spec = typeof cleaned === 'string' && !looksCodeLike(cleaned) ? cleaned : undefined;
+            delete args.content;
+        }
+    }
+    if (tool === 'search' || tool === 'retrieve_chunks') {
+        if (typeof args.query === 'string') {
+            args.query = stripCode(args.query);
+        }
+        if (Array.isArray(args.keywords)) {
+            args.keywords = args.keywords.map((k: any) => stripCode(k)).filter((k: any) => typeof k === 'string' && k.length > 0);
+        }
+    }
+
+    return args;
+}
+
+function sanitizeToolName(tool: any): PlannerToolCall['tool'] | undefined {
+    const allowed: PlannerToolCall['tool'][] = ['check_index', 'search', 'locate_code', 'retrieve_chunks', 'create_file', 'edit_file', 'append_file'];
+    if (typeof tool === 'string' && (allowed as string[]).includes(tool)) return tool as any;
+    return undefined;
+}
 
 /**
  * planner_index.json dosyasını yükler.
@@ -49,6 +125,17 @@ async function readPlannerIndex(context: vscode.ExtensionContext): Promise<Plann
 	} catch {
 		return null;
 	}
+}
+
+function fileExistsInPlannerIndex(index: PlannerIndex, workspaceRoot: string, relativeOrName: string): { exists: boolean; matchedPath?: string } {
+    const norm = (s: string) => s.replace(/\\/g, '/').toLowerCase();
+    const nc = norm(relativeOrName);
+    for (const key of Object.keys(index)) {
+        const nk = norm(key);
+        if (!nk.startsWith(norm(workspaceRoot))) continue;
+        if (nk.endsWith(nc)) return { exists: true, matchedPath: key };
+    }
+    return { exists: false };
 }
 
 /** Dosya uzantısından markdown dil etiketi tahmini. */
@@ -135,7 +222,11 @@ async function readFileContent(fsPath: string): Promise<string | null> {
 /**
  * Planner için zenginleştirilmiş mimari raporu üretir.
  */
-export async function build_planner_context(context: vscode.ExtensionContext, userQuery: string): Promise<string> {
+export async function build_planner_context(
+	context: vscode.ExtensionContext,
+	userQuery: string,
+	recentSummaryMemory?: string
+): Promise<string> {
 	// Sadece indeksleme aktifken çalış
 	const config = vscode.workspace.getConfiguration(EXTENSION_ID);
 	const indexingEnabled = config.get<boolean>(SETTINGS_KEYS.indexingEnabled, false);
@@ -167,6 +258,14 @@ export async function build_planner_context(context: vscode.ExtensionContext, us
 	// Kullanıcı sorgusundan dosya adaylarını çıkar ve index ile eşleştir
 	const fileCandidates = extractMentionedFileCandidates(userQuery);
 	const matchedFiles = matchIndexFiles(index, fileCandidates, rootPath);
+	const missingFiles = fileCandidates.filter(c => {
+		const norm = (s: string) => s.replace(/\\/g, '/').toLowerCase();
+		const nc = norm(c);
+		return !Object.keys(index).some(k => {
+			const nk = norm(k);
+			return nk.startsWith(norm(rootPath)) && nk.endsWith(nc);
+		});
+	});
 
 	const detailedSections: string[] = [];
 	for (const absFile of matchedFiles) {
@@ -195,6 +294,12 @@ export async function build_planner_context(context: vscode.ExtensionContext, us
 	lines.push('## Project Summary');
 	lines.push(`- ${rootSummary}`);
 	lines.push('');
+	// Inject recent planner summary memory for continuity
+	if (typeof recentSummaryMemory === 'string' && recentSummaryMemory.trim().length > 0) {
+		lines.push('## Recent Planner Summary (Memory)');
+		lines.push(recentSummaryMemory.trim());
+		lines.push('');
+	}
 	lines.push('## Key Directories and Their Responsibilities');
 	if (dirSummaries.length === 0) {
 		lines.push('- (No top-level directories summarized)');
@@ -211,6 +316,22 @@ export async function build_planner_context(context: vscode.ExtensionContext, us
 		lines.push(detailedSections.join('\n\n'));
 	} else {
 		lines.push('No specific files were detected in the user request.');
+	}
+
+	// Ek: Index İpuçları — Planlayıcı için dosya mevcudiyeti sinyali
+	lines.push('');
+	lines.push('---');
+	lines.push('## Index Hints');
+	if (fileCandidates.length > 0) {
+		lines.push(`Requested files mentioned by the user: ${fileCandidates.map(f => '`' + f + '`').join(', ')}`);
+	}
+	if (matchedFiles.length > 0) {
+		lines.push(`Existing requested files in the index: ${matchedFiles.map(f => '`' + path.relative(rootPath, f).replace(/\\\\/g, '/').replace(/\\/g, '/') + '`').join(', ')}`);
+	}
+	if (missingFiles.length > 0) {
+		lines.push(`Missing requested files (DO NOT search/retrieve for these; create them first): ${missingFiles.map(f => '`' + f + '`').join(', ')}`);
+	} else {
+		lines.push('No missing requested files detected.');
 	}
 
 	return lines.join('\n');
@@ -243,7 +364,20 @@ export function parse_and_validate_plan(rawResponse: string): PlannerPlan {
 			throw new Error(`Plan adımı ${idx} zorunlu alanları içermiyor (step:number, action:string, thought:string).`);
 		}
 		const uiText = typeof s.ui_text === 'string' ? s.ui_text : undefined;
-		steps.push({ step: s.step, action: s.action, thought: s.thought, ui_text: uiText, files_to_edit: s.files_to_edit, notes: s.notes });
+		const tool = sanitizeToolName(s.tool);
+		const argsRaw = s.args && typeof s.args === 'object' ? s.args : undefined;
+		const args = sanitizePlannerArgs(tool, argsRaw);
+		let tool_calls: PlannerToolCall[] | undefined;
+		if (Array.isArray(s.tool_calls)) {
+			tool_calls = s.tool_calls
+				.map((c: any) => {
+					const t = sanitizeToolName(c?.tool);
+					if (!t) return null;
+					return { tool: t, args: sanitizePlannerArgs(t, c.args) } as PlannerToolCall;
+				})
+				.filter((c: PlannerToolCall | null): c is PlannerToolCall => !!c);
+		}
+		steps.push({ step: s.step, action: s.action, thought: s.thought, ui_text: uiText, tool, args, tool_calls, files_to_edit: s.files_to_edit, notes: s.notes });
 	}
 
 	return { steps };
@@ -255,10 +389,11 @@ export async function run_planner(
 	api: ApiServiceManager,
 	userQuery: string,
 	onUiEmit?: (stepNo: number | undefined, uiText: string, isFinal?: boolean) => Promise<void> | void,
-	cancellationSignal?: AbortSignal
+	cancellationSignal?: AbortSignal,
+	recentSummaryMemory?: string
 ): Promise<PlannerPlan> {
 	// GEÇİCİ: Planner her zaman çalışsın (indeksleme açık olmasa da). Bağlam üretimi indeks yoksa temel içerik döndürür.
-	const plannerContext = await build_planner_context(context, userQuery);
+	const plannerContext = await build_planner_context(context, userQuery, recentSummaryMemory);
 	const systemPrompt = systemPrompts.createPlannerSystemPrompt(plannerContext, userQuery);
 	console.log('[Planner] System prompt sent to LLM (truncated to 2000 chars):', systemPrompt.slice(0, 2000));
 

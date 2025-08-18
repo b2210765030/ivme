@@ -10,3 +10,33 @@
 @import url('./input.css');
 @import url('./modal.css');
 @import url('./diff.css'); /* YENİ EKLENEN SATIR */
+
+/* Planner panel run-all button placement */
+.planner-panel-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.planner-panel-title {
+  display: inline-flex;
+  align-items: center;
+}
+#planner-run-all-toggle {
+  margin-left: 6px;
+}
+
+/* Plan tamamlandığında (ve panel kapalıyken) barın ortasından ince çizgi */
+.planner-panel.collapsed.completed .planner-panel-bar {
+  position: relative;
+}
+.planner-panel.collapsed.completed .planner-panel-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0 8px;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+  background: rgba(255,255,255,0.5);
+  pointer-events: none;
+}

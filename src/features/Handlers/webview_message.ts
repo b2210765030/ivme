@@ -31,6 +31,16 @@ export class WebviewMessageHandler {
 
     public async handleMessage(data: any) {
         switch (data.type) {
+            // --- Planner: Tek adımı uygula ---
+            case 'executePlannerStep': {
+                const stepIndex = Number(data?.payload?.index ?? -1);
+                try {
+                    await this.interactionHandler.executePlannerStep(stepIndex);
+                } catch (e: any) {
+                    vscode.window.showErrorMessage(`Adım uygulanamadı: ${e?.message || e}`);
+                }
+                break;
+            }
             case 'toggleAgentFileSuppressed':
                 this.contextManager.setAgentFileSuppressed(!!data.payload?.suppressed, this.webview);
                 // UI'ı güncelle: Eğer suppress ise agent barı gizlensin bilgisi gönder
@@ -40,6 +50,10 @@ export class WebviewMessageHandler {
             case 'askAI':
                 await this.messageHandler.handleAskAi(data.payload);
                 this.sendContextSize();
+                break;
+            // Planner: tüm adımları uygula
+            case 'executePlannerAll':
+                await this.interactionHandler.executePlannerAll();
                 break;
             
             // --- YENİ: Değişikliği Uygula Mesajı ---
@@ -164,9 +178,25 @@ export class WebviewMessageHandler {
     public sendContextSize() {
         const conversationTokens = this.conversationManager.getActiveConversationSize();
         const filesTokens = this.contextManager.getUploadedFilesSize() + this.contextManager.getAgentFileSize();
+        // Sadece planner akışı kullanılacaksa hafıza özetini toplam sayaca dahil et
+        let memoryTokens = 0;
+        try {
+            const isAgentActive = this.settingsManager.getAgentModeState();
+            const isIndexingEnabled = this.settingsManager.getIndexingEnabled();
+            const agentContextPresent = !!(this.contextManager.agentFileContext || this.contextManager.agentSelectionContext);
+            const shouldUsePlanner = (isAgentActive || agentContextPresent) && isIndexingEnabled;
+            if (shouldUsePlanner) {
+                const mem = this.conversationManager.getPlannerSummaryMemory?.();
+                if (typeof mem === 'string' && mem.trim().length > 0) {
+                    // Runtime import to avoid TS cycle; use extension tokenizer for parity
+                    const { countTokensGPT } = require('../../core/tokenizer');
+                    memoryTokens = countTokensGPT(mem);
+                }
+            }
+        } catch {}
         this.webview.postMessage({
             type: 'updateContextSize',
-            payload: { conversationSize: conversationTokens, filesSize: filesTokens }
+            payload: { conversationSize: conversationTokens + memoryTokens, filesSize: filesTokens }
         });
     }
 

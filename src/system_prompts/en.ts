@@ -139,15 +139,44 @@ export function createPlannerSystemPrompt(plannerContext: string, userQuery: str
         `"${userQuery}"\n\n` +
         `# INSTRUCTIONS\n` +
         `- Think step-by-step.\n` +
+        `- Break each high-level task into the SMALLEST possible, atomic, actionable steps. If a single logical action contains multiple sub-actions, split them into separate numbered steps. Do NOT combine separate actions in one step.\n` +
+        `- Aim to produce micro-steps that a developer could follow one-by-one (tiny, repeatable actions such as "open file X", "change line Y", "add import Z", "run test A").\n` +
+        `- ABSOLUTELY DO NOT output any code, pseudo-code, or multi-line code blocks in ANY field. Do not include backtick fences (\`\`\`) in fields. The plan must only describe WHAT to do, not the code itself.\n` +
         `- Optimize for minimal changes while ensuring correctness.\n` +
         `- Prefer editing existing files over creating new ones unless necessary.\n` +
         `- For each step, include a concise English one-sentence summary in the field ".ui_text" that will be shown directly in the UI. Keep it short and human-friendly.\n` +
         `- IMPORTANT: Every value of the field ".ui_text" MUST be written in English. If the model would otherwise produce that field in another language, translate it to English. Do not include non-English text inside ".ui_text".\n` +
-        `- Output strictly valid JSON following the schema below. Do not include any prose outside JSON.\n\n` +
+        `- You may optionally populate the field "files_to_edit" with exact file paths to modify and "notes" with short estimated effort or rationale.\n` +
+        `- Output strictly valid JSON following the schema below. Do not include any prose outside JSON.\n` +
+        `- NEVER include language-tagged code blocks or backticks in any field. Do not place actual code in plan steps.\n\n` +
+        `# FILE EXISTENCE RULE (INDEX-AWARE)\n` +
+        `- If 'Missing requested files' are listed under 'Index Hints' in CONTEXT, DO NOT perform search/retrieval for them. The FIRST step MUST be create_file for each missing file.\n` +
+        `- Use search/retrieve only for files that already exist in the index.\n\n` +
+        `# AVAILABLE TOOLS\n` +
+        `- check_index: { args: { file?: string, files?: string[] } } -> Check if the mentioned file(s) exist in the planner index; returns which ones exist or are missing.\n` +
+        `- search: { args: { keywords?: string[], query?: string, top_k?: number } } -> Plan-time intent to look up relevant areas by keywords. Provide keywords; the system will run retrieval and cache results for subsequent steps.\n` +
+        `- locate_code: { args: { name?: string, pattern?: string, path?: string, save_as?: string } } -> Locate the exact start-end range of a function/snippet by name or regex and store it as a handle for later edits.\n` +
+        `- retrieve_chunks: { args: { query: string, top_k?: number } } -> Retrieve relevant code/document chunks from the vector index. Use before editing when unsure about files/locations.\n` +
+        `- create_file: { args: { path: string, content_spec?: string } } -> Create a new file; DO NOT include code. Describe the intended content in 'content_spec' (requirements/spec), not actual code.\n` +
+        `- edit_file: { args: { path?: string, find_spec?: string, change_spec?: string, use_saved_range?: string } } -> Edit an existing file. If path omitted, use the best retrieved chunk and update ONLY that chunk's content. DO NOT include code in the plan; the executor will generate it.\n` +
+        `- append_file: { args: { path: string, content_spec?: string, position?: "end"|"beginning" } } -> Append or prepend; DO NOT include code. Use 'content_spec' to describe the addition.\n\n` +
+        `# IMPORTANT INDEX HINTS\n` +
+        `- If the user mentions files that do NOT exist in the index (see the 'Index Hints' section in CONTEXT), do NOT search for them. First step MUST be to create those files with create_file.\n` +
+        `- Only use search/retrieve for existing files and when the exact location is unknown.\n` +
         `# JSON OUTPUT SCHEMA\n` +
         `{\n` +
         `  "steps": [\n` +
-        `    { "step": <number>, "action": <string>, "thought": <string>, "ui_text": <string|optional>, "files_to_edit": <string[]|optional>, "notes": <string|optional> }\n` +
+        `    {\n` +
+        `      "step": <number>,\n` +
+        `      "action": <string>,\n` +
+        `      "thought": <string>,\n` +
+        `      "ui_text": <string|optional>,\n` +
+        `      "tool": <"search"|"locate_code"|"retrieve_chunks"|"create_file"|"edit_file"|"append_file"|optional>,\n` +
+        `      "args": <object|optional>,  // Use *spec* fields (content_spec, change_spec, find_spec). Do NOT include code.\n` +
+        `      "tool_calls": <Array<{ tool: string, args: object }>|optional>,\n` +
+        `      "files_to_edit": <string[]|optional>,\n` +
+        `      "notes": <string|optional>\n` +
+        `    }\n` +
         `  ]\n` +
         `}`
     );
@@ -169,14 +198,32 @@ export function createPlannerPrompt(plannerContext: string, userQuery: string): 
         `"${userQuery}"\n\n` +
         `# INSTRUCTIONS\n` +
         `- Think step-by-step.\n` +
+        `- Break each high-level task into the SMALLEST possible, atomic, actionable steps. If a single logical action contains multiple sub-actions, split them into separate numbered steps. Do NOT combine separate actions in one step.\n` +
+        `- Aim to produce micro-steps that a developer could follow one-by-one (tiny, repeatable actions such as "open file X", "change line Y", "add import Z", "run test A").\n` +
         `- Optimize for minimal changes while ensuring correctness.\n` +
         `- Prefer editing existing files over creating new ones unless necessary.\n` +
         `- For each step, include a concise one-sentence summary in the field ".ui_text" that will be shown directly in the UI. Keep it short and human-friendly.\n` +
+        `- You may optionally populate the field "files_to_edit" with exact file paths to modify and "notes" with short estimated effort or rationale.\n` +
         `- Output strictly valid JSON following the schema below. Do not include any prose outside JSON.\n\n` +
+        `# AVAILABLE TOOLS\n` +
+        `- retrieve_chunks: { args: { query: string, top_k?: number } }\n` +
+        `- create_file: { args: { path: string, content_spec?: string } }\n` +
+        `- edit_file: { args: { path?: string, find_spec?: string, change_spec?: string, use_saved_range?: string } }\n` +
+        `- append_file: { args: { path: string, content_spec?: string, position?: "end"|"beginning" } }\n\n` +
         `# JSON OUTPUT SCHEMA\n` +
         `{\n` +
         `  "steps": [\n` +
-        `    { "step": <number>, "action": <string>, "thought": <string>, "ui_text": <string|optional>, "files_to_edit": <string[]|optional>, "notes": <string|optional> }\n` +
+        `    {\n` +
+        `      "step": <number>,\n` +
+        `      "action": <string>,\n` +
+        `      "thought": <string>,\n` +
+        `      "ui_text": <string|optional>,\n` +
+        `      "tool": <"retrieve_chunks"|"create_file"|"edit_file"|"append_file"|optional>,\n` +
+        `      "args": <object|optional>,\n` +
+        `      "tool_calls": <Array<{ tool: string, args: object }>|optional>,\n` +
+        `      "files_to_edit": <string[]|optional>,\n` +
+        `      "notes": <string|optional>\n` +
+        `    }\n` +
         `  ]\n` +
         `}`
     );

@@ -105,6 +105,34 @@ export function initMessageListener() {
                 break;
             }
 
+            // --- Step Execution Placeholder Messages ---
+            case 'stepExecStart': {
+                const label = String(data?.label || '');
+                ChatView.showStepExecutionPlaceholder(label);
+                break;
+            }
+            case 'stepExecEnd': {
+                const label = String(data?.label || '');
+                const elapsedMs = Number(data?.elapsedMs || 0);
+                const error = data?.error;
+                ChatView.finishStepExecutionPlaceholder(label, elapsedMs, error);
+                break;
+            }
+
+            // --- Summary streaming into same placeholder ---
+            case 'summaryStart': {
+                ChatView.startInlineSummary();
+                break;
+            }
+            case 'summaryChunk': {
+                ChatView.appendInlineSummary(String(data || ''));
+                break;
+            }
+            case 'summaryEnd': {
+                ChatView.finishInlineSummary();
+                break;
+            }
+
             // --- Planner streaming UI parça mesajı ---
             case 'plannerUiChunk': {
                 const { isAgentModeActive, isIndexingEnabled } = getState();
@@ -145,6 +173,8 @@ export function initMessageListener() {
                     // Chat modunda planner sonucu yok sayılır (planner zaten çağrılmaz)
                     break;
                 }
+                // Yeni plan geldiğinde panel tamamlandı işaretini kaldır
+                try { ChatView.setPlannerPanelCompleted(false); } catch (e) {}
                 const plan = data?.plan ?? data?.payload?.plan ?? data;
                 if (!plan || !Array.isArray(plan.steps)) {
                     ChatView.showAiResponse('Plan adımları bulunamadı.');
@@ -206,6 +236,10 @@ export function initMessageListener() {
                         ChatView.showPlannerPanel(stepsForPanel);
                     } catch(e) { console.warn('showPlannerPanel error', e); }
                 })();
+                break;
+            }
+            case 'plannerCompleted': {
+                try { ChatView.setPlannerPanelCompleted(true); } catch (e) {}
                 break;
             }
 

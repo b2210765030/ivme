@@ -15,9 +15,13 @@ import { EXTENSION_ID, SETTINGS_KEYS } from '../../core/constants';
 import { createContextualPrompt } from '../../system_prompts';
 import { build_context_for_query } from '../../services/orchestrator';
 import { run_planner, PlannerPlan } from '../../services/planner';
+import { PlannerExecutor } from '../../services/executor';
 export class InteractionHandler {
     private currentRequestController: AbortController | null = null;
     private lastPlannerPlan: PlannerPlan | null = null;
+    private executor: PlannerExecutor = new PlannerExecutor();
+    private executedStepLogs: Array<{ label: string; elapsedMs: number; error?: string }> = [];
+    private executedStepIndices: Set<number> = new Set();
 
     constructor(
         private conversationManager: ConversationManager,
@@ -60,6 +64,8 @@ export class InteractionHandler {
 
             if (shouldUsePlanner) {
                 // Streaming: ui_text parçalarını anında UI'a ilet
+                // Planner'ı hafızadaki son özetle zenginleştir
+                const latestSummary = this.conversationManager.getPlannerSummaryMemory?.();
                 const plan = await run_planner(
                     this.conversationManager.getExtensionContext(),
                     this.apiManager,
@@ -68,12 +74,16 @@ export class InteractionHandler {
                         // Tipografik/daktilo efekti için parça olarak gönderme yerine UI tarafında efekt verilecek
                         this.webview.postMessage({ type: 'plannerUiChunk', payload: { stepNo, uiText, isFinal } });
                     },
-                    cancellationSignal as any
+                    cancellationSignal as any,
+                    latestSummary
                 );
                 // Plan tamamlandığında nihai sonucu da gönder
                 this.webview.postMessage({ type: 'plannerResult', payload: { plan } });
                 // Planı hafızada tut
                 this.lastPlannerPlan = plan;
+                // Yeni plan için yürütülen adım izlerini sıfırla
+                this.executedStepIndices = new Set();
+                this.executedStepLogs = [];
                 this.currentRequestController = null;
 
                 // Plan finalize edildikten sonra, aynı placeholder altında açıklamayı stream et
@@ -91,6 +101,145 @@ export class InteractionHandler {
             const errorMessage = e instanceof Error ? e.message : 'Planner çalıştırılırken hata oluştu.';
             this.webview.postMessage({ type: 'addResponse', payload: `**Hata:** ${errorMessage}` });
             this.webview.postMessage({ type: 'streamEnd' });
+        }
+    }
+
+    /**
+     * Planner planındaki tek bir adımı uygular (tool kullanarak). Kod üretimi bu aşamada yapılır.
+     */
+    public async executePlannerStep(stepIndex: number): Promise<{ label: string; elapsedMs: number; error?: string } | null> {
+        if (this.lastPlannerPlan == null) {
+            vscode.window.showWarningMessage('Önce bir plan oluşturulmalı.');
+            return null;
+        }
+        if (typeof stepIndex !== 'number' || stepIndex < 0 || stepIndex >= this.lastPlannerPlan.steps.length) {
+            vscode.window.showErrorMessage('Geçersiz adım index.');
+            return null;
+        }
+        const ctx = this.conversationManager.getExtensionContext();
+        const step = this.lastPlannerPlan.steps[stepIndex];
+        const label = this.formatStepLabel(step);
+        const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        // UI placeholder: başlat
+        this.webview.postMessage({ type: 'stepExecStart', payload: { index: stepIndex, label } });
+        try {
+            const result = await this.executor.executeStep(ctx, this.apiManager, this.lastPlannerPlan, stepIndex);
+            const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            const elapsedMs = Math.max(0, t1 - t0);
+            this.webview.postMessage({ type: 'stepExecEnd', payload: { index: stepIndex, label, elapsedMs, result } });
+            const log = { label, elapsedMs };
+            this.executedStepLogs.push(log);
+            this.executedStepIndices.add(stepIndex);
+            // Eğer tüm adımlar (başarılı ya da hatalı) en az bir kez çalıştırıldıysa paneli tamamlandı olarak işaretle
+            try {
+                if (this.lastPlannerPlan && this.executedStepIndices.size >= this.lastPlannerPlan.steps.length) {
+                    this.webview.postMessage({ type: 'plannerCompleted' });
+                }
+            } catch (e) { /* ignore */ }
+            return log;
+        } catch (e: any) {
+            const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            const elapsedMs = Math.max(0, t1 - t0);
+            this.webview.postMessage({ type: 'stepExecEnd', payload: { index: stepIndex, label, elapsedMs, error: e?.message || String(e) } });
+            const log = { label, elapsedMs, error: e?.message || String(e) };
+            this.executedStepLogs.push(log);
+            this.executedStepIndices.add(stepIndex);
+            try {
+                if (this.lastPlannerPlan && this.executedStepIndices.size >= this.lastPlannerPlan.steps.length) {
+                    this.webview.postMessage({ type: 'plannerCompleted' });
+                }
+            } catch (e2) { /* ignore */ }
+            return log;
+        }
+    }
+
+    /** Tüm plan adımlarını sırayla uygular. */
+    public async executePlannerAll(): Promise<void> {
+        if (!this.lastPlannerPlan || !Array.isArray(this.lastPlannerPlan.steps)) return;
+        this.executedStepLogs = [];
+        for (let i = 0; i < this.lastPlannerPlan.steps.length; i++) {
+            await this.executePlannerStep(i);
+        }
+        await this.generateAndShowSummaryNote();
+        try {
+            // UI: Plan panelini tamamlandı olarak işaretle
+            this.webview.postMessage({ type: 'plannerCompleted' });
+        } catch (e) { /* ignore */ }
+    }
+
+    private async generateAndShowSummaryNote(): Promise<void> {
+        try {
+            if (!this.executedStepLogs.length) return;
+            const lines = this.executedStepLogs.map((l, idx) => {
+                const sec = (l.elapsedMs / 1000).toFixed(2);
+                const status = l.error ? `Hata: ${l.error}` : 'Tamamlandı';
+                return `${idx + 1}. ${l.label} — ${status}`; // süreyi LLM'e göndermiyoruz, içerik odağı
+            }).join('\n');
+
+            const system = [
+                'Türkçe ve kısa yaz. Kod blokları, başlıklar veya gereksiz süsleme yok.',
+                'Madde işareti kullanabilirsin. Önce neler yapıldığını ve nelerin eklendiğini/oluşturulduğunu belirt.',
+                "Ardından 'Önerilen sonraki adımlar' için 1-3 madde yaz.",
+                'Kullanıcıdan gerekirse onay/istek talep eden bir son cümle ekle.'
+            ].join(' ');
+            const user = `Gerçekleştirilen adımlar:\n${lines}\n\nÖzet ve öneriler:`;
+
+            // Aynı placeholder içinde stream edilecek
+            this.webview.postMessage({ type: 'summaryStart' });
+            let summaryCollected = '';
+            await this.apiManager.generateChatContent([
+                { role: 'system' as const, content: system },
+                { role: 'user' as const, content: user }
+            ], (chunk) => {
+                summaryCollected += chunk;
+                this.webview.postMessage({ type: 'summaryChunk', payload: chunk });
+            }, undefined as any);
+            this.webview.postMessage({ type: 'summaryEnd' });
+
+            // Özet tamamlandığında konuşma geçmişine sadece özet metnini assistant mesajı olarak ekle
+            try {
+                const finalSummary = (summaryCollected && summaryCollected.trim().length > 0)
+                    ? summaryCollected.trim()
+                    : `Özet/Öneriler (Uygulama Sonu)\n${lines}`;
+                this.conversationManager.addMessage('assistant', finalSummary);
+                // Ayrıca hafızaya kaydet (planner memory)
+                await this.conversationManager.savePlannerSummaryMemory(finalSummary);
+            } catch (e) { /* ignore */ }
+        } catch (e) {
+            // sessizce geç
+        }
+    }
+
+    private formatStepLabel(step: PlannerPlan['steps'][number]): string {
+        const tool = step.tool || step.tool_calls?.[0]?.tool || 'step';
+        const args = step.args || step.tool_calls?.[0]?.args || {};
+        const q = (s?: string) => (typeof s === 'string' && s.trim().length > 0 ? s.trim() : undefined);
+        switch (tool) {
+            case 'check_index': {
+                const files = Array.isArray(args?.files) ? args.files : (args?.file ? [String(args.file)] : []);
+                return `check index ${files.join(', ')}`.trim();
+            }
+            case 'search': {
+                const kw = Array.isArray(args?.keywords) ? args.keywords.join(' ') : q(args?.query) || '';
+                return `search ${kw}`.trim();
+            }
+            case 'locate_code': {
+                return `locate ${q(args?.name) || q(args?.pattern) || ''}`.trim();
+            }
+            case 'retrieve_chunks': {
+                return `retrieve ${q(args?.query) || ''}`.trim();
+            }
+            case 'create_file': {
+                return `create file ${q(args?.path) || ''}`.trim();
+            }
+            case 'edit_file': {
+                return `edit file ${q(args?.path) || q(args?.use_saved_range) || ''}`.trim();
+            }
+            case 'append_file': {
+                return `append file ${q(args?.path) || ''}`.trim();
+            }
+            default:
+                return `${tool}: ${step.ui_text || step.action}`;
         }
     }
 
@@ -170,7 +319,6 @@ export class InteractionHandler {
         const cancellationSignal = this.currentRequestController.signal;
         
         const messagesForApi = await this.prepareMessagesForApiWithRetrieval();
-
         console.log('Prompt to LLM:', JSON.stringify(messagesForApi, null, 2));
 
         

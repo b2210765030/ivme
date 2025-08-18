@@ -62,11 +62,16 @@ export class ConversationManager {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID);
         const historyLimit = config.get<number>(SETTINGS_KEYS.conversationHistoryLimit, 2);
 
-        // Sistem mesajı hariç ve son kullanıcı mesajı (henüz gönderilmemiş) hariç
-        const messagesWithoutSystem = activeConv.messages.filter(m => m.role !== 'system');
-        const limitedMessages = messagesWithoutSystem.slice(-(historyLimit * 2));
+        // Sistem mesajını da dahil et (kullanıcı talebi: gerçek gönderilen toplamı ölç)
+        const systemMessage = activeConv.messages.find(m => m.role === 'system');
+        const systemTokens = systemMessage ? countTokensGPT(systemMessage.content) : 0;
 
-        return limitedMessages.reduce((total, message) => total + countTokensGPT(message.content), 0);
+        // Son kullanıcı mesajı (henüz gönderilecek) hariç, sadece geçmişi topla
+        const messagesWithoutSystem = activeConv.messages.filter(m => m.role !== 'system');
+        const limitedHistory = messagesWithoutSystem.slice(-(historyLimit * 2));
+        const historyTokens = limitedHistory.reduce((total, message) => total + countTokensGPT(message.content), 0);
+
+        return systemTokens + historyTokens;
     }
 
     public addMessage(role: 'user' | 'assistant', content: string): void {
@@ -80,6 +85,35 @@ export class ConversationManager {
             activeConv.timestamp = Date.now();
             this.save();
         }
+    }
+
+    /**
+     * Save the latest planner summary text into a per-conversation memory bucket
+     * so we can inject it into subsequent planner runs.
+     */
+    public async savePlannerSummaryMemory(summaryText: string): Promise<void> {
+        const activeConv = this.getActive();
+        if (!activeConv) return;
+        const key = 'baykar.planner.memories';
+        const map = this.context.workspaceState.get<Record<string, string[]>>(key) || {};
+        const list = Array.isArray(map[activeConv.id]) ? map[activeConv.id] : [];
+        // Keep only the last few summaries per conversation
+        list.push(String(summaryText || '').trim());
+        const trimmed = list.filter(s => s && s.length > 0).slice(-3);
+        map[activeConv.id] = trimmed;
+        await this.context.workspaceState.update(key, map);
+    }
+
+    /**
+     * Return the most recent planner summary for the active conversation, if any.
+     */
+    public getPlannerSummaryMemory(): string | undefined {
+        const activeConv = this.getActive();
+        if (!activeConv) return undefined;
+        const key = 'baykar.planner.memories';
+        const map = this.context.workspaceState.get<Record<string, string[]>>(key) || {};
+        const list = Array.isArray(map[activeConv.id]) ? map[activeConv.id] : [];
+        return list.length > 0 ? list[list.length - 1] : undefined;
     }
     
     public removeLastMessage(): void {
