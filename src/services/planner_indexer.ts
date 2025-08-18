@@ -75,13 +75,18 @@ export class PlannerIndexer {
         const content = this.buildIndexIgnoreTemplate();
         await vscode.workspace.fs.writeFile(ignoreFile, Buffer.from(content, 'utf8'));
 
-        // Kullanıcıya bilgi ver ve isterse aç
+        // Kullanıcıya bilgi ver (non-blocking) ve isterse aç
         try {
-            const picked = await vscode.window.showInformationMessage('İndeksleme için .ivme/.indexignore oluşturuldu. Düzenlemek ister misiniz?', 'Aç', 'Kapat');
-            if (picked === 'Aç') {
-                const doc = await vscode.workspace.openTextDocument(ignoreFile);
-                await vscode.window.showTextDocument(doc, { preview: false });
-            }
+            void vscode.window
+                .showInformationMessage('İndeksleme için .ivme/.indexignore oluşturuldu. Düzenlemek ister misiniz?', 'Aç', 'Kapat')
+                .then(async (picked) => {
+                    try {
+                        if (picked === 'Aç') {
+                            const doc = await vscode.workspace.openTextDocument(ignoreFile);
+                            await vscode.window.showTextDocument(doc, { preview: false });
+                        }
+                    } catch {}
+                });
         } catch {}
     }
 
@@ -194,10 +199,14 @@ export class PlannerIndexer {
                     try {
                         const content = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
                         const prompt = this.buildFileSummaryPrompt(uri.fsPath, content);
-                        const raw = await this.apiManager.generateContent(prompt);
-                        const parsed = this.tryParseSummaryJson(raw);
-                        if (parsed?.summary) {
-                            summaries[uri.fsPath] = parsed.summary;
+                        const raw = await this.generateContentWithTimeout(prompt, 15000);
+                        if (!raw) {
+                            console.warn('[PlannerIndexer] Dosya özeti zaman aşımına uğradı veya boş döndü:', uri.fsPath);
+                        } else {
+                            const parsed = this.tryParseSummaryJson(raw);
+                            if (parsed?.summary) {
+                                summaries[uri.fsPath] = parsed.summary;
+                            }
                         }
                     } catch (e) {
                         console.warn('[PlannerIndexer] Dosya özeti hata:', uri.fsPath, e);
@@ -242,10 +251,14 @@ export class PlannerIndexer {
                     continue;
                 }
                 const prompt = this.buildDirectorySummaryPrompt(dirPath, items.join('\n'));
-                const raw = await this.apiManager.generateContent(prompt);
-                const parsed = this.tryParseSummaryJson(raw);
-                if (parsed?.summary) {
-                    dirSummaryMap[dirPath] = parsed.summary;
+                const raw = await this.generateContentWithTimeout(prompt, 15000);
+                if (!raw) {
+                    console.warn('[PlannerIndexer] Dizin özeti zaman aşımına uğradı veya boş döndü:', dirPath);
+                } else {
+                    const parsed = this.tryParseSummaryJson(raw);
+                    if (parsed?.summary) {
+                        dirSummaryMap[dirPath] = parsed.summary;
+                    }
                 }
             } catch (e) {
                 console.warn('[PlannerIndexer] Dizin özeti hata:', dirPath, e);
@@ -312,9 +325,14 @@ export class PlannerIndexer {
         }
 
         const prompt = this.buildDirectorySummaryPrompt(rootPath, contents.join('\n'));
-        const raw = await this.apiManager.generateContent(prompt);
-        const parsed = this.tryParseSummaryJson(raw);
-        return parsed?.summary || 'Projenin genel amacını tanımlayan üst düzey bir özet.';
+        try {
+            const raw = await this.generateContentWithTimeout(prompt, 20000);
+            const parsed = raw ? this.tryParseSummaryJson(raw) : null;
+            return parsed?.summary || 'A high-level summary describing the overall purpose of the project.';
+        } catch (e) {
+            console.warn('[PlannerIndexer] Kök özeti üretilemedi:', e);
+            return 'A high-level summary describing the overall purpose of the project.';
+        }
     }
 
     private async writePlannerIndex(index: PlannerIndex): Promise<void> {
@@ -331,7 +349,7 @@ export class PlannerIndexer {
     private buildFileSummaryPrompt(filePath: string, fileContent: string): string {
         return (
             `# ROLE\n` +
-            `You are an expert code analyst. Your task is to read a source code file and generate a single, concise sentence in Turkish that describes its primary purpose and responsibility. Focus on WHAT the file does, not HOW it does it. This summary will be used by an AI architect to understand the project structure.\n\n` +
+            `You are an expert code analyst. Your task is to read a source code file and generate a single, concise sentence in English that describes its primary purpose and responsibility. Focus on WHAT the file does, not HOW it does it. This summary will be used by an AI architect to understand the project structure.\n\n` +
             `# CONTEXT\n` +
             `- File Path: \`${filePath}\`\n\n` +
             `# FILE CONTENT\n` +
@@ -339,7 +357,7 @@ export class PlannerIndexer {
             `${fileContent}\n` +
             `---\n\n` +
             `# TASK\n` +
-            `Generate a one-sentence summary of the file's purpose.\n\n` +
+            `Generate a one-sentence summary of the file's purpose in English.\n\n` +
             `# OUTPUT FORMAT (JSON ONLY)\n` +
             `{\n  "summary": "<your_one_sentence_summary_here>"\n}`
         );
@@ -371,6 +389,18 @@ export class PlannerIndexer {
 
     private depth(p: string): number {
         return p.split(/\\|\//).filter(Boolean).length;
+    }
+
+    private async generateContentWithTimeout(prompt: string, timeoutMs: number): Promise<string | null> {
+        try {
+            const p = this.apiManager.generateContent(prompt);
+            const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs));
+            const res = await Promise.race([p, timeout]);
+            return (typeof res === 'string') ? res : null;
+        } catch (e) {
+            console.warn('[PlannerIndexer] generateContentWithTimeout error:', e);
+            return null;
+        }
     }
 }
 

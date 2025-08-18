@@ -14,6 +14,7 @@ import * as path from 'path';
 import { ApiServiceManager } from './manager';
 import { cleanLLMJsonBlock } from '../core/utils';
 import { EXTENSION_ID, SETTINGS_KEYS } from '../core/constants';
+import * as systemPrompts from '../system_prompts';
 
 type PlannerIndex = Record<string, string>;
 
@@ -216,31 +217,8 @@ export async function build_planner_context(context: vscode.ExtensionContext, us
 }
 
 /** Planner prompt şablonu: Mimari rapor ve kullanıcı isteğini içerir. */
-export function createPlannerPrompt(plannerContext: string, userQuery: string): string {
-	return (
-		`# ROLE & GOAL\n` +
-		`You are a 10x Principal Software Architect. Design the most optimal, feasible implementation plan that addresses the user's request while aligning with the project's architecture.\n\n` +
-		`# CONTEXT\n` +
-		`Here is the architectural overview of the project, plus any specific file content relevant to the user's request:\n` +
-		`---\n` +
-		`${plannerContext}\n` +
-		`---\n\n` +
-		`# USER REQUEST\n` +
-		`"${userQuery}"\n\n` +
-		`# INSTRUCTIONS\n` +
-		`- Think step-by-step.\n` +
-		`- Optimize for minimal changes while ensuring correctness.\n` +
-		`- Prefer editing existing files over creating new ones unless necessary.\n` +
-		`- For each step, include a concise Turkish one-sentence summary in the field ".ui_text" that will be shown directly in the UI. Keep it short and human-friendly.\n` +
-		`- Output strictly valid JSON following the schema below. Do not include any prose outside JSON.\n\n` +
-		`# JSON OUTPUT SCHEMA\n` +
-		`{\n` +
-		`  "steps": [\n` +
-		`    { "step": <number>, "action": <string>, "thought": <string>, "ui_text": <string|optional>, "files_to_edit": <string[]|optional>, "notes": <string|optional> }\n` +
-		`  ]\n` +
-		`}`
-	);
-}
+// createPlannerPrompt removed from this file; use `systemPrompts.createPlannerPrompt(plannerContext, userQuery)`
+// which selects the prompt from `src/system_prompts/en.ts` or `src/system_prompts/tr.ts` based on the current language.
 
 /** Model yanıtını ayrıştırır ve temel şemaya göre doğrular. */
 export function parse_and_validate_plan(rawResponse: string): PlannerPlan {
@@ -281,11 +259,14 @@ export async function run_planner(
 ): Promise<PlannerPlan> {
 	// GEÇİCİ: Planner her zaman çalışsın (indeksleme açık olmasa da). Bağlam üretimi indeks yoksa temel içerik döndürür.
 	const plannerContext = await build_planner_context(context, userQuery);
-	const prompt = createPlannerPrompt(plannerContext, userQuery);
-	console.log('[Planner] Prompt sent to LLM (truncated to 2000 chars):', prompt.slice(0, 2000));
+	const systemPrompt = systemPrompts.createPlannerSystemPrompt(plannerContext, userQuery);
+	console.log('[Planner] System prompt sent to LLM (truncated to 2000 chars):', systemPrompt.slice(0, 2000));
 
 	if (typeof onUiEmit === 'function') {
-		const messages = [{ role: 'user' as const, content: prompt }];
+		const messages = [
+			{ role: 'system' as const, content: systemPrompt },
+			{ role: 'user' as const, content: systemPrompts.createPlannerPrompt(plannerContext, userQuery) }
+		];
 		let buffer = '';
 		let fullRaw = '';
 		const emittedOffsets = new Set<number>();
@@ -315,7 +296,18 @@ export async function run_planner(
 		return parse_and_validate_plan(fullRaw);
 	}
 
-	const raw = await api.generateContent(prompt);
+	// Non-streaming: prefer chat-style system prompt
+	const chatMessages = [
+		{ role: 'system' as const, content: systemPrompt },
+		{ role: 'user' as const, content: systemPrompts.createPlannerPrompt(plannerContext, userQuery) }
+	];
+	let raw = '';
+	try {
+		await api.generateChatContent(chatMessages, (chunk) => { raw += chunk; }, undefined as any);
+	} catch (e) {
+		// fallback to text completion
+		raw = await api.generateContent(systemPrompt);
+	}
 	console.log('[Planner] Raw response from LLM (truncated to 2000 chars):', String(raw).slice(0, 2000));
 	return parse_and_validate_plan(raw);
 }

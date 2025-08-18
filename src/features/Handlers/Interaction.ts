@@ -108,28 +108,38 @@ export class InteractionHandler {
 
         // Promptu hazırla
         const planJson = JSON.stringify(plan, null, 2);
+        const stepCount = Array.isArray((plan as any)?.steps) ? (plan as any).steps.length : 0;
+        const stepsTemplate = Array.from({ length: stepCount }, (_, i) => `${i + 1}) <kısa cümle>`).join('\n');
+
         const systemInstruction = [
-            'Türkçe konuşan bir yazılım asistanısın.',
-            'Verilen plan JSON\'unu kullanıcıya bilgi amaçlı, birinci şahıs (modelin yapacağı işi ifade eden) dilde kısa açıklamalar halinde sun.',
-            'Her adımı birinci şahıs olarak, gelecek zaman veya şimdiki devam eden eylem olarak yaz (örnek: "Yeni bir Python dosyası oluşturacağım.", "Merge sort fonksiyonunu implement edeceğim.", "Dosyayı seçeceğim").',
-            'Emir kipi/kişiye yönelik talimat ("Oluşturun", "Create ...") kullanma; kullanıcıya görev vermekten kaçın.',
-            'Cümleler kısa, net ve numaralandırılmış olsun. Her adımı yalnızca bir cümleyle açıkla; gerekirse kısa bir notu "notes" alanına koy.',
-            'Başlangıçta kısa bir GİRİŞ cümlesi, sonunda kısa bir ÖZET cümlesi ver.',
-            'Dil samimi, profesyonel ve öz olsun; gereksiz detaya girmesin; kod bloğu kullanma.'
+            'Türkçe ve ÇOK KISA cümlelerle yaz.',
+            'Sadece belirtilen formatta yaz; ekstra açıklama, başlık, markdown, kod bloğu, boş satır veya ek satır ekleme.',
+            `Plan ${stepCount} adım içeriyor; adım satırı sayısı tam olarak ${stepCount} olmalı.`,
+            'Her adım için yalnızca TEK cümle yaz; açıklama, gerekçe, örnek, not ekleme.',
+            "Her satırda mevcutsa step.ui_text'i kullan; yoksa step.action'ı çok kısa tek cümleye indir.",
+            "'thought', 'notes' gibi alanları YOK SAY.",
+            "Son satır 'Özet:' ile başlayan çok kısa bir cümle olmalı.",
+            'Başka hiçbir şey yazma.'
         ].join(' ');
 
         const userRequest = [
-            "Aşağıda plan JSON'u var. Lütfen aşağıdaki formatta çıktı üret: Her cümleyi birinci şahıs (modelin yapacağını belirten) şekilde yaz.",
-            "Giriş cümlesi\n\n1) Kısa cümle (birinci şahıs)\n2) Kısa cümle (birinci şahıs)\n...\n\nÖzet: Kısa sonuç cümlesi (birinci şahıs)",
+            "Aşağıda plan JSON'u var. Aşağıdaki KESİN formatta çıktı üret:",
+            'Giriş cümlesi',
+            stepsTemplate,
+            'Özet: <çok kısa cümle>',
+            '',
             'Plan(JSON):',
             '```json',
             planJson,
             '```'
         ].join('\n');
 
+        // Use centralized prompt builder (language selection is handled via src/system_prompts.setPromptLanguage elsewhere)
+        const prompts = require('../../system_prompts').createPlanExplanationPrompts(planJson);
+
         const messages = [
-            { role: 'system' as const, content: systemInstruction },
-            { role: 'user' as const, content: userRequest }
+            { role: 'system' as const, content: prompts.system },
+            { role: 'user' as const, content: prompts.user }
         ];
 
         try {

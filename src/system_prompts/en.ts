@@ -88,3 +88,96 @@ INSTRUCTION: ${userInstruction}`;
     // CASE 5: No context, just the user instruction.
     return userInstruction;
 }
+
+/**
+ * Returns system and user prompts for plan explanation (EN).
+ * `planJson` must be a JSON string.
+ */
+export function createPlanExplanationPrompts(planJson: string): { system: string; user: string } {
+    const planObj = (() => {
+        try { return JSON.parse(planJson); } catch { return null; }
+    })();
+    const stepCount = Array.isArray(planObj?.steps) ? planObj.steps.length : 0;
+    const stepsTemplate = Array.from({ length: stepCount }, (_, i) => `${i + 1}) <short sentence>`).join('\n');
+
+    const system = [
+        'Write in English using VERY SHORT sentences.',
+        'Output ONLY the exact format requested; no extra explanation, headings, markdown, code blocks, blank lines, or extra lines.',
+        `The plan has ${stepCount} steps; the number of step lines must be exactly ${stepCount}.`,
+        'For each step write ONLY ONE SENTENCE; do not add rationale, examples, or notes.',
+        "For each line prefer step.ui_text if present; otherwise reduce step.action to a very short single sentence.",
+        "IGNORE fields like 'thought' or 'notes'.",
+        "The final line must start with 'Summary:' followed by one very short sentence.",
+        'Do not write anything else.'
+    ].join(' ');
+
+    const user = [
+        'Below is the plan JSON. Produce output in the EXACT format below:',
+        'Intro sentence',
+        stepsTemplate,
+        'Summary: <very short sentence>',
+        '',
+        'Plan(JSON):',
+        '```json',
+        planJson,
+        '```'
+    ].join('\n');
+
+    return { system, user };
+}
+
+/**
+ * Returns the planner SYSTEM prompt (EN). Must not deviate from the JSON output requirement.
+ */
+export function createPlannerSystemPrompt(plannerContext: string, userQuery: string): string {
+    return (
+        `# ROLE & GOAL\n` +
+        `You are a Principal Software Architect. Design an optimal, feasible implementation plan addressing the user's request while aligning with the project's architecture.\n\n` +
+        `# CONTEXT\n` +
+        `${plannerContext}\n\n` +
+        `# USER REQUEST\n` +
+        `"${userQuery}"\n\n` +
+        `# INSTRUCTIONS\n` +
+        `- Think step-by-step.\n` +
+        `- Optimize for minimal changes while ensuring correctness.\n` +
+        `- Prefer editing existing files over creating new ones unless necessary.\n` +
+        `- For each step, include a concise English one-sentence summary in the field ".ui_text" that will be shown directly in the UI. Keep it short and human-friendly.\n` +
+        `- IMPORTANT: Every value of the field ".ui_text" MUST be written in English. If the model would otherwise produce that field in another language, translate it to English. Do not include non-English text inside ".ui_text".\n` +
+        `- Output strictly valid JSON following the schema below. Do not include any prose outside JSON.\n\n` +
+        `# JSON OUTPUT SCHEMA\n` +
+        `{\n` +
+        `  "steps": [\n` +
+        `    { "step": <number>, "action": <string>, "thought": <string>, "ui_text": <string|optional>, "files_to_edit": <string[]|optional>, "notes": <string|optional> }\n` +
+        `  ]\n` +
+        `}`
+    );
+}
+
+/**
+ * Planner user prompt (EN) - same structure as the original createPlannerPrompt (English version).
+ */
+export function createPlannerPrompt(plannerContext: string, userQuery: string): string {
+    return (
+        `# ROLE & GOAL\n` +
+        `You are a 10x Principal Software Architect. Design the most optimal, feasible implementation plan that addresses the user's request while aligning with the project's architecture.\n\n` +
+        `# CONTEXT\n` +
+        `Here is the architectural overview of the project, plus any specific file content relevant to the user's request:\n` +
+        `---\n` +
+        `${plannerContext}\n` +
+        `---\n\n` +
+        `# USER REQUEST\n` +
+        `"${userQuery}"\n\n` +
+        `# INSTRUCTIONS\n` +
+        `- Think step-by-step.\n` +
+        `- Optimize for minimal changes while ensuring correctness.\n` +
+        `- Prefer editing existing files over creating new ones unless necessary.\n` +
+        `- For each step, include a concise one-sentence summary in the field ".ui_text" that will be shown directly in the UI. Keep it short and human-friendly.\n` +
+        `- Output strictly valid JSON following the schema below. Do not include any prose outside JSON.\n\n` +
+        `# JSON OUTPUT SCHEMA\n` +
+        `{\n` +
+        `  "steps": [\n` +
+        `    { "step": <number>, "action": <string>, "thought": <string>, "ui_text": <string|optional>, "files_to_edit": <string[]|optional>, "notes": <string|optional> }\n` +
+        `  ]\n` +
+        `}`
+    );
+}

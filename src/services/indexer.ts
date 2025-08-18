@@ -45,6 +45,32 @@ export class ProjectIndexer {
         }
     }
 
+    private async generateContentWithTimeout(prompt: string, timeoutMs: number): Promise<string | null> {
+        try {
+            const p = this.apiManager.generateContent(prompt);
+            const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs));
+            const res = await Promise.race([p, timeout]);
+            return (typeof res === 'string') ? res : null;
+        } catch (e) {
+            console.warn('[Indexer] generateContentWithTimeout error:', e);
+            return null;
+        }
+    }
+
+    private async embedWithTimeout(text: string, timeoutMs: number): Promise<number[] | null> {
+        try {
+            const gemini = this.apiManager.getGeminiService();
+            if (!gemini || typeof gemini.embedText !== 'function') return null;
+            const p = gemini.embedText(text);
+            const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs));
+            const res = await Promise.race([p, timeout]);
+            return Array.isArray(res) ? res as number[] : null;
+        } catch (e) {
+            console.warn('[Indexer] embedWithTimeout error:', e);
+            return null;
+        }
+    }
+
     public async indexWorkspace(progress?: { report: (info: { message?: string; percent?: number }) => void } | vscode.Progress<{ message?: string; increment?: number }>): Promise<IndexResult> {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID);
         const includeGlobs = config.get<string[]>(SETTINGS_KEYS.indexingIncludeGlobs) || ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'];
@@ -117,21 +143,37 @@ export class ProjectIndexer {
 
             const summaryPrompt = this.buildSummaryPrompt(chunk.content);
             try {
-                const summaryText = await gemini.generateContent(summaryPrompt);
-                const parsed = this.tryParseSummaryJson(summaryText);
-                if (parsed?.summary) {
-                    chunk.summary = parsed.summary;
-                    console.log(`[Indexer] Özet üretildi: ${chunk.name} -> ${chunk.summary.slice(0, 80)}...`);
+                const idx = done;
+                console.log(`[Indexer] (summary) Başlıyor: ${idx}/${chunks.length} -> ${chunk.filePath} :: ${chunk.name}`);
+                const start = Date.now();
+                const summaryText = await this.generateContentWithTimeout(summaryPrompt, 10000);
+                const elapsed = Date.now() - start;
+                if (!summaryText) {
+                    console.warn(`[Indexer] (summary) Zaman aşımı veya boş yanıt: ${chunk.filePath} :: ${chunk.name} (elapsed ${elapsed}ms)`);
+                } else {
+                    const parsed = this.tryParseSummaryJson(summaryText);
+                    if (parsed?.summary) {
+                        chunk.summary = parsed.summary;
+                        console.log(`[Indexer] Özet üretildi: ${chunk.name} -> ${chunk.summary.slice(0, 80)}... (elapsed ${elapsed}ms)`);
+                    } else {
+                        console.warn(`[Indexer] (summary) Geçersiz JSON çıktı: ${chunk.filePath} :: ${chunk.name}`);
+                    }
                 }
             } catch (e) {
-                console.warn('Summary generation failed for', chunk.name, e);
+                console.warn('[Indexer] Summary generation failed for', chunk.name, e);
             }
 
             try {
                 const combined = this.buildCombinedForEmbedding(chunk);
-                const embedding = await gemini.embedText(combined);
-                chunk.embedding = embedding;
-                console.log(`[Indexer] Embedding üretildi: ${chunk.name} -> boyut ${embedding.length}`);
+                const startE = Date.now();
+                const embedding = await this.embedWithTimeout(combined, 10000);
+                const elapsedE = Date.now() - startE;
+                if (!embedding) {
+                    console.warn(`[Indexer] (embed) Zaman aşımı veya hata: ${chunk.filePath} :: ${chunk.name} (elapsed ${elapsedE}ms)`);
+                } else {
+                    chunk.embedding = embedding;
+                    console.log(`[Indexer] Embedding üretildi: ${chunk.name} -> boyut ${embedding.length} (elapsed ${elapsedE}ms)`);
+                }
             } catch (e) {
                 console.warn('Embedding generation failed for', chunk.name, e);
             }
@@ -463,7 +505,7 @@ export class ProjectIndexer {
     }
 
     private buildSummaryPrompt(code: string): string {
-        return `# ROLE\nYou are an expert software developer and technical writer, specializing in creating concise and clear code documentation. Your primary language is Turkish.\n\n# TASK\nYour task is to analyze the provided code snippet and generate a single, descriptive sentence in Turkish that explains its core purpose and functionality. This summary will be used as metadata for a semantic search system, so it should be clear, concise, and capture the main intent of the code.\n\n# CONTEXT\nThe code snippet is a part of a larger codebase. The summary you generate will be embedded along with the code to help an AI agent find the most relevant code snippet to fulfill a user's request. Focus on *what* the code does, not *how* it does it. For example, instead of "loops through an array and checks a condition", say "Filters users based on their active status".\n\n# INPUT CODE SNIPPET\n${code}\n\n# OUTPUT FORMAT\nStrictly respond with a JSON object containing a single key "summary". Do not add any other text, explanations, or markdown formatting.`;
+        return `# ROLE\nYou are an expert software developer and technical writer, specializing in creating concise and clear code documentation. Your primary language is English.\n\n# TASK\nYour task is to analyze the provided code snippet and generate a single, descriptive sentence in English that explains its core purpose and functionality. This summary will be used as metadata for a semantic search system, so it should be clear, concise, and capture the main intent of the code.\n\n# CONTEXT\nThe code snippet is a part of a larger codebase. The summary you generate will be embedded along with the code to help an AI agent find the most relevant code snippet to fulfill a user's request. Focus on *what* the code does, not *how* it does it. For example, instead of "loops through an array and checks a condition", say "Filters users based on their active status".\n\n# INPUT CODE SNIPPET\n${code}\n\n# OUTPUT FORMAT\nStrictly respond with a JSON object containing a single key "summary". Do not add any other text, explanations, or markdown formatting.`;
     }
 
     private tryParseSummaryJson(text: string): { summary?: string } | null {

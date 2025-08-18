@@ -25,3 +25,8 @@ export const createContextualPrompt = (
     lastUserMessage: ChatMessage,
     contextManager: ContextManager
 ) => getModule().createContextualPrompt(lastUserMessage, contextManager);
+
+// Returns an object with `system` and `user` fields to be sent as messages
+export const createPlanExplanationPrompts = (planJson: string) => getModule().createPlanExplanationPrompts(planJson);
+export const createPlannerSystemPrompt = (plannerContext: string, userQuery: string) => getModule().createPlannerSystemPrompt(plannerContext, userQuery);
+export const createPlannerPrompt = (plannerContext: string, userQuery: string) => getModule().createPlannerPrompt(plannerContext, userQuery);
