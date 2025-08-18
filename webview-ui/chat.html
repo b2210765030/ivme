@@ -93,7 +93,16 @@
                             <img src="{{attach_icon_uri}}" alt="Dosya Ekle" />
                         </button>
 
-                        <button id="agent-mode-button" title="Mod Değiştir">Chat</button>
+                        <div class="mode-switch" id="mode-switch">
+                            <button id="agent-mode-button" class="mode-button" aria-haspopup="true" aria-expanded="false" title="Mod Değiştir">
+                                <span class="mode-label">Chat</span>
+                                <svg class="mode-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                            <div id="agent-mode-menu" class="mode-menu hidden" role="menu" aria-hidden="true">
+                                <button class="mode-menu-item" data-mode="chat" role="menuitem">Chat</button>
+                                <button class="mode-menu-item" data-mode="agent" role="menuitem">Agent</button>
+                            </div>
+                        </div>
 
                         <!-- Yeni: Agent mod aktifken görünecek indeksleme butonları -->
                         <button id="indexer-start-button" class="hidden" title="Projeyi İndeksle" aria-label="Projeyi İndeksle">

@@ -12,6 +12,7 @@ export function init() {
     const agentStatusHide = document.getElementById('agent-status-hide');
     const modeButton = document.getElementById('agent-mode-button');
     const menu = document.getElementById('agent-mode-menu');
+    const toggle = document.getElementById('agent-mode-toggle');
 
     // 1) Başlangıçta sadece ikon butonu görünür kalır (collapsed)
     if (collapsedBtn && agentStatusBar) {
@@ -37,32 +38,69 @@ export function init() {
             VsCode.postMessage('agentBarExpandedChanged', { isExpanded: false });
         });
     }
-        if (modeButton) {
-        // Butona tıklayınca direkt mod değiştir
+    if (modeButton) {
+        // Eğer CSS değişkeni ile SVG ataması yapılmamışsa, inline SVG öğesini kullan.
+        // Kullanıcı özel SVG yolunu atamak isterse extension tarafı veya başka JS
+        // `modeButton.style.setProperty('--mode-arrow-svg', 'url("data:image/svg+xml;utf8,<svg ...>")')`
+        // şeklinde atayabilir.
+        try {
+            // Eğer mode-button içinde .mode-arrow yoksa ekleyelim (fallback inline SVG)
+            if (!modeButton.querySelector('.mode-arrow')) {
+                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.setAttribute('width', '14');
+                svg.setAttribute('height', '14');
+                svg.setAttribute('viewBox', '0 0 24 24');
+                svg.classList.add('mode-arrow');
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', 'M6 9l6 6 6-6');
+                path.setAttribute('stroke', 'currentColor');
+                path.setAttribute('stroke-width', '2');
+                path.setAttribute('stroke-linecap', 'round');
+                path.setAttribute('stroke-linejoin', 'round');
+                path.setAttribute('fill', 'none');
+                svg.appendChild(path);
+                modeButton.appendChild(svg);
+            }
+        } catch (e) {}
+        // Buton artık tek bir baloncuk: tıklayınca menü açılır. Kısa tıklama ile anında mod değiştirme yok.
         modeButton.addEventListener('click', (e) => {
             e.stopPropagation();
-            
-            // Mevcut modu kontrol et ve tersini yap
-            const currentText = modeButton.textContent;
-            const isCurrentlyAgent = currentText === 'Agent';
-            const newIsAgent = !isCurrentlyAgent;
-            
-            // Buton metnini güncelle
-            modeButton.textContent = newIsAgent ? 'Agent' : 'Chat';
-            
-            // VS Code'a mod değişikliğini bildir
-            VsCode.postMessage('agentModeToggled', { isActive: newIsAgent, language: undefined });
-            
-            // UI'ı güncelle
-            if (collapsedBtn && agentStatusBar) {
-                if (newIsAgent) {
-                    collapsedBtn.classList.remove('hidden');
-                    agentStatusBar.classList.add('hidden');
-                } else {
-                    collapsedBtn.classList.add('hidden');
-                    agentStatusBar.classList.add('hidden');
+            if (!menu) return;
+            const isHidden = menu.classList.toggle('hidden');
+            menu.setAttribute('aria-hidden', isHidden ? 'true' : 'false');
+            modeButton.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+        });
+
+        // Menü dışına tıklayınca kapat
+        document.addEventListener('click', (e) => {
+            if (!menu) return;
+            if (!menu.contains(e.target) && !modeButton.contains(e.target)) {
+                if (!menu.classList.contains('hidden')) {
+                    menu.classList.add('hidden');
+                    menu.setAttribute('aria-hidden', 'true');
+                    modeButton.setAttribute('aria-expanded', 'false');
                 }
             }
         });
+
+        // Menü seçimleri
+        if (menu) {
+            menu.querySelectorAll('.mode-menu-item').forEach(item => {
+                item.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    const mode = item.getAttribute('data-mode');
+                    const isAgent = mode === 'agent';
+                    // update UI label
+                    const label = modeButton.querySelector('.mode-label');
+                    if (label) label.textContent = isAgent ? 'Agent' : 'Chat';
+                    // notify VS Code
+                    VsCode.postMessage('agentModeToggled', { isActive: isAgent, language: undefined });
+                    // close menu
+                    menu.classList.add('hidden');
+                    menu.setAttribute('aria-hidden', 'true');
+                    modeButton.setAttribute('aria-expanded', 'false');
+                });
+            });
+        }
     }
 }

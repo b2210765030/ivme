@@ -274,6 +274,146 @@
     flex-shrink: 0;
 }
 
+/* Mode switch wrapper (buton + toggle + menu) */
+.mode-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+}
+
+.mode-toggle {
+    width: 18px;
+    height: 18px;
+    background: transparent;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    color: var(--vscode-input-foreground);
+    opacity: 0.8;
+}
+
+.mode-toggle:hover { opacity: 1; }
+
+.mode-menu {
+    position: absolute;
+    bottom: 30px; /* menu yukarı doğru açılır */
+    left: 50%; /* butonun merkezine hizala */
+    transform: translateX(-50%);
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.25);
+    border-radius: 8px;
+    padding: 4px 6px; /* daha ince */
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 60;
+    min-width: 90px; /* küçültüldü */
+    white-space: nowrap;
+}
+
+/* Buz efekti: hafif blur + yarı saydam katman */
+.mode-menu {
+    backdrop-filter: blur(8px) saturate(1.05);
+    -webkit-backdrop-filter: blur(8px) saturate(1.05);
+    background-color: rgba(255,255,255,0.03); /* default: hafif transparan (dark theme uyumlu) */
+    border-color: rgba(255,255,255,0.06);
+}
+
+/* Menü rengini input-wrapper'ın indeksleme durumlarına göre eşleştir */
+.input-wrapper.indexing-active .mode-menu {
+    background-color: rgba(59,130,246,0.08);
+    border-color: rgba(59,130,246,0.14);
+}
+.input-wrapper.indexing-ready .mode-menu {
+    background-color: rgba(59,130,246,0.03);
+    border-color: rgba(59,130,246,0.08);
+}
+.input-wrapper.indexing-complete .mode-menu {
+    background-color: rgba(59,130,246,0.04);
+    border-color: rgba(59,130,246,0.10);
+}
+
+/* Menü iç metin için kontrast (temaya göre değişebilir) */
+.mode-menu,
+.mode-menu .mode-menu-item {
+    color: var(--vscode-editor-foreground);
+}
+
+.mode-menu.hidden { display: none; }
+
+.mode-menu-item {
+    background: transparent;
+    border: none;
+    text-align: left;
+    padding: 4px 8px; /* daha küçük */
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--vscode-editor-foreground);
+    font-size: 11px; /* daha küçük yazı */
+    line-height: 1.2;
+}
+
+.mode-menu-item:hover { background: var(--vscode-list-hoverBackground); }
+
+/* Mode button (baloncuk) style - label + ok ikonu */
+.mode-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid var(--vscode-input-border);
+    color: var(--vscode-input-foreground);
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    min-width: 48px;
+    height: 22px;
+}
+
+.mode-button:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.mode-label {
+    display: inline-block;
+    font-weight: 500;
+}
+
+.mode-arrow {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    opacity: 0.9;
+}
+
+/* Eğer inline SVG varsa (eski markup), onu gizleyip asset-based SVG kullanacağız */
+.mode-button .mode-arrow { display: none; }
+
+/* Fallback/ek: Eğer inline SVG görünmüyorsa butonun sonunda her zaman küçük bir ok göster */
+.mode-button::after {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-left: 6px;
+    /* asset dizini css'nin bir üstünde olduğu için ../assets kullanıyoruz */
+    background-image: var(--mode-arrow-svg, url("../assets/up.svg"));
+    background-size: 14px 14px;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.95;
+    pointer-events: none;
+    filter: invert(1); /* ikonu invert ederek yazı rengine uydurmaya yardımcı olur */
+}
+
 #agent-mode-button:hover {
     opacity: 1;
     background-color: var(--vscode-toolbar-hoverBackground);
