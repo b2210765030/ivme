@@ -54,6 +54,20 @@ export class WebviewMessageHandler {
                 }
                 break;
             }
+            // --- Planner: Yeni adım ekle ---
+            case 'insertPlannerStep': {
+                try {
+                    const index = Number(data?.payload?.index ?? -1);
+                    const direction = String(data?.payload?.direction || 'below');
+                    const step = data?.payload?.step;
+                    if (index >= 0 && step) {
+                        await this.interactionHandler.insertPlannerStep(index, direction, step);
+                    }
+                } catch (e: any) {
+                    vscode.window.showErrorMessage(`Adım eklenemedi: ${e?.message || e}`);
+                }
+                break;
+            }
             case 'toggleAgentFileSuppressed':
                 this.contextManager.setAgentFileSuppressed(!!data.payload?.suppressed, this.webview);
                 // UI'ı güncelle: Eğer suppress ise agent barı gizlensin bilgisi gönder

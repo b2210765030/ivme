@@ -57,10 +57,15 @@ export const USER_ICON_URI = document.body.dataset.userIconUri;
 const ICON_URIS_CONTAINER = document.getElementById('icon-uris');
 export const EDIT_ICON_URI = ICON_URIS_CONTAINER?.dataset?.editIcon || '';
 export const APPLY_ICON_URI = ICON_URIS_CONTAINER?.dataset?.applyIcon || '';
+export const INSERT_ICON_URI = ICON_URIS_CONTAINER?.dataset?.insertIcon || '';
 
 // YENİ: Kopyala ve Değişikliği Uygula butonları için SVG ikonları
 export const COPY_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
 export const APPLY_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+
+// YENİ: Adım ekleme butonları için SVG ikonları
+export const INSERT_ABOVE_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M12 5v14"/><path d="m5 12 7-7 7 7"/></svg>`;
+export const INSERT_BELOW_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>`;
 
 // --- Karakter Sayacı ---
 export const characterCounter = document.getElementById('character-counter');
@@ -83,6 +88,8 @@ export const i18n = {
         applied: 'Uygulandı!',
         edit: 'Düzenle',
         stepJsonTitle: 'Adım JSON',
+        insertAbove: 'Üste Ekle',
+        insertBelow: 'Alta Ekle',
         stop: 'Durdur',
         send: 'Gönder',
         tokenUsage: '📊 Token Kullanımı',
@@ -138,6 +145,8 @@ export const i18n = {
         applied: 'Applied!',
         edit: 'Edit',
         stepJsonTitle: 'Step JSON',
+        insertAbove: 'Insert Above',
+        insertBelow: 'Insert Below',
         stop: 'Stop',
         send: 'Send',
         tokenUsage: '📊 Token Usage',

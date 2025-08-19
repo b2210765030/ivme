@@ -377,7 +377,7 @@ export class InteractionHandler {
         }
     }
 
-    /** Webview’den gelen düzenlenmiş step JSON’unu bellekteki son plan üzerinde günceller. */
+    /** Webview'den gelen düzenlenmiş step JSON'unu bellekteki son plan üzerinde günceller. */
     public async updatePlannerStep(stepIndex: number, newStep: any): Promise<void> {
         if (!this.lastPlannerPlan || !Array.isArray(this.lastPlannerPlan.steps)) return;
         if (typeof stepIndex !== 'number' || stepIndex < 0 || stepIndex >= this.lastPlannerPlan.steps.length) return;
@@ -389,6 +389,78 @@ export class InteractionHandler {
             console.error('[Interaction] updatePlannerStep error:', e);
             throw e;
         }
+    }
+
+    /** Belirtilen konuma yeni bir adım ekler ve adım numaralarını yeniden düzenler. */
+    public async insertPlannerStep(insertIndex: number, direction: string, newStep: any): Promise<void> {
+        if (!this.lastPlannerPlan || !Array.isArray(this.lastPlannerPlan.steps)) {
+            throw new Error('Geçerli bir plan bulunamadı');
+        }
+        
+        try {
+            // Basit doğrulama: nesne mi?
+            if (typeof newStep !== 'object' || newStep == null) throw new Error('Geçersiz adım verisi');
+            
+            // Ekleme pozisyonunu belirle
+            let targetIndex: number;
+            if (direction === 'above') {
+                targetIndex = Math.max(0, insertIndex);
+            } else { // 'below' veya diğer
+                targetIndex = Math.min(insertIndex + 1, this.lastPlannerPlan.steps.length);
+            }
+            
+            // Yeni adımı uygun konuma ekle
+            this.lastPlannerPlan.steps.splice(targetIndex, 0, newStep as any);
+            
+            // Tüm adım numaralarını yeniden düzenle
+            this.renumberPlanSteps();
+            
+            // Execution tracking'i güncelle: ekleme noktasından sonraki tüm indeksleri kaydır
+            this.updateExecutionTrackingAfterInsertion(targetIndex);
+            
+            // UI'ı güncelle - yeni planı webview'e gönder
+            this.webview.postMessage({
+                type: 'plannerStepInserted',
+                payload: { plan: this.lastPlannerPlan, insertedIndex: targetIndex }
+            });
+            
+            console.log(`[Interaction] Inserted new step at index ${targetIndex}, plan now has ${this.lastPlannerPlan.steps.length} steps`);
+            
+        } catch (e) {
+            console.error('[Interaction] insertPlannerStep error:', e);
+            throw e;
+        }
+    }
+
+    /** Adım numaralarını 1'den başlayarak yeniden düzenler. */
+    private renumberPlanSteps(): void {
+        if (!this.lastPlannerPlan || !Array.isArray(this.lastPlannerPlan.steps)) return;
+        
+        this.lastPlannerPlan.steps.forEach((step, index) => {
+            if (step && typeof step === 'object') {
+                step.step = index + 1;
+            }
+        });
+    }
+
+    /** Yeni adım eklendikten sonra execution tracking indekslerini günceller. */
+    private updateExecutionTrackingAfterInsertion(insertedIndex: number): void {
+        // Eklenen indeks ve sonrasındaki tüm adımların indekslerini bir artır
+        const newExecutedStepIndices = new Set<number>();
+        
+        for (const oldIndex of this.executedStepIndices) {
+            if (oldIndex >= insertedIndex) {
+                // Bu adım kaydırıldı, yeni pozisyonunu kaydet
+                newExecutedStepIndices.add(oldIndex + 1);
+            } else {
+                // Bu adım etkilenmedi
+                newExecutedStepIndices.add(oldIndex);
+            }
+        }
+        
+        this.executedStepIndices = newExecutedStepIndices;
+        
+        console.log(`[Interaction] Updated execution tracking after insertion at ${insertedIndex}:`, Array.from(this.executedStepIndices));
     }
 
     private async generateAndShowSummaryNote(): Promise<void> {

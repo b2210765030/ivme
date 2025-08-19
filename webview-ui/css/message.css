@@ -412,3 +412,61 @@ pre code.hljs {
     font-size: 11px;
     line-height: 1.2;
 }
+
+/* Insert step buttons */
+.planner-insert-item {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 2px 0;
+    list-style: none;
+    position: relative;
+}
+
+.planner-insert-item::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    height: 1px;
+    background: rgba(255,255,255,0.1);
+    z-index: 1;
+}
+
+.step-insert-button {
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-input-placeholderForeground);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 3px;
+    width: 20px;
+    height: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    opacity: 0.7;
+    position: relative;
+    z-index: 2;
+    padding: 0;
+}
+
+.step-insert-button:hover:not(.disabled) {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border-color: var(--vscode-button-border);
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+.step-insert-button.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background-color: var(--vscode-editor-background);
+}
+
+.step-insert-button .insert-icon {
+    width: 10px;
+    height: 10px;
+    filter: invert(1);
+}

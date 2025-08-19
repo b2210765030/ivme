@@ -533,12 +533,61 @@ export function showPlannerPanelWithPlan(plan) {
         list.innerHTML = '';
 
         steps.forEach((step, idx) => {
+            // İlk adımdan önce de insert butonu ekle (ancak ilk adım completed değilse)
+            if (idx === 0) {
+                const insertLi = document.createElement('li');
+                insertLi.className = 'planner-insert-item';
+                
+                const insertAboveBtn = document.createElement('button');
+                insertAboveBtn.className = 'step-insert-button';
+                insertAboveBtn.type = 'button';
+                insertAboveBtn.title = DOM.getText('insertAbove') || 'Üste Ekle';
+                insertAboveBtn.innerHTML = `<img src="${DOM.INSERT_ICON_URI}" alt="insert" class="insert-icon"/>`;
+                
+                // İlk adım completed ise bu butonu devre dışı bırak
+                if (completedPlannerSteps && completedPlannerSteps.has(0)) {
+                    insertAboveBtn.disabled = true;
+                    insertAboveBtn.classList.add('disabled');
+                } else {
+                    insertAboveBtn.addEventListener('click', () => {
+                        try { openNewStepEditor(0, 'above'); } catch {}
+                    });
+                }
+                insertLi.appendChild(insertAboveBtn);
+                list.appendChild(insertLi);
+            } else if (idx > 0) {
+                // Sonraki adımlar için arada insert butonu
+                const insertLi = document.createElement('li');
+                insertLi.className = 'planner-insert-item';
+                
+                const insertAboveBtn = document.createElement('button');
+                insertAboveBtn.className = 'step-insert-button';
+                insertAboveBtn.type = 'button';
+                insertAboveBtn.title = DOM.getText('insertAbove') || 'Üste Ekle';
+                insertAboveBtn.innerHTML = `<img src="${DOM.INSERT_ICON_URI}" alt="insert" class="insert-icon"/>`;
+                
+                // Önceki veya bu adım completed ise butonu devre dışı bırak
+                const prevCompleted = completedPlannerSteps && completedPlannerSteps.has(idx - 1);
+                const thisCompleted = completedPlannerSteps && completedPlannerSteps.has(idx);
+                if (prevCompleted || thisCompleted) {
+                    insertAboveBtn.disabled = true;
+                    insertAboveBtn.classList.add('disabled');
+                } else {
+                    insertAboveBtn.addEventListener('click', () => {
+                        try { openNewStepEditor(idx, 'above'); } catch {}
+                    });
+                }
+                insertLi.appendChild(insertAboveBtn);
+                list.appendChild(insertLi);
+            }
+
             const li = document.createElement('li');
             li.className = 'planner-step-item';
 
             const text = (typeof step?.ui_text === 'string' && step.ui_text.trim()) ? step.ui_text.trim() : (typeof step?.action === 'string' ? step.action : '');
+            const stepNumber = typeof step?.step === 'number' ? step.step : (idx + 1);
             const span = document.createElement('span');
-            span.textContent = text;
+            span.textContent = `${stepNumber}. ${text}`;
             span.className = 'planner-step-text';
             li.appendChild(span);
 
@@ -574,6 +623,31 @@ export function showPlannerPanelWithPlan(plan) {
             }
             list.appendChild(li);
         });
+
+        // Son adımdan sonra da insert butonu ekle (son adım completed değilse)
+        if (steps.length > 0) {
+            const insertLi = document.createElement('li');
+            insertLi.className = 'planner-insert-item';
+            
+            const insertBelowBtn = document.createElement('button');
+            insertBelowBtn.className = 'step-insert-button';
+            insertBelowBtn.type = 'button';
+            insertBelowBtn.title = DOM.getText('insertBelow') || 'Alta Ekle';
+            insertBelowBtn.innerHTML = `<img src="${DOM.INSERT_ICON_URI}" alt="insert" class="insert-icon"/>`;
+            
+            // Son adım completed ise bu butonu devre dışı bırak
+            const lastCompleted = completedPlannerSteps && completedPlannerSteps.has(steps.length - 1);
+            if (lastCompleted) {
+                insertBelowBtn.disabled = true;
+                insertBelowBtn.classList.add('disabled');
+            } else {
+                insertBelowBtn.addEventListener('click', () => {
+                    try { openNewStepEditor(steps.length, 'below'); } catch {}
+                });
+            }
+            insertLi.appendChild(insertBelowBtn);
+            list.appendChild(insertLi);
+        }
 
         panel.classList.remove('hidden');
         content.classList.add('hidden');
@@ -627,6 +701,7 @@ function openStepInlineEditor(index, anchorEl) {
         // Kapat/temizle (tek editor)
         closeStepInlineEditor();
         const step = Array.isArray(lastPlannerPlan?.steps) ? lastPlannerPlan.steps[index] : null;
+        const currentUiText = typeof step?.ui_text === 'string' ? step.ui_text : '';
         const currentAction = typeof step?.action === 'string' ? step.action : '';
         const currentThought = typeof step?.thought === 'string' ? step.thought : '';
 
@@ -634,6 +709,10 @@ function openStepInlineEditor(index, anchorEl) {
         const container = document.createElement('div');
         container.className = 'step-inline-editor';
         container.innerHTML = `
+            <div class="field-row">
+                <label class="field-label">ui_text</label>
+                <input id="sie-ui-text" class="field-input" type="text" value="${escapeHtmlAttr(currentUiText)}" placeholder="Panelde görünecek kısa açıklama..." />
+            </div>
             <div class="field-row">
                 <label class="field-label">action</label>
                 <input id="sie-action" class="field-input" type="text" value="${escapeHtmlAttr(currentAction)}" />
@@ -666,13 +745,15 @@ function openStepInlineEditor(index, anchorEl) {
         const cancelBtn = container.querySelector('#sie-cancel');
         saveBtn?.addEventListener('click', () => {
             try {
+                const uiTextInput = container.querySelector('#sie-ui-text');
                 const actionInput = container.querySelector('#sie-action');
                 const thoughtInput = container.querySelector('#sie-thought');
+                const newUiText = String(uiTextInput && uiTextInput.value || '').trim();
                 const newAction = String(actionInput && actionInput.value || '').trim();
                 const newThought = String(thoughtInput && thoughtInput.value || '').trim();
                 if (lastPlannerPlan && Array.isArray(lastPlannerPlan.steps) && lastPlannerPlan.steps[index]) {
                     const old = lastPlannerPlan.steps[index];
-                    const updated = { ...old, action: newAction, thought: newThought };
+                    const updated = { ...old, ui_text: newUiText, action: newAction, thought: newThought };
                     lastPlannerPlan.steps[index] = updated;
                     // Panel metnini güncelle (ui_text yoksa action kullanılır)
                     try {
@@ -680,7 +761,8 @@ function openStepInlineEditor(index, anchorEl) {
                         const li = list?.children?.[index];
                         const span = li?.querySelector?.('.planner-step-text');
                         const newText = (typeof updated?.ui_text === 'string' && updated.ui_text.trim()) ? updated.ui_text.trim() : (typeof updated?.action === 'string' ? updated.action : '');
-                        if (span) span.textContent = newText;
+                        const stepNumber = typeof updated?.step === 'number' ? updated.step : (index + 1);
+                        if (span) span.textContent = `${stepNumber}. ${newText}`;
                     } catch {}
                     try {
                         lastPlannerStepsCache = Array.isArray(lastPlannerPlan.steps) ? lastPlannerPlan.steps.map(s => (typeof s?.ui_text === 'string' && s.ui_text.trim()) ? s.ui_text.trim() : (typeof s?.action === 'string' ? s.action : '')) : [];
@@ -701,6 +783,88 @@ function openStepInlineEditor(index, anchorEl) {
         activeInlineEditorEl = container;
         activeInlineEditorIndex = index;
     } catch (e) { console.warn('openStepInlineEditor error', e); }
+}
+
+function openNewStepEditor(insertIndex, direction) {
+    try {
+        // Kapat/temizle (tek editor)
+        closeStepInlineEditor();
+        
+        const container = document.createElement('div');
+        container.className = 'step-inline-editor';
+        container.innerHTML = `
+            <div class="field-row">
+                <label class="field-label">ui_text</label>
+                <input id="sie-ui-text" class="field-input" type="text" value="" placeholder="Panelde görünecek kısa açıklama..." />
+            </div>
+            <div class="field-row">
+                <label class="field-label">action</label>
+                <input id="sie-action" class="field-input" type="text" value="" placeholder="Yeni adımın action alanı..." />
+            </div>
+            <div class="field-row">
+                <label class="field-label">thought</label>
+                <input id="sie-thought" class="field-input" type="text" value="" placeholder="Yeni adımın thought alanı..." />
+            </div>
+            <div class="editor-actions">
+                <button id="sie-save" class="primary-button">${DOM.getText('save') || 'Kaydet'}</button>
+                <button id="sie-cancel" class="secondary-button">${DOM.getText('cancel') || 'İptal'}</button>
+            </div>
+        `;
+        document.body.appendChild(container);
+
+        // Konumla (ekranın ortasına)
+        const desiredWidth = 520;
+        const SIDE_MARGIN = 25;
+        const viewportW = window.innerWidth || document.documentElement.clientWidth;
+        const finalWidth = Math.max(360, Math.min(desiredWidth, viewportW - SIDE_MARGIN * 2));
+        let left = Math.round((viewportW - finalWidth) / 2);
+        const top = Math.round((window.innerHeight - 200) / 2);
+
+        container.style.left = `${left}px`;
+        container.style.top = `${top}px`;
+        container.style.width = `${finalWidth}px`;
+
+        // Eventler
+        const saveBtn = container.querySelector('#sie-save');
+        const cancelBtn = container.querySelector('#sie-cancel');
+        saveBtn?.addEventListener('click', () => {
+            try {
+                const uiTextInput = container.querySelector('#sie-ui-text');
+                const actionInput = container.querySelector('#sie-action');
+                const thoughtInput = container.querySelector('#sie-thought');
+                const newUiText = String(uiTextInput && uiTextInput.value || '').trim();
+                const newAction = String(actionInput && actionInput.value || '').trim();
+                const newThought = String(thoughtInput && thoughtInput.value || '').trim();
+                
+                if (newUiText || newAction || newThought) {
+                    const newStep = {
+                        step: insertIndex + 1, // Temporary, will be renumbered by backend
+                        action: newAction,
+                        thought: newThought,
+                        ui_text: newUiText || newAction // UI text öncelikli, yoksa action kullan
+                    };
+                    
+                    // Backend'e gönder
+                    try { postMessage('insertPlannerStep', { index: insertIndex, direction, step: newStep }); } catch {}
+                }
+                closeStepInlineEditor();
+            } catch (e) { console.warn('New step save error', e); }
+        });
+        cancelBtn?.addEventListener('click', closeStepInlineEditor);
+
+        // İlk input'a focus
+        setTimeout(() => {
+            try { container.querySelector('#sie-ui-text')?.focus?.(); } catch {}
+            // Escape ile kapanma
+            const escHandler = (e) => { if (e.key === 'Escape') closeStepInlineEditor(); };
+            window.addEventListener('keydown', escHandler, { once: true });
+            // Resize ile kapanma
+            window.addEventListener('resize', closeStepInlineEditor, { once: true });
+        }, 0);
+
+        activeInlineEditorEl = container;
+        activeInlineEditorIndex = insertIndex;
+    } catch (e) { console.warn('openNewStepEditor error', e); }
 }
 
 function escapeHtmlAttr(s) {
@@ -837,18 +1001,95 @@ export function markPlannerStepCompleted(index) {
     try {
         completedPlannerSteps.add(index);
         const list = document.getElementById('planner-steps-list');
-        const li = list?.children?.[index];
-        if (li) {
-            li.classList.add('completed');
-            const buttons = li.querySelectorAll('button');
-            buttons.forEach(b => { try { b.disabled = true; } catch {} });
+        // Insert butonları da var olduğu için gerçek step li'yi bul
+        const allItems = list?.children || [];
+        let stepItemIndex = 0;
+        for (let i = 0; i < allItems.length; i++) {
+            const item = allItems[i];
+            if (item.classList.contains('planner-step-item')) {
+                if (stepItemIndex === index) {
+                    item.classList.add('completed');
+                    const buttons = item.querySelectorAll('button');
+                    buttons.forEach(b => { try { b.disabled = true; } catch {} });
+                    break;
+                }
+                stepItemIndex++;
+            }
         }
+        
+        // İlgili insert butonlarını da kilitle
+        disableInsertButtonsForCompletedStep(index);
+        
         // Eğer tüm adımlar tamamlandıysa paneli completed yap (ince çizgi)
         const stepsTotal = Array.isArray(lastPlannerPlan?.steps) ? lastPlannerPlan.steps.length : 0;
         if (stepsTotal > 0 && completedPlannerSteps.size >= stepsTotal) {
             try { setPlannerPanelCompleted(true); } catch (e) {}
         }
     } catch (e) {}
+}
+
+// Completed adım için insert butonlarını kilitle
+function disableInsertButtonsForCompletedStep(completedIndex) {
+    try {
+        const list = document.getElementById('planner-steps-list');
+        const allItems = list?.children || [];
+        
+        for (let i = 0; i < allItems.length; i++) {
+            const item = allItems[i];
+            if (item.classList.contains('planner-insert-item')) {
+                const button = item.querySelector('.step-insert-button');
+                if (button && !button.classList.contains('disabled')) {
+                    // Bu insert butonunun hangi adımlarla ilgili olduğunu belirle
+                    const insertIndex = getInsertButtonIndex(i, allItems);
+                    
+                    // Eğer bu insert butonu completed step ile ilgiliyse kilitle
+                    if (insertIndex.beforeStep === completedIndex || 
+                        insertIndex.afterStep === completedIndex) {
+                        button.disabled = true;
+                        button.classList.add('disabled');
+                        // Click handler'ı kaldır
+                        button.replaceWith(button.cloneNode(true));
+                    }
+                }
+            }
+        }
+    } catch (e) { console.warn('disableInsertButtonsForCompletedStep error', e); }
+}
+
+// Insert butonunun hangi adımlar arasında olduğunu belirle
+function getInsertButtonIndex(itemIndex, allItems) {
+    let stepsBefore = 0;
+    
+    for (let i = 0; i < itemIndex; i++) {
+        if (allItems[i].classList.contains('planner-step-item')) {
+            stepsBefore++;
+        }
+    }
+    
+    return {
+        beforeStep: stepsBefore - 1, // Önceki adım index (-1 ise başta)
+        afterStep: stepsBefore       // Sonraki adım index
+    };
+}
+
+// Adım insertion'dan sonra completed step tracking'i güncelle
+export function updateCompletedStepsAfterInsertion(insertedIndex) {
+    try {
+        const newCompletedSteps = new Set();
+        
+        for (const oldIndex of completedPlannerSteps) {
+            if (oldIndex >= insertedIndex) {
+                // Bu adım kaydırıldı, yeni pozisyonunu kaydet
+                newCompletedSteps.add(oldIndex + 1);
+            } else {
+                // Bu adım etkilenmedi
+                newCompletedSteps.add(oldIndex);
+            }
+        }
+        
+        completedPlannerSteps = newCompletedSteps;
+        console.log('[ChatView] Updated completed steps after insertion at', insertedIndex, ':', Array.from(completedPlannerSteps));
+    } catch (e) { console.warn('updateCompletedStepsAfterInsertion error', e); }
 }
 
 // --- Inline summary (same placeholder, no pulse) ---

@@ -248,6 +248,22 @@ export function initMessageListener() {
                 break;
             }
 
+            // Yeni adım eklendi - panel güncelle
+            case 'plannerStepInserted': {
+                const plan = data?.plan;
+                const insertedIndex = data?.insertedIndex;
+                if (plan && Array.isArray(plan.steps)) {
+                    try {
+                        // Completed step tracking'i güncelle
+                        if (typeof insertedIndex === 'number') {
+                            ChatView.updateCompletedStepsAfterInsertion(insertedIndex);
+                        }
+                        ChatView.showPlannerPanelWithPlan(plan);
+                    } catch(e) { console.warn('plannerStepInserted update error', e); }
+                }
+                break;
+            }
+
             // --- Agent durumu mesajı ---
             case 'updateAgentStatus':
                 setAgentMode(data.isActive, data.activeFileName);
