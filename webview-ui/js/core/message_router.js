@@ -263,6 +263,20 @@ export function initMessageListener() {
                 }
                 break;
             }
+            // Planner adımı silindi - paneli güncelle
+            case 'plannerStepDeleted': {
+                const plan = data?.plan;
+                const deletedIndex = data?.deletedIndex;
+                if (plan && Array.isArray(plan.steps)) {
+                    try {
+                        if (typeof deletedIndex === 'number') {
+                            ChatView.updateCompletedStepsAfterDeletion(deletedIndex);
+                        }
+                        ChatView.showPlannerPanelWithPlan(plan);
+                    } catch(e) { console.warn('plannerStepDeleted update error', e); }
+                }
+                break;
+            }
 
             // --- Agent durumu mesajı ---
             case 'updateAgentStatus':

@@ -68,6 +68,18 @@ export class WebviewMessageHandler {
                 }
                 break;
             }
+            // --- Planner: Adım sil ---
+            case 'deletePlannerStep': {
+                try {
+                    const stepIndex = Number(data?.payload?.index ?? -1);
+                    if (stepIndex >= 0) {
+                        await this.interactionHandler.deletePlannerStep(stepIndex);
+                    }
+                } catch (e: any) {
+                    vscode.window.showErrorMessage(`Adım silinemedi: ${e?.message || e}`);
+                }
+                break;
+            }
             case 'toggleAgentFileSuppressed':
                 this.contextManager.setAgentFileSuppressed(!!data.payload?.suppressed, this.webview);
                 // UI'ı güncelle: Eğer suppress ise agent barı gizlensin bilgisi gönder

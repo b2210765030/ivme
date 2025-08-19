@@ -608,12 +608,25 @@ export function showPlannerPanelWithPlan(plan) {
             });
             actions.appendChild(applyBtn);
 
+            // Sil (delete) butonu
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'step-action-button delete';
+            deleteBtn.type = 'button';
+            deleteBtn.title = DOM.getText('delete') || 'Sil';
+            // Kullanıcının istediği gibi basit bir "X" görünümü
+            deleteBtn.textContent = '✕';
+            deleteBtn.addEventListener('click', () => {
+                try { postMessage('deletePlannerStep', { index: idx }); } catch {}
+            });
+            actions.appendChild(deleteBtn);
+
             li.appendChild(actions);
             // Eğer daha önce tamamlandıysa işaretle ve butonları kilitle
             if (completedPlannerSteps && completedPlannerSteps.has(idx)) {
                 li.classList.add('completed');
                 try { editBtn.disabled = true; } catch {}
                 try { applyBtn.disabled = true; } catch {}
+                try { deleteBtn.disabled = true; } catch {}
             }
             list.appendChild(li);
         });
@@ -1078,6 +1091,29 @@ export function updateCompletedStepsAfterInsertion(insertedIndex) {
         completedPlannerSteps = newCompletedSteps;
         console.log('[ChatView] Updated completed steps after insertion at', insertedIndex, ':', Array.from(completedPlannerSteps));
     } catch (e) { console.warn('updateCompletedStepsAfterInsertion error', e); }
+}
+
+// Adım deletion'dan sonra completed step tracking'i güncelle
+export function updateCompletedStepsAfterDeletion(deletedIndex) {
+    try {
+        const newCompletedSteps = new Set();
+        
+        for (const oldIndex of completedPlannerSteps) {
+            if (oldIndex === deletedIndex) {
+                // Silinen adım, settten çıkar
+                continue;
+            } else if (oldIndex > deletedIndex) {
+                // Bu adım kaydırıldı, yeni pozisyonunu kaydet
+                newCompletedSteps.add(oldIndex - 1);
+            } else {
+                // Bu adım etkilenmedi
+                newCompletedSteps.add(oldIndex);
+            }
+        }
+        
+        completedPlannerSteps = newCompletedSteps;
+        console.log('[ChatView] Updated completed steps after deletion at', deletedIndex, ':', Array.from(completedPlannerSteps));
+    } catch (e) { console.warn('updateCompletedStepsAfterDeletion error', e); }
 }
 
 // --- Inline summary (same placeholder, no pulse) ---

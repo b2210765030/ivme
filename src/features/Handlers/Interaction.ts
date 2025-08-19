@@ -432,6 +432,43 @@ export class InteractionHandler {
         }
     }
 
+    /** Belirtilen index'teki adımı siler ve adım numaralarını yeniden düzenler. */
+    public async deletePlannerStep(stepIndex: number): Promise<void> {
+        if (!this.lastPlannerPlan || !Array.isArray(this.lastPlannerPlan.steps)) {
+            throw new Error('Geçerli bir plan bulunamadı');
+        }
+        if (typeof stepIndex !== 'number' || stepIndex < 0 || stepIndex >= this.lastPlannerPlan.steps.length) {
+            throw new Error('Geçersiz adım index');
+        }
+        try {
+            // Sil
+            this.lastPlannerPlan.steps.splice(stepIndex, 1);
+            // Yeniden numaralandır
+            this.renumberPlanSteps();
+
+            // Execution tracking'i güncelle: silinen index'ten sonraki tüm indeksleri kaydır
+            const newExecuted = new Set<number>();
+            for (const oldIndex of this.executedStepIndices) {
+                if (oldIndex === stepIndex) {
+                    // silinen adımı atla (artık yok)
+                    continue;
+                }
+                if (oldIndex > stepIndex) {
+                    newExecuted.add(oldIndex - 1);
+                } else {
+                    newExecuted.add(oldIndex);
+                }
+            }
+            this.executedStepIndices = newExecuted;
+
+            // UI'ı güncelle - yeni planı webview'e gönder
+            this.webview.postMessage({ type: 'plannerStepDeleted', payload: { plan: this.lastPlannerPlan, deletedIndex: stepIndex } });
+        } catch (e) {
+            console.error('[Interaction] deletePlannerStep error:', e);
+            throw e;
+        }
+    }
+
     /** Adım numaralarını 1'den başlayarak yeniden düzenler. */
     private renumberPlanSteps(): void {
         if (!this.lastPlannerPlan || !Array.isArray(this.lastPlannerPlan.steps)) return;

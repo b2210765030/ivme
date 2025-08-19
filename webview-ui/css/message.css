@@ -358,6 +358,24 @@ pre code.hljs {
 .step-action-button.primary:hover {
     background-color: var(--vscode-button-hoverBackground);
 }
+.step-action-button.delete {
+    background-color: transparent;
+    color: var(--vscode-errorForeground);
+    border: 1px solid var(--vscode-errorForeground);
+    font-size: 14px;
+    font-weight: bold;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+.step-action-button.delete:hover {
+    background-color: var(--vscode-errorForeground);
+    color: var(--vscode-errorBackground);
+}
 
 .step-action-button .icon-img {
     width: 14px;
