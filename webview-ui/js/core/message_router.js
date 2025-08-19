@@ -346,6 +346,23 @@ export function initMessageListener() {
             case 'settingsSaveResult':
                 SettingsModal.handleSaveResult(data);
                 break;
+
+            // Custom Tools Messages
+            case 'customToolCreated':
+                SettingsModal.handleCustomToolCreated(data);
+                break;
+
+            case 'customToolDeleted':
+                SettingsModal.handleCustomToolDeleted(data);
+                break;
+
+            case 'customToolsList':
+                SettingsModal.handleCustomToolsList(data);
+                break;
+
+            case 'toolsInitialized':
+                SettingsModal.handleToolsInitialized(data);
+                break;
         }
     });
 }

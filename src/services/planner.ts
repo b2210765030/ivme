@@ -394,13 +394,19 @@ export async function run_planner(
 ): Promise<PlannerPlan> {
 	// GEÇİCİ: Planner her zaman çalışsın (indeksleme açık olmasa da). Bağlam üretimi indeks yoksa temel içerik döndürür.
 	const plannerContext = await build_planner_context(context, userQuery, recentSummaryMemory);
-	const systemPrompt = systemPrompts.createPlannerSystemPrompt(plannerContext, userQuery);
+	
+	// Load tools from tools.json
+	const { getToolsManager } = await import('./tools_manager.js');
+	const toolsManager = getToolsManager();
+	const allTools = toolsManager.getAllTools();
+	
+	const systemPrompt = await systemPrompts.createPlannerSystemPrompt(plannerContext, userQuery, allTools);
 	console.log('[Planner] System prompt sent to LLM (truncated to 2000 chars):', systemPrompt.slice(0, 2000));
 
 	if (typeof onUiEmit === 'function') {
 		const messages = [
 			{ role: 'system' as const, content: systemPrompt },
-			{ role: 'user' as const, content: systemPrompts.createPlannerPrompt(plannerContext, userQuery) }
+			{ role: 'user' as const, content: await systemPrompts.createPlannerPrompt(plannerContext, userQuery, allTools) }
 		];
 		let buffer = '';
 		let fullRaw = '';
@@ -434,7 +440,7 @@ export async function run_planner(
 	// Non-streaming: prefer chat-style system prompt
 	const chatMessages = [
 		{ role: 'system' as const, content: systemPrompt },
-		{ role: 'user' as const, content: systemPrompts.createPlannerPrompt(plannerContext, userQuery) }
+		{ role: 'user' as const, content: await systemPrompts.createPlannerPrompt(plannerContext, userQuery, allTools) }
 	];
 	let raw = '';
 	try {

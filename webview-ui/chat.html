@@ -169,6 +169,7 @@
                     <li><button class="nav-button active" data-target="pane-services">Servisler</button></li>
                     <li><button class="nav-button" data-target="pane-interface">Arayüz</button></li>
                     <li><button class="nav-button" data-target="pane-general">Genel</button></li>
+                    <li><button class="nav-button" data-target="pane-tools">Araçlar</button></li>
                 </ul>
             </div>
             <div class="modal-main-content">
@@ -209,7 +210,74 @@
                             <p id="temperature-label" class="form-group-description">0.7</p>
                         </div>
                     </div>
+                    <div id="pane-tools" class="settings-pane">
+                        <div class="tools-container">
+                            <h3>Mevcut Araçlar</h3>
+                            <p class="tools-description">Sistemde kullanılabilir araçlar ve açıklamaları:</p>
+                            <div class="tools-table">
+                                <div class="tools-table-header">
+                                    <div class="tool-name-header">Araç Adı</div>
+                                    <div class="tool-description-header">Açıklama</div>
+                                    <div class="tool-actions-header">İşlemler</div>
+                                </div>
+                                <div class="tools-table-body" id="tools-table-body">
+                                    <!-- Tools will be populated by JavaScript -->
+                                </div>
+                            </div>
+                            <div class="tools-actions">
+                                <button type="button" id="initialize-tools-button" class="secondary-button">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zM4.5 7.5a.5.5 0 0 1 0-1h5.793L8.146 4.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 7.5H4.5z"/>
+                                    </svg>
+                                    Araçları Başlat
+                                </button>
+                                <button type="button" id="add-tool-button" class="primary-button">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z"/>
+                                    </svg>
+                                    Yeni Araç Ekle
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="modal-actions"><button type="button" id="cancel-settings-button" class="secondary-button">İptal</button><button type="submit" class="primary-button">Kaydet</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tool Creator Modal -->
+    <div id="tool-creator-modal" class="modal-overlay hidden">
+        <div class="modal-content tool-creator-modal-content">
+            <div class="tool-creator-header">
+                <h2>Yeni Araç Oluştur</h2>
+                <button type="button" id="close-tool-creator" class="close-button">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="tool-creator-body">
+                <form id="tool-creator-form">
+                    <div class="form-group">
+                        <label for="tool-name">Araç Adı</label>
+                        <input type="text" id="tool-name" placeholder="örn: send_email" required>
+                        <p class="form-group-description">Araç adı snake_case formatında olmalı (küçük harf, alt çizgi)</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="tool-description">Açıklama</label>
+                        <textarea id="tool-description" rows="3" placeholder="Bu araç ne yapar? Detaylı açıklama yazın..." required></textarea>
+                        <p class="form-group-description">Aracın ne işe yaradığını ve nasıl kullanılacağını açıklayın</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="tool-functionality">İstenen İşlevsellik</label>
+                        <textarea id="tool-functionality" rows="4" placeholder="Bu araç hangi işlemleri yapmalı? Hangi parametreleri almalı? Nasıl çalışmalı?" required></textarea>
+                        <p class="form-group-description">Aracın teknik gereksinimlerini ve beklenen davranışını detaylı şekilde açıklayın</p>
+                    </div>
+                    <div class="tool-creator-actions">
+                        <button type="button" id="cancel-tool-creator" class="secondary-button">İptal</button>
+                        <button type="submit" class="primary-button">Araç Oluştur</button>
+                    </div>
                 </form>
             </div>
         </div>

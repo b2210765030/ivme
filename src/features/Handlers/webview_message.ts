@@ -11,6 +11,7 @@ import { SettingsManager } from '../manager/settings';
 import { InteractionHandler } from '../Handlers/Interaction';
 import { ChatViewProvider } from '../../providers/view_chat';
 import { setPromptLanguage, createInitialSystemPrompt } from '../../system_prompts';
+import { getToolsManager, ToolCreationRequest } from '../../services/tools_manager';
 
 
 
@@ -23,7 +24,8 @@ export class WebviewMessageHandler {
         private conversationManager: ConversationManager,
         private contextManager: ContextManager,
         private settingsManager: SettingsManager,
-        private webview: vscode.Webview
+        private webview: vscode.Webview,
+        private context: vscode.ExtensionContext
     ) {
         this.interactionHandler = this.messageHandler.interactionHandler;
     }
@@ -211,6 +213,23 @@ export class WebviewMessageHandler {
                 // Webview'e dil değişikliği mesajı gönder
                 this.webview.postMessage({ type: 'languageChanged', payload: { language: data.payload.language } });
                 break;
+
+            // Custom Tools Cases
+            case 'createCustomTool':
+                await this.handleCreateCustomTool(data.payload);
+                break;
+
+            case 'deleteCustomTool':
+                await this.handleDeleteCustomTool(data.payload);
+                break;
+
+            case 'requestCustomTools':
+                await this.handleRequestCustomTools();
+                break;
+
+            case 'initializeTools':
+                await this.handleInitializeTools();
+                break;
         }
     }
 
@@ -329,6 +348,106 @@ export class WebviewMessageHandler {
                 // İndekslenmemişse indeksleme işlemini başlat
                 await vscode.commands.executeCommand('baykar-ai.indexProject');
             }
+        }
+    }
+
+    // Custom Tools Handler Methods
+    private async handleCreateCustomTool(payload: ToolCreationRequest) {
+        try {
+            const toolsManager = getToolsManager();
+            // Ensure tools manager knows the extension context for storage fallback
+            if (typeof toolsManager.setExtensionContext === 'function') {
+                toolsManager.setExtensionContext(this.context);
+            }
+            const result = await toolsManager.createCustomTool(payload);
+            this.webview.postMessage({
+                type: 'customToolCreated',
+                payload: result
+            });
+        } catch (error) {
+            this.webview.postMessage({
+                type: 'customToolCreated',
+                payload: {
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Bilinmeyen hata'
+                }
+            });
+        }
+    }
+
+    private async handleDeleteCustomTool(payload: { toolName: string }) {
+        try {
+            const toolsManager = getToolsManager();
+            if (typeof toolsManager.setExtensionContext === 'function') {
+                toolsManager.setExtensionContext(this.context);
+            }
+            const result = await toolsManager.deleteCustomTool(payload.toolName);
+            this.webview.postMessage({
+                type: 'customToolDeleted',
+                payload: { ...result, toolName: payload.toolName }
+            });
+        } catch (error) {
+            this.webview.postMessage({
+                type: 'customToolDeleted',
+                payload: {
+                    success: false,
+                    toolName: payload.toolName,
+                    error: error instanceof Error ? error.message : 'Bilinmeyen hata'
+                }
+            });
+        }
+    }
+
+    private async handleRequestCustomTools() {
+        try {
+            const toolsManager = getToolsManager();
+            if (typeof toolsManager.setExtensionContext === 'function') {
+                toolsManager.setExtensionContext(this.context);
+            }
+            const allTools = toolsManager.getAllTools();
+            this.webview.postMessage({
+                type: 'customToolsList',
+                payload: {
+                    success: true,
+                    tools: allTools.map(tool => ({
+                        name: tool.name,
+                        description: tool.description,
+                        type: tool.type
+                    }))
+                }
+            });
+        } catch (error) {
+            this.webview.postMessage({
+                type: 'customToolsList',
+                payload: {
+                    success: false,
+                    tools: [],
+                    error: error instanceof Error ? error.message : 'Bilinmeyen hata'
+                }
+            });
+        }
+    }
+
+    private async handleInitializeTools() {
+        try {
+            const toolsManager = getToolsManager();
+            if (typeof toolsManager.setExtensionContext === 'function') {
+                toolsManager.setExtensionContext(this.context);
+            }
+            const result = await toolsManager.initializeBuiltinTools();
+            
+            this.webview.postMessage({
+                type: 'toolsInitialized',
+                payload: result
+            });
+        } catch (error) {
+            this.webview.postMessage({
+                type: 'toolsInitialized',
+                payload: {
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Bilinmeyen hata'
+                }
+            });
         }
     }
 }

@@ -52,8 +52,38 @@ export class PlannerExecutor {
             case 'append_file':
                 return await this.handleAppendFile(context, api, args, step);
             default:
+                // Check if it's a custom tool
+                if (tool) {
+                    return await this.handleCustomTool(context, tool, args, step);
+                }
                 // Araç belirtilmemişse sadece bilgi mesajı
                 return `Araç belirtilmedi veya desteklenmiyor: ${tool || 'yok'} — Adım: ${step.ui_text || step.action}`;
+        }
+    }
+
+    private async handleCustomTool(
+        context: vscode.ExtensionContext,
+        toolName: string,
+        args: any,
+        step: PlannerPlanStep
+    ): Promise<string> {
+        try {
+            // Load tools manager
+            const { getToolsManager } = await import('./tools_manager.js');
+            const toolsManager = getToolsManager();
+            
+            // Check if custom tool exists
+            if (!toolsManager.hasCustomTool(toolName)) {
+                return `Hata: '${toolName}' adlı özel araç bulunamadı`;
+            }
+
+            // Execute custom tool
+            const result = await toolsManager.executeCustomTool(toolName, args);
+            return result;
+
+        } catch (error) {
+            console.error(`Error executing custom tool ${toolName}:`, error);
+            return `Hata: '${toolName}' aracı çalıştırılırken hata oluştu: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`;
         }
     }
 

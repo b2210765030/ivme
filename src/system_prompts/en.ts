@@ -7,7 +7,7 @@
 
 import { ContextManager } from '../features/manager/context';
 import { ChatMessage } from '../types';
-import { toolsEnDetailed, toolsEnShort, toolsEnDescriptions } from './tool';
+import { toolsEnDetailed, toolsEnShort, toolsEnDescriptions, getToolsDescriptions } from './tool';
 
 /**
  * Creates the initial system prompt given to the LLM when a new conversation starts.
@@ -130,7 +130,7 @@ export function createPlanExplanationPrompts(planJson: string): { system: string
 /**
  * Returns the planner SYSTEM prompt (EN). Must not deviate from the JSON output requirement.
  */
-export function createPlannerSystemPrompt(plannerContext: string, userQuery: string): string {
+export async function createPlannerSystemPrompt(plannerContext: string, userQuery: string, customTools?: Array<{name: string, description: string, schema: any}>): Promise<string> {
     return (
         `# ROLE & GOAL\n` +
         `You are a Principal Software Architect. Design an optimal, actionable implementation plan for the user's request that fits the project's architecture.\n\n` +
@@ -145,7 +145,7 @@ export function createPlannerSystemPrompt(plannerContext: string, userQuery: str
         `- Each plan step must include a short English sentence in the field ".ui_text". Keep it concise.\n` +
         `- Output STRICTLY valid JSON only, matching the schema below; do not add prose outside the JSON.\n\n` +
         `# AVAILABLE TOOLS\n` +
-        toolsEnDescriptions + `\n\n` +
+        await getToolsDescriptions('en') + `\n\n` +
         `# IMPORTANT INDEX RULES\n` +
         `- If CONTEXT lists 'Missing requested files', DO NOT search for them; the first steps must create those files.\n` +
         `- Only use search/retrieve for files already present in the index.\n\n` +
@@ -172,7 +172,7 @@ export function createPlannerSystemPrompt(plannerContext: string, userQuery: str
     );
 }
 
-export function createPlannerPrompt(plannerContext: string, userQuery: string): string {
+export async function createPlannerPrompt(plannerContext: string, userQuery: string, customTools?: Array<{name: string, description: string, schema: any}>): Promise<string> {
     return (
         `# ROLE & GOAL\n` +
         `You are a Principal Software Architect. Produce an implementation plan that addresses the user's request and fits the project's architecture.\n\n` +
@@ -186,7 +186,7 @@ export function createPlannerPrompt(plannerContext: string, userQuery: string): 
         `- Keep each step short and precise; include a short ".ui_text" sentence for UI display.\n` +
         `- Output strictly valid JSON only, following the schema below.\n\n` +
         `# AVAILABLE TOOLS\n` +
-        toolsEnDescriptions + `\n\n` +
+        await getToolsDescriptions('en') + `\n\n` +
         `# JSON OUTPUT SCHEMA\n` +
         `{
 ` +

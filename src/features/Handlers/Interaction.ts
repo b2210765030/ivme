@@ -30,7 +30,8 @@ export class InteractionHandler {
         private conversationManager: ConversationManager,
         private apiManager: ApiServiceManager,
         private webview: vscode.Webview,
-        private contextManager: ContextManager
+        private contextManager: ContextManager,
+        private context: vscode.ExtensionContext
     ) {}
 
     public cancelStream() {
@@ -136,7 +137,12 @@ export class InteractionHandler {
                 ctxSnap.retrievedSummary ? ('Retrieved files (top):\n' + ctxSnap.retrievedSummary) : '',
                 ctxSnap.locationsSummary ? ('Saved locations:\n' + ctxSnap.locationsSummary) : ''
             ].filter(Boolean).join('\n') : '';
-            const validTools = ['check_index','search','locate_code','retrieve_chunks','create_file','edit_file','append_file'];
+            // Get all tools from tools manager
+            const { getToolsManager } = await import('../../services/tools_manager.js');
+            const toolsManager = getToolsManager();
+            const allToolNames = toolsManager.getToolNames();
+            
+            const validTools = allToolNames;
             const system = [
                 'Aşağıdaki plan adımı için UYGUN TEK aracı ve argümanlarını çıkar.',
                 'Sadece geçerli araçlardan birini kullan (aşağıda listelenen).',

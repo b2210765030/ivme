@@ -7,7 +7,7 @@
 
 import { ContextManager } from '../features/manager/context';
 import { ChatMessage } from '../types';
-import { toolsTrDetailed, toolsTrShort, toolsTrDescriptions } from './tool';
+import { toolsTrDetailed, toolsTrShort, toolsTrDescriptions, getToolsDescriptions } from './tool';
 
 /**
  * Yeni bir konuşma başlatıldığında LLM'e verilecek olan ilk sistem talimatını oluşturur.
@@ -130,7 +130,7 @@ export function createPlanExplanationPrompts(planJson: string): { system: string
  * Planner için system prompt'u üretir (TR).
  * Bu, planner agent'a gönderilecek SYSTEM talimatıdır; JSON çıktısından kesinlikle sapmamalıdır.
  */
-export function createPlannerSystemPrompt(plannerContext: string, userQuery: string): string {
+export async function createPlannerSystemPrompt(plannerContext: string, userQuery: string, customTools?: Array<{name: string, description: string, schema: any}>): Promise<string> {
     return (
         `# ROLE & GOAL\n` +
         `Bir Baş Yazılım Mimarısısın. Kullanıcının isteğini proje mimarisine uygun, uygulanabilir bir plan hâline getir.\n\n` +
@@ -145,7 +145,7 @@ export function createPlannerSystemPrompt(plannerContext: string, userQuery: str
         `- Her adım için kısa bir ".ui_text" cümlesi ekle; UI bu metni gösterecek.\n` +
         `- Sadece GEÇERLİ JSON çıktısı ver; JSON dışı metin ekleme.\n\n` +
         `# KULLANILABİLİR ARAÇLAR\n` +
-        toolsTrDescriptions + `\n\n` +
+        await getToolsDescriptions('tr') + `\n\n` +
         `# ÖNEMLİ KURAL\n` +
         `- CONTEXT içinde 'Missing requested files' listeleniyorsa, bu dosyalar için arama yapma; ilk adımlar bu dosyaları oluşturmalı.\n` +
         `- Arama/retrieval yalnızca index'te mevcut dosyalar için kullanılmalı.\n\n` +
@@ -172,7 +172,7 @@ export function createPlannerSystemPrompt(plannerContext: string, userQuery: str
     );
 }
 
-export function createPlannerPrompt(plannerContext: string, userQuery: string): string {
+export async function createPlannerPrompt(plannerContext: string, userQuery: string, customTools?: Array<{name: string, description: string, schema: any}>): Promise<string> {
     return (
         `# ROLE & GOAL\n` +
         `Bir Baş Yazılım Mimarısısın. Kullanıcının isteğini proje mimarisine uygun şekilde karşılayan bir uygulama planı üret.\n\n` +
@@ -186,7 +186,7 @@ export function createPlannerPrompt(plannerContext: string, userQuery: string): 
         `- Her adım kısa ve net olsun; UI için kısa bir ".ui_text" cümlesi ekle.\n` +
         `- Sadece geçerli JSON çıktısı ver, aşağıdaki şemaya uy.\n\n` +
         `# KULLANILABİLİR ARAÇLAR\n` +
-        toolsTrDescriptions + `\n\n` +
+        await getToolsDescriptions('tr') + `\n\n` +
         `# JSON OUTPUT SCHEMA\n` +
         `{
 ` +

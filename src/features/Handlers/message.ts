@@ -15,9 +15,10 @@ export class MessageHandler {
         private conversationManager: ConversationManager,
         private apiManager: ApiServiceManager,
         private contextManager: ContextManager,
-        private webview: vscode.Webview
+        private webview: vscode.Webview,
+        private context: vscode.ExtensionContext
     ) {
-        this.interactionHandler = new InteractionHandler(this.conversationManager, this.apiManager, this.webview, this.contextManager);
+        this.interactionHandler = new InteractionHandler(this.conversationManager, this.apiManager, this.webview, this.contextManager, this.context);
     }
 
     public async handleAskAi(userMessage: string) {

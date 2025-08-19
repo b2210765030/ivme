@@ -37,6 +37,104 @@ export const toolsTrShort = [
 // Export names for backwards compatibility if needed
 export default { toolsEnDetailed, toolsEnShort, toolsTrDetailed, toolsTrShort };
 
+// Tool Creator System Prompts
+export const toolCreatorSystemPrompt = `# TOOL CREATOR ROLE
+
+Sen bir uzman yazılım geliştirici ve araç tasarımcısısın. Kullanıcının talep ettiği işlevselliği gerçekleştiren özel araçlar oluşturuyorsun.
+
+## GÖREVİN
+
+Kullanıcının verdiği araç ismi, açıklama ve işlevsellik gereksinimlerine dayanarak:
+
+1. **Tool Schema Oluştur**: JSON format tool calling için uygun schema
+2. **Implementation Code**: Aracın işlevselliğini gerçekleştiren TypeScript kodu
+
+## TOOL SCHEMA FORMAT
+
+\`\`\`json
+{
+  "name": "tool_name",
+  "description": "Aracın kısa açıklaması",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "param1": {
+        "type": "string",
+        "description": "Parametre açıklaması"
+      }
+    },
+    "required": ["param1"]
+  }
+}
+\`\`\`
+
+## IMPLEMENTATION CODE FORMAT
+
+\`\`\`typescript
+export async function tool_name(args: { param1: string }): Promise<string> {
+    try {
+        // Implementation logic here
+        return "Success message or result";
+    } catch (error) {
+        return \`Error: \${error.message}\`;
+    }
+}
+\`\`\`
+
+## KURALLAR
+
+1. **Schema**: JSON tool calling standardına uygun olmalı
+2. **Code**: TypeScript, async/await kullan, hata yönetimi ekle
+3. **Naming**: snake_case kullan (örn: send_email)
+4. **Parameters**: Gerekli parametreleri required array'ine ekle
+5. **Return**: Her zaman string döndür (başarı/hata mesajı)
+6. **Error Handling**: try-catch kullan, anlamlı hata mesajları ver
+
+## ÇIKTI FORMAT
+
+İlk olarak SADECE tool schema'yı JSON olarak ver:
+\`\`\`json
+{schema}
+\`\`\`
+
+Sonra SADECE implementation code'u ver:
+\`\`\`typescript
+{code}
+\`\`\`
+
+Başka açıklama, yorum veya metin YAZMA.`;
+
+export const toolImplementationPrompt = `# TOOL IMPLEMENTATION GENERATOR
+
+Sen bir TypeScript uzmanısın. Verilen tool schema ve gereksinimler için tam işlevsel kod yazıyorsun.
+
+## GÖREVİN
+
+Verilen tool schema ve işlevsellik gereksinimlerine göre:
+- Tam çalışır TypeScript implementation kodu yaz
+- Gerekli import'ları ekle
+- Hata yönetimi ve validasyon ekle
+- VSCode extension context'inde çalışacak şekilde tasarla
+
+## KOD KURALLARI
+
+1. **Exports**: Named export kullan
+2. **Types**: Parametre tiplerini interface olarak tanımla
+3. **Async**: Asenkron işlemler için async/await
+4. **Error Handling**: Comprehensive try-catch
+5. **VSCode API**: Gerekirse vscode modülünü kullan
+6. **File System**: Node.js fs/path modüllerini kullan
+7. **Network**: axios veya fetch kullan
+8. **Return**: Her zaman string döndür
+
+## ÇIKTI FORMAT
+
+SADECE TypeScript kodu ver, başka hiçbir şey yazma:
+
+\`\`\`typescript
+{implementation_code}
+\`\`\``;
+
 // Description-only variants (no args shown) for system prompts where we don't want to expose args
 export const toolsEnDescriptions = [
     '- check_index -> Check whether specified file(s) exist in the planner index; returns which are present or missing.',
@@ -57,6 +155,40 @@ export const toolsTrDescriptions = [
     '- edit_file -> Mevcut dosyayı düzenle (değişikliği tarif et; planda kod yazma).',
     '- append_file -> Dosyaya ekle/başına ekle (eklencek içeriği tarif et; kod ekleme).'
 ].join('\n');
+
+// Dynamic tool descriptions that load from tools.json
+export async function getToolsDescriptions(language: 'en' | 'tr' = 'tr'): Promise<string> {
+    try {
+        const { getToolsManager } = await import('../services/tools_manager.js');
+        const toolsManager = getToolsManager();
+        
+        const allTools = toolsManager.getAllTools();
+        const toolDescriptions = allTools.map(tool => 
+            `- ${tool.name} -> ${tool.description}`
+        ).join('\n');
+
+        return toolDescriptions;
+    } catch (error) {
+        console.error('Error loading tools descriptions:', error);
+        // Fallback to static descriptions
+        return language === 'en' ? toolsEnDescriptions : toolsTrDescriptions;
+    }
+}
+
+// Legacy sync version for backwards compatibility (deprecated)
+export function getToolsDescriptionsSync(language: 'en' | 'tr' = 'tr', customTools: Array<{name: string, description: string, schema: any}> = []): string {
+    const baseTools = language === 'en' ? toolsEnDescriptions : toolsTrDescriptions;
+    
+    if (customTools.length === 0) {
+        return baseTools;
+    }
+
+    const customToolDescriptions = customTools.map(tool => 
+        `- ${tool.name} -> ${tool.description}`
+    ).join('\n');
+
+    return baseTools + '\n\n# ÖZEL ARAÇLAR\n' + customToolDescriptions;
+}
 
 // Keep default export unchanged
 

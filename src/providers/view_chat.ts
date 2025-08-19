@@ -207,14 +207,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             ]
         };
         
-        this.messageHandler = new MessageHandler(this.conversationManager, this.apiManager, this.contextManager, webviewView.webview);
+        this.messageHandler = new MessageHandler(this.conversationManager, this.apiManager, this.contextManager, webviewView.webview, this._context);
         this.webviewMessageHandler = new WebviewMessageHandler(
             this,
             this.messageHandler,
             this.conversationManager,
             this.contextManager,
             this.settingsManager,
-            webviewView.webview
+            webviewView.webview,
+            this._context
         );
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
