@@ -21,6 +21,10 @@ let rateWindow = [];
 let finalReplaceText = null;
 let planTimerStartMs = null;
 let lastPlannerStepsCache = [];
+let lastPlannerPlan = null;
+let activeInlineEditorEl = null;
+let activeInlineEditorIndex = -1;
+let completedPlannerSteps = new Set();
 let summaryTargetEl = null;
 let summaryContainerEl = null;
 let summaryMessageEl = null;
@@ -273,6 +277,7 @@ function runFinalizationLogic() {
 function resetPlannerUI() {
     try {
         lastPlannerStepsCache = [];
+        lastPlannerPlan = null;
         const panel = document.getElementById('planner-panel');
         const content = document.getElementById('planner-panel-content');
         const list = document.getElementById('planner-steps-list');
@@ -496,6 +501,234 @@ export function showPlannerPanel(steps) {
     } catch (e) { console.warn('showPlannerPanel error', e); }
 }
 
+// Yeni: Plan objesi ile (adım JSON'ları dahil) paneli doldur
+export function showPlannerPanelWithPlan(plan) {
+    try {
+        const panel = document.getElementById('planner-panel');
+        const content = document.getElementById('planner-panel-content');
+        const list = document.getElementById('planner-steps-list');
+        if (!panel || !content || !list) return;
+        const { isAgentModeActive, isIndexingEnabled } = getState();
+        if (!(isAgentModeActive && isIndexingEnabled)) {
+            lastPlannerPlan = plan || null;
+            // yine de ui_text'leri cache'le
+            try {
+                const texts = Array.isArray(plan?.steps) ? plan.steps.map(s => (typeof s?.ui_text === 'string' && s.ui_text.trim()) ? s.ui_text.trim() : (typeof s?.action === 'string' ? s.action : '')) : [];
+                lastPlannerStepsCache = texts;
+            } catch {}
+            panel.classList.add('hidden');
+            return;
+        }
+
+        // Cache'leri güncelle
+        // Yeni plan referansı geldiyse tamamlananlar setini sıfırla
+        if (lastPlannerPlan !== plan) {
+            completedPlannerSteps = new Set();
+        }
+        lastPlannerPlan = plan || null;
+        const steps = Array.isArray(plan?.steps) ? plan.steps : [];
+        lastPlannerStepsCache = steps.map(s => (typeof s?.ui_text === 'string' && s.ui_text.trim()) ? s.ui_text.trim() : (typeof s?.action === 'string' ? s.action : ''));
+
+        // Temizle ve listeyi yeniden oluştur
+        list.innerHTML = '';
+
+        steps.forEach((step, idx) => {
+            const li = document.createElement('li');
+            li.className = 'planner-step-item';
+
+            const text = (typeof step?.ui_text === 'string' && step.ui_text.trim()) ? step.ui_text.trim() : (typeof step?.action === 'string' ? step.action : '');
+            const span = document.createElement('span');
+            span.textContent = text;
+            span.className = 'planner-step-text';
+            li.appendChild(span);
+
+            const actions = document.createElement('div');
+            actions.className = 'planner-step-actions';
+
+            // Düzenle (JSON'u göster) butonu
+            const editBtn = document.createElement('button');
+            editBtn.className = 'step-action-button';
+            editBtn.type = 'button';
+            editBtn.title = DOM.getText('edit') || 'Düzenle';
+            editBtn.innerHTML = `<img src="${DOM.EDIT_ICON_URI}" alt="edit" class="icon-img"/>`;
+            editBtn.addEventListener('click', (ev) => openStepInlineEditor(idx, ev.currentTarget));
+            actions.appendChild(editBtn);
+
+            // Uygula butonu (şimdilik sadece gönderim)
+            const applyBtn = document.createElement('button');
+            applyBtn.className = 'step-action-button primary';
+            applyBtn.type = 'button';
+            applyBtn.title = DOM.getText('apply') || 'Uygula';
+            applyBtn.innerHTML = `<img src="${DOM.APPLY_ICON_URI}" alt="apply" class="icon-img"/>`;
+            applyBtn.addEventListener('click', () => {
+                try { postMessage('executePlannerStep', { index: idx }); } catch {}
+            });
+            actions.appendChild(applyBtn);
+
+            li.appendChild(actions);
+            // Eğer daha önce tamamlandıysa işaretle ve butonları kilitle
+            if (completedPlannerSteps && completedPlannerSteps.has(idx)) {
+                li.classList.add('completed');
+                try { editBtn.disabled = true; } catch {}
+                try { applyBtn.disabled = true; } catch {}
+            }
+            list.appendChild(li);
+        });
+
+        panel.classList.remove('hidden');
+        content.classList.add('hidden');
+        panel.classList.add('collapsed');
+        panel.classList.remove('expanded');
+        panel.classList.remove('completed');
+
+        // Toggle buton handler (bir kez ekle)
+        const toggle = document.getElementById('planner-panel-toggle');
+        if (toggle && !toggle.dataset.bound) {
+            toggle.addEventListener('click', () => {
+                const isHidden = content.classList.toggle('hidden');
+                if (isHidden) {
+                    panel.classList.add('collapsed');
+                    panel.classList.remove('expanded');
+                } else {
+                    panel.classList.remove('collapsed');
+                    panel.classList.add('expanded');
+                }
+            });
+            toggle.dataset.bound = '1';
+            // Run-all düğmesini ekle (varsa atla)
+            try {
+                if (!document.getElementById('planner-run-all-toggle')) {
+                    const runAllBtn = document.createElement('button');
+                    runAllBtn.id = 'planner-run-all-toggle';
+                    runAllBtn.className = 'icon-button planner-run-all';
+                    runAllBtn.title = 'Tüm adımları uygula';
+                    runAllBtn.innerText = '✔';
+                    runAllBtn.style.marginLeft = '4px';
+                    runAllBtn.addEventListener('click', () => { try { postMessage('executePlannerAll'); } catch (e) {} });
+                    try {
+                        const titleEl = toggle.parentNode.querySelector('.planner-panel-title');
+                        if (titleEl) {
+                            titleEl.appendChild(runAllBtn);
+                        } else {
+                            const bar = toggle.closest('.planner-panel-bar') || toggle.parentNode;
+                            bar.insertBefore(runAllBtn, toggle);
+                        }
+                    } catch (e) {
+                        try { toggle.parentNode.insertBefore(runAllBtn, toggle); } catch(e){}
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+    } catch (e) { console.warn('showPlannerPanelWithPlan error', e); }
+}
+
+function openStepInlineEditor(index, anchorEl) {
+    try {
+        // Kapat/temizle (tek editor)
+        closeStepInlineEditor();
+        const step = Array.isArray(lastPlannerPlan?.steps) ? lastPlannerPlan.steps[index] : null;
+        const currentAction = typeof step?.action === 'string' ? step.action : '';
+        const currentThought = typeof step?.thought === 'string' ? step.thought : '';
+
+        const rect = anchorEl?.getBoundingClientRect?.();
+        const container = document.createElement('div');
+        container.className = 'step-inline-editor';
+        container.innerHTML = `
+            <div class="field-row">
+                <label class="field-label">action</label>
+                <input id="sie-action" class="field-input" type="text" value="${escapeHtmlAttr(currentAction)}" />
+            </div>
+            <div class="field-row">
+                <label class="field-label">thought</label>
+                <input id="sie-thought" class="field-input" type="text" value="${escapeHtmlAttr(currentThought)}" />
+            </div>
+            <div class="editor-actions">
+                <button id="sie-save" class="primary-button">${DOM.getText('save') || 'Kaydet'}</button>
+                <button id="sie-cancel" class="secondary-button">${DOM.getText('cancel') || 'İptal'}</button>
+            </div>
+        `;
+        document.body.appendChild(container);
+
+        // Konumla (butonun altına, ekrana sığacak şekilde)
+        const desiredWidth = 520; // daha geniş
+        const SIDE_MARGIN = 25; // input-wrapper ve planner panel ile aynı boşluk
+        const viewportW = window.innerWidth || document.documentElement.clientWidth;
+        const finalWidth = Math.max(360, Math.min(desiredWidth, viewportW - SIDE_MARGIN * 2));
+        let left = Math.round((viewportW - finalWidth) / 2);
+        const top = Math.min((rect?.bottom ?? 20) + 6, (window.innerHeight - 10));
+        container.style.position = 'fixed';
+        container.style.left = `${Math.round(left)}px`;
+        container.style.top = `${Math.round(top)}px`;
+        container.style.width = `${finalWidth}px`;
+
+        // Eventler
+        const saveBtn = container.querySelector('#sie-save');
+        const cancelBtn = container.querySelector('#sie-cancel');
+        saveBtn?.addEventListener('click', () => {
+            try {
+                const actionInput = container.querySelector('#sie-action');
+                const thoughtInput = container.querySelector('#sie-thought');
+                const newAction = String(actionInput && actionInput.value || '').trim();
+                const newThought = String(thoughtInput && thoughtInput.value || '').trim();
+                if (lastPlannerPlan && Array.isArray(lastPlannerPlan.steps) && lastPlannerPlan.steps[index]) {
+                    const old = lastPlannerPlan.steps[index];
+                    const updated = { ...old, action: newAction, thought: newThought };
+                    lastPlannerPlan.steps[index] = updated;
+                    // Panel metnini güncelle (ui_text yoksa action kullanılır)
+                    try {
+                        const list = document.getElementById('planner-steps-list');
+                        const li = list?.children?.[index];
+                        const span = li?.querySelector?.('.planner-step-text');
+                        const newText = (typeof updated?.ui_text === 'string' && updated.ui_text.trim()) ? updated.ui_text.trim() : (typeof updated?.action === 'string' ? updated.action : '');
+                        if (span) span.textContent = newText;
+                    } catch {}
+                    try {
+                        lastPlannerStepsCache = Array.isArray(lastPlannerPlan.steps) ? lastPlannerPlan.steps.map(s => (typeof s?.ui_text === 'string' && s.ui_text.trim()) ? s.ui_text.trim() : (typeof s?.action === 'string' ? s.action : '')) : [];
+                    } catch {}
+                    try { postMessage('updatePlannerStep', { index, step: updated }); } catch {}
+                }
+            } catch {}
+            closeStepInlineEditor();
+        });
+        cancelBtn?.addEventListener('click', () => closeStepInlineEditor());
+        setTimeout(() => {
+            document.addEventListener('keydown', inlineEscClose, { once: true });
+            document.addEventListener('mousedown', outsideInlineClick, true);
+            window.addEventListener('scroll', closeStepInlineEditor, { once: true });
+            window.addEventListener('resize', closeStepInlineEditor, { once: true });
+        }, 0);
+
+        activeInlineEditorEl = container;
+        activeInlineEditorIndex = index;
+    } catch (e) { console.warn('openStepInlineEditor error', e); }
+}
+
+function escapeHtmlAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function inlineEscClose(ev) {
+    if (ev.key === 'Escape') closeStepInlineEditor();
+}
+
+function outsideInlineClick(ev) {
+    try {
+        if (activeInlineEditorEl && !activeInlineEditorEl.contains(ev.target)) {
+            closeStepInlineEditor();
+        }
+    } catch {}
+}
+
+function closeStepInlineEditor() {
+    try {
+        if (activeInlineEditorEl && activeInlineEditorEl.parentNode) {
+            activeInlineEditorEl.parentNode.removeChild(activeInlineEditorEl);
+        }
+        activeInlineEditorEl = null;
+        activeInlineEditorIndex = -1;
+    } catch {}
+}
+
 // Gizle fonksiyonu
 export function hidePlannerPanel() {
     const panel = document.getElementById('planner-panel');
@@ -510,8 +743,10 @@ export function refreshPlannerPanelVisibility() {
     if (!panel || !content || !list) return;
     const { isAgentModeActive, isIndexingEnabled } = getState();
     if (isAgentModeActive && isIndexingEnabled) {
-        // Adımlar önceden cache'lenmişse aynı planla tekrar göster
-        if (Array.isArray(lastPlannerStepsCache) && lastPlannerStepsCache.length > 0) {
+        // Eğer son plan objesi varsa onunla (butonlarla) yeniden oluştur, yoksa sadece metinleri göster
+        if (lastPlannerPlan && Array.isArray(lastPlannerPlan.steps) && lastPlannerPlan.steps.length > 0) {
+            showPlannerPanelWithPlan(lastPlannerPlan);
+        } else if (Array.isArray(lastPlannerStepsCache) && lastPlannerStepsCache.length > 0) {
             list.innerHTML = '';
             for (const s of lastPlannerStepsCache) {
                 const li = document.createElement('li');
@@ -519,7 +754,6 @@ export function refreshPlannerPanelVisibility() {
                 list.appendChild(li);
             }
             panel.classList.remove('hidden');
-            // Mod değiştirilip geri gelindiğinde kapalı (collapsed) başlasın
             content.classList.add('hidden');
             panel.classList.add('collapsed');
             panel.classList.remove('expanded');
@@ -596,6 +830,25 @@ export function finishStepExecutionPlaceholder(label, elapsedMs, error) {
     } else {
         contentElement.appendChild(soft);
     }
+}
+
+// Panelde bir adımı tamamlanmış olarak işaretle ve butonlarını devre dışı bırak
+export function markPlannerStepCompleted(index) {
+    try {
+        completedPlannerSteps.add(index);
+        const list = document.getElementById('planner-steps-list');
+        const li = list?.children?.[index];
+        if (li) {
+            li.classList.add('completed');
+            const buttons = li.querySelectorAll('button');
+            buttons.forEach(b => { try { b.disabled = true; } catch {} });
+        }
+        // Eğer tüm adımlar tamamlandıysa paneli completed yap (ince çizgi)
+        const stepsTotal = Array.isArray(lastPlannerPlan?.steps) ? lastPlannerPlan.steps.length : 0;
+        if (stepsTotal > 0 && completedPlannerSteps.size >= stepsTotal) {
+            try { setPlannerPanelCompleted(true); } catch (e) {}
+        }
+    } catch (e) {}
 }
 
 // --- Inline summary (same placeholder, no pulse) ---

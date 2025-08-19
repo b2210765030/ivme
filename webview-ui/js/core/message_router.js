@@ -116,6 +116,13 @@ export function initMessageListener() {
                 const elapsedMs = Number(data?.elapsedMs || 0);
                 const error = data?.error;
                 ChatView.finishStepExecutionPlaceholder(label, elapsedMs, error);
+                // Panelde ilgili adımı tamamlandı olarak işaretle
+                try {
+                    const idx = Number(data?.index);
+                    if (!Number.isNaN(idx)) {
+                        ChatView.markPlannerStepCompleted(idx);
+                    }
+                } catch (e) {}
                 break;
             }
 
@@ -194,11 +201,10 @@ export function initMessageListener() {
                     // "İvme planladı" anından sonra shimmer'ı kapat
                     ChatView.setShimmerActive(false);
                     ChatView.replaceStreamingPlaceholderWithPlanned(plannedText);
-                    // Paneli doldurup göster (ui_text varsa onu kullan, yoksa action)
+                    // Paneli adım JSON'ları ile doldur
                     try {
-                        const stepsForPanel = (plan.steps||[]).map(s => (typeof s?.ui_text === 'string' && s.ui_text.trim().length>0) ? s.ui_text.trim() : (typeof s?.action === 'string' ? s.action : ''));
-                        ChatView.showPlannerPanel(stepsForPanel);
-                    } catch(e) { console.warn('showPlannerPanel error', e); }
+                        ChatView.showPlannerPanelWithPlan(plan);
+                    } catch(e) { console.warn('showPlannerPanelWithPlan error', e); }
                     break;
                 }
                 // Streaming yoksa da tek placeholder üzerinde sırayla yaz ve finalize et
@@ -232,9 +238,8 @@ export function initMessageListener() {
                     ChatView.setShimmerActive(false);
                     ChatView.replaceStreamingPlaceholderWithPlanned(plannedText);
                     try {
-                        const stepsForPanel = (plan.steps||[]).map(s => (typeof s?.ui_text === 'string' && s.ui_text.trim().length>0) ? s.ui_text.trim() : (typeof s?.action === 'string' ? s.action : ''));
-                        ChatView.showPlannerPanel(stepsForPanel);
-                    } catch(e) { console.warn('showPlannerPanel error', e); }
+                        ChatView.showPlannerPanelWithPlan(plan);
+                    } catch(e) { console.warn('showPlannerPanelWithPlan error', e); }
                 })();
                 break;
             }

@@ -137,6 +137,25 @@ export class PlannerExecutor {
         return list;
     }
 
+    /** Önceki araç çıktılarından hızlı bir özet döndürür (tool seçim prompt'larında kullanılabilir). */
+    public getContextSnapshot(): { retrievedSummary: string; locationsSummary: string } {
+        const retrievedSummary = this.bestMatchesSummary();
+        let locationsSummary = '';
+        try {
+            const ws = (vscode.workspace.workspaceFolders?.[0]?.uri.fsPath) || '';
+            const rel = (p: string) => ws && p.startsWith(ws) ? path.relative(ws, p) : p;
+            const lines: string[] = [];
+            for (const key of Object.keys(this.lastLocations)) {
+                const loc = this.lastLocations[key];
+                lines.push(`${key}: ${rel(loc.path)} lines ${loc.startLine}-${loc.endLine}`);
+            }
+            locationsSummary = lines.join('\n');
+        } catch {
+            locationsSummary = Object.keys(this.lastLocations).join(', ');
+        }
+        return { retrievedSummary, locationsSummary };
+    }
+
     private async handleCheckIndex(
         context: vscode.ExtensionContext,
         api: ApiServiceManager,
@@ -171,7 +190,24 @@ export class PlannerExecutor {
             }
             (found ? existing : missing).push(f);
         }
-        return `check_index: existing=[${existing.join(', ')}] missing=[${missing.join(', ')}]`;
+        const baseMsg = `check_index: existing=[${existing.join(', ')}] missing=[${missing.join(', ')}]`;
+        try {
+            // Otomatik: Eğer adım metni/niyeti 'create' içeriyorsa ve eksik dosyalar varsa, aynı adımda create_file uygula
+            const wantsCreate = /\b(create|oluştur)\b/i.test(String(step.action || '') + ' ' + String(step.ui_text || '') + ' ' + String(step.thought || ''));
+            if (wantsCreate && missing.length > 0) {
+                const results: string[] = [];
+                for (const mf of missing) {
+                    try {
+                        const r = await this.handleCreateFile({ path: mf }, step);
+                        results.push(r);
+                    } catch (e: any) {
+                        results.push(`create_file hata: ${mf} — ${e?.message || String(e)}`);
+                    }
+                }
+                return `${baseMsg}\n${results.join('\n')}`;
+            }
+        } catch {/* ignore */}
+        return baseMsg;
     }
 
     private pickBestRetrieved(hint?: string): RetrievedChunk | undefined {
@@ -238,7 +274,8 @@ export class PlannerExecutor {
             const buf = await vscode.workspace.fs.readFile(vscode.Uri.file(abs));
             original = Buffer.from(buf).toString('utf8');
         } catch {
-            return `edit_file: Dosya okunamadı: ${filePath}`;
+            // Dosya yoksa boş içerikle çalış (create_file sonrası ilk edit gibi durumlar)
+            original = '';
         }
 
         const findSpec = typeof args?.find_spec === 'string' ? args.find_spec : undefined;
@@ -264,6 +301,17 @@ export class PlannerExecutor {
                 range = { start: startChar, end: endChar } as any;
             }
         }
+        // Eğer hala yoksa ve dosya yeni/boş ise, full file update moduna düş
+        if (!range && original.trim().length === 0) {
+            // full file update yapılır (aşağıdaki else bloğu)
+        }
+        // Eğer range yine yoksa ve find_spec varsa, basit bir text aramasıyla ilk eşleşmeyi kullan
+        if (!range && findSpec && findSpec.trim().length > 0) {
+            const idx = original.indexOf(findSpec);
+            if (idx !== -1) {
+                range = { start: idx, end: idx + findSpec.length } as any;
+            }
+        }
 
         // Kod üretim prompt'u — sadece yeni dosya içeriği olarak döndürmesini ister
         const retrievedContext = this.composeRetrievedContext();
@@ -272,13 +320,19 @@ export class PlannerExecutor {
             const snippetOriginal = original.slice(range.start, range.end);
             const system = [
                 'You are a senior engineer. Update ONLY the provided code snippet based on the change specification.',
-                'Output ONLY the updated snippet as a single Markdown code block with the correct language. No extra text.'
+                'Output ONLY the updated snippet as a single Markdown code block. No prose, no explanation, no surrounding text.'
             ].join(' ');
             const userParts: string[] = [];
             userParts.push('Change specification:');
             userParts.push('---');
             userParts.push(String(changeSpec || step.action || step.thought || ''));
             userParts.push('---');
+            if (step.thought && String(step.thought).trim().length > 0) {
+                userParts.push('User request (from plan.thought):');
+                userParts.push('---');
+                userParts.push(String(step.thought));
+                userParts.push('---');
+            }
             if (findSpec) userParts.push(`Helpful find_spec: ${findSpec}`);
             userParts.push('Current snippet:');
             userParts.push('```');
@@ -292,9 +346,18 @@ export class PlannerExecutor {
                 { role: 'system' as const, content: system },
                 { role: 'user' as const, content: userParts.join('\n') }
             ];
+            // Debug log: prompt ve hedef aralık bilgisi
+            try {
+                const preview = (s: string) => (s.length > 2000 ? s.slice(0, 2000) + '... [truncated]' : s);
+                console.log('[EditFile] Path:', filePath, 'range:', range.start + '-' + range.end);
+                console.log('[EditFile] System prompt:\n' + system);
+                console.log('[EditFile] User prompt:\n' + preview(userParts.join('\n')));
+            } catch {}
             let raw = '';
             await api.generateChatContent(messages, (chunk) => { raw += chunk; }, undefined as any);
-            const newSnippet = cleanLLMCodeBlock(raw);
+            try { console.log('[EditFile] Raw response length:', raw.length); } catch {}
+            const newSnippet = extractOnlyCode(raw);
+            try { console.log('[EditFile] Extracted snippet length:', (newSnippet || '').length); } catch {}
             if (!newSnippet || newSnippet.trim().length === 0) return 'edit_file: Modelden geçerli snippet alınamadı.';
             const updated = original.slice(0, range.start) + newSnippet + original.slice(range.end);
             await vscode.workspace.fs.writeFile(vscode.Uri.file(abs), Buffer.from(updated, 'utf8'));
@@ -303,14 +366,19 @@ export class PlannerExecutor {
             // Tüm dosyayı güncelle
             const system = [
                 'You are a senior engineer. Update the given file based on the change specification.',
-                'Output ONLY the complete, final file content as a single Markdown code block with the correct language.',
-                'Do not include any prose or explanations before or after the code block.'
+                'Output ONLY the complete, final file content as a single Markdown code block. No prose, no explanation.'
             ].join(' ');
             const userParts: string[] = [];
             userParts.push('Change specification:');
             userParts.push('---');
             userParts.push(String(changeSpec || step.action || step.thought || ''));
             userParts.push('---');
+            if (step.thought && String(step.thought).trim().length > 0) {
+                userParts.push('User request (from plan.thought):');
+                userParts.push('---');
+                userParts.push(String(step.thought));
+                userParts.push('---');
+            }
             if (findSpec) userParts.push(`Locate using find_spec: ${findSpec}`);
             userParts.push('Current file content:');
             userParts.push('```');
@@ -324,9 +392,18 @@ export class PlannerExecutor {
                 { role: 'system' as const, content: system },
                 { role: 'user' as const, content: userParts.join('\n') }
             ];
+            // Debug log: prompt ve full-file bilgisi
+            try {
+                const preview = (s: string) => (s.length > 2000 ? s.slice(0, 2000) + '... [truncated]' : s);
+                console.log('[EditFile] Path:', filePath, 'FULL FILE UPDATE');
+                console.log('[EditFile] System prompt:\n' + system);
+                console.log('[EditFile] User prompt:\n' + preview(userParts.join('\n')));
+            } catch {}
             let raw = '';
             await api.generateChatContent(messages, (chunk) => { raw += chunk; }, undefined as any);
-            const newContent = cleanLLMCodeBlock(raw);
+            try { console.log('[EditFile] Raw response length:', raw.length); } catch {}
+            const newContent = extractOnlyCode(raw);
+            try { console.log('[EditFile] Extracted content length:', (newContent || '').length); } catch {}
             if (!newContent || newContent.trim().length === 0) return 'edit_file: Modelden geçerli içerik alınamadı.';
             await vscode.workspace.fs.writeFile(vscode.Uri.file(abs), Buffer.from(newContent, 'utf8'));
             return `Dosya güncellendi: ${filePath}`;
@@ -354,18 +431,18 @@ export class PlannerExecutor {
             return `append_file: Dosya okunamadı: ${filePath}`;
         }
 
+        // content_spec yalın metin isteniyor; kod burada üretilecek (LLM) ve sadece snippet dönecek
         const contentSpec = typeof args?.content_spec === 'string' ? args.content_spec : (step.action || step.thought || '');
         const retrievedContext = this.composeRetrievedContext();
         const system = [
-            'You are a senior engineer. Produce ONLY the code to append based on the specification.',
-            'Output ONLY a single Markdown code block containing the snippet to add. No prose.'
+            'You are a senior engineer. Produce ONLY the minimal Python code snippet to append based on the high-level specification.',
+            'Strictly output ONE Markdown code block with ONLY the code. No prose, no comments, no extra text.'
         ].join(' ');
         const user = [
-            'Append specification:',
-            '---',
-            String(contentSpec),
-            '---',
-            'Existing file (for reference):',
+            'Goal (high-level, plain text spec; no code shown here):',
+            String(contentSpec).replace(/```[\s\S]*?```/g, '').replace(/[\r\n]+/g, ' '),
+            '',
+            'Existing file (reference only; do NOT repeat unchanged parts):',
             '```',
             original,
             '```',
@@ -486,6 +563,19 @@ export class PlannerExecutor {
     private escapeRegex(s: string): string {
         return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
+}
+
+// Yardımcı: LLM çıktısından yalnızca kod bloğunu çıkarır.
+// Birden fazla kod bloğu varsa, ilk tam blok tercih edilir; hiç yoksa cleanLLMCodeBlock ile kalan metin döndürülür.
+function extractOnlyCode(raw: string): string {
+    if (!raw) return '';
+    // Önce üçlü fence arayın (```lang ... ```)
+    const fenceRegex = /```[a-zA-Z0-9]*\s*([\s\S]*?)```/m;
+    const m = fenceRegex.exec(raw);
+    if (m && m[1]) return m[1].trim();
+    // Bazı modeller tek backtickli veya hiçbir fence kullanmayabilir
+    // Yine de en azından markdown olmayan ön/arka metni temizle
+    return cleanLLMCodeBlock(raw);
 }
 
 

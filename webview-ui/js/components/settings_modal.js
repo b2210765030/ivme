@@ -50,6 +50,16 @@ export function init() {
 
     DOM.serviceSelect.addEventListener('change', handleServiceChange);
 
+    // Temperature slider live label update
+    if (DOM.temperatureInput && DOM.temperatureLabel) {
+        const updateTempLabel = () => {
+            const v = Number(DOM.temperatureInput.value);
+            DOM.temperatureLabel.textContent = isFinite(v) ? v.toFixed(1) : '0.7';
+        };
+        DOM.temperatureInput.addEventListener('input', updateTempLabel);
+        DOM.temperatureInput.addEventListener('change', updateTempLabel);
+    }
+
     // YENİ: Video Oynatma Butonu Mantığı
     const videoToggle = document.getElementById('video-toggle-switch');
     if (videoToggle) {
@@ -88,7 +98,8 @@ export function init() {
             vllmModelName: DOM.vllmModelInput.value,
             geminiApiKey: DOM.geminiKeyInput.value,
             conversationHistoryLimit: DOM.historyLimitInput.value,
-            tokenLimit: DOM.tokenLimitInput.value
+            tokenLimit: DOM.tokenLimitInput.value,
+            temperature: DOM.temperatureInput ? DOM.temperatureInput.value : 0.7
         };
         VsCode.postMessage('saveSettings', settingsPayload);
     });
@@ -107,9 +118,7 @@ export function handleSaveResult(payload) {
             errorContainer.textContent = payload.message || 'Bilinmeyen bir hata oluştu.';
             errorContainer.classList.remove('hidden');
         } else {
-            // vLLM seçili değilse genel bir VS Code hatası göster
-            // Bu normalde SettingsManager'dan gelen bir hata olur
-            vscode.window.showErrorMessage(payload.message);
+            // vLLM seçili değilse inline hata göstermiyoruz.
         }
     }
 }
@@ -121,5 +130,10 @@ export function loadConfig(config) {
     DOM.historyLimitInput.value = config.conversationHistoryLimit;
     DOM.tokenLimitInput.value = config.tokenLimit || 12000;
     DOM.serviceSelect.value = config.activeApiService;
+    if (DOM.temperatureInput) {
+        const t = typeof config.temperature === 'number' ? config.temperature : 0.7;
+        DOM.temperatureInput.value = String(t);
+        if (DOM.temperatureLabel) DOM.temperatureLabel.textContent = String(t);
+    }
     handleServiceChange();
 }

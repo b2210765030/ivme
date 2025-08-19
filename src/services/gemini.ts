@@ -71,9 +71,11 @@ export class GeminiApiService implements IApiService {
             throw new Error('Gemini API anahtarı ayarlanmamış.');
         }
 
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        const temperature = config.get<number>(SETTINGS_KEYS.temperature, 0.7);
         const model = this.genAI.getGenerativeModel({
             model: GEMINI_MODEL_NAME,
-            generationConfig: GEMINI_PARAMS.completion as GenerationConfig
+            generationConfig: { ...(GEMINI_PARAMS.completion as GenerationConfig), temperature }
         });
 
         try {
@@ -90,9 +92,11 @@ export class GeminiApiService implements IApiService {
             throw new Error('Gemini API anahtarı ayarlanmamış.');
         }
 
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        const temperature = config.get<number>(SETTINGS_KEYS.temperature, 0.7);
         const model = this.genAI.getGenerativeModel({
             model: GEMINI_MODEL_NAME,
-            generationConfig: GEMINI_PARAMS.chat as GenerationConfig,
+            generationConfig: { ...(GEMINI_PARAMS.chat as GenerationConfig), temperature },
             safetySettings: [
                 { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
                 { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE }

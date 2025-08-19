@@ -16,12 +16,15 @@ import { createContextualPrompt } from '../../system_prompts';
 import { build_context_for_query } from '../../services/orchestrator';
 import { run_planner, PlannerPlan } from '../../services/planner';
 import { PlannerExecutor } from '../../services/executor';
+import { toolsTrDetailed } from '../../system_prompts/tool';
 export class InteractionHandler {
     private currentRequestController: AbortController | null = null;
     private lastPlannerPlan: PlannerPlan | null = null;
     private executor: PlannerExecutor = new PlannerExecutor();
     private executedStepLogs: Array<{ label: string; elapsedMs: number; error?: string }> = [];
     private executedStepIndices: Set<number> = new Set();
+    private isBatchRun: boolean = false;
+    private didEmitSummaryNote: boolean = false;
 
     constructor(
         private conversationManager: ConversationManager,
@@ -84,6 +87,7 @@ export class InteractionHandler {
                 // Yeni plan için yürütülen adım izlerini sıfırla
                 this.executedStepIndices = new Set();
                 this.executedStepLogs = [];
+                this.didEmitSummaryNote = false;
                 this.currentRequestController = null;
 
                 // Plan finalize edildikten sonra, aynı placeholder altında açıklamayı stream et
@@ -123,6 +127,90 @@ export class InteractionHandler {
         // UI placeholder: başlat
         this.webview.postMessage({ type: 'stepExecStart', payload: { index: stepIndex, label } });
         try {
+            // 1) Tool seçimi + args çıkarımı (LLM)
+            const stepJson = JSON.stringify(step, null, 2);
+            // Önceki araç çıktılarını tool seçiminde bağlama ekle
+            const ctxSnap = this.executor.getContextSnapshot?.();
+            const ctxText = ctxSnap ? [
+                'Önceki araç bağlamı (özet):',
+                ctxSnap.retrievedSummary ? ('Retrieved files (top):\n' + ctxSnap.retrievedSummary) : '',
+                ctxSnap.locationsSummary ? ('Saved locations:\n' + ctxSnap.locationsSummary) : ''
+            ].filter(Boolean).join('\n') : '';
+            const validTools = ['check_index','search','locate_code','retrieve_chunks','create_file','edit_file','append_file'];
+            const system = [
+                'Aşağıdaki plan adımı için UYGUN TEK aracı ve argümanlarını çıkar.',
+                'Sadece geçerli araçlardan birini kullan (aşağıda listelenen).',
+                'ÇIKTI FORMAT ZORUNLU: Yalnızca tek satır ve SADE JSON objesi döndür: {"tool":"...","args":{...}}',
+                'BAŞKA ANAHTAR EKLEME: step, action, thought, ui_text, tool_input, parameters, params, arguments, input gibi anahtarları YAZMA.',
+                'TÜM string değerleri TEK SATIR olmalı; kod bloğu/backtick kullanma; \n dahil kaçış karakterleri kullanma.',
+                'Markdown, açıklama, kod bloğu, ön/arka metin YAZMA.',
+                'Örnek: {"tool":"edit_file","args":{"path":"merge.py","change_spec":"...","find_spec":"..."}}',
+                `Geçerli araç isimleri: ${validTools.join(', ')}`
+            ].join(' ');
+            const user = [
+                'Araç Listesi (TR):',
+                toolsTrDetailed,
+                '',
+                ctxText || '',
+                'Plan Adımı (JSON):',
+                '```json',
+                stepJson,
+                '```'
+            ].join('\n');
+            // Debug: giden promptu ve adım bilgisini logla
+            console.log('[ToolSelect] stepIndex=', stepIndex, 'label=', label);
+            console.log('[ToolSelect] system prompt:\n' + system);
+            console.log('[ToolSelect] user prompt:\n' + user);
+            let raw = '';
+            await this.apiManager.generateChatContent([
+                { role: 'system' as const, content: system },
+                { role: 'user' as const, content: user }
+            ], (chunk) => { raw += chunk; }, undefined as any);
+            console.log('[ToolSelect] raw response:\n' + raw);
+            let selection: { tool: string; args?: any } | null = null;
+            try {
+                selection = this.parseToolSelection(raw);
+            } catch (e) {
+                console.warn('[ToolSelect] parse error:', e);
+            }
+            if (!selection || typeof selection.tool !== 'string') {
+                throw new Error('Araç seçimi yapılamadı.');
+            }
+            console.log('[ToolSelect] parsed selection (pre-normalize):', selection);
+            // Normalize tool name to allowed set
+            const normalized = this.normalizeToolName(selection.tool);
+            if (!normalized) {
+                throw new Error(`Geçersiz araç adı: ${selection.tool}`);
+            }
+            selection.tool = normalized;
+            console.log('[ToolSelect] normalized selection:', selection);
+
+            // Eksik args'ı adım metninden tamamlamaya çalış
+            try {
+                if (!selection.args || typeof selection.args !== 'object') selection.args = {};
+                const inferredPath = this.inferFilePathFromStep(step);
+                switch (selection.tool) {
+                    case 'create_file': {
+                        if (!selection.args.path && inferredPath) selection.args.path = inferredPath;
+                        break;
+                    }
+                    case 'edit_file':
+                    case 'append_file': {
+                        if (!selection.args.path && inferredPath) selection.args.path = inferredPath;
+                        break;
+                    }
+                    case 'check_index': {
+                        if (!selection.args.files && inferredPath) selection.args.files = [inferredPath];
+                        break;
+                    }
+                    default: break;
+                }
+            } catch {}
+            // Seçimi plana uygula (runtime)
+            (this.lastPlannerPlan.steps[stepIndex] as any).tool = selection.tool;
+            (this.lastPlannerPlan.steps[stepIndex] as any).args = selection.args || {};
+
+            // 2) Aracı çalıştır
             const result = await this.executor.executeStep(ctx, this.apiManager, this.lastPlannerPlan, stepIndex);
             const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
             const elapsedMs = Math.max(0, t1 - t0);
@@ -134,6 +222,10 @@ export class InteractionHandler {
             try {
                 if (this.lastPlannerPlan && this.executedStepIndices.size >= this.lastPlannerPlan.steps.length) {
                     this.webview.postMessage({ type: 'plannerCompleted' });
+                    if (!this.isBatchRun && !this.didEmitSummaryNote) {
+                        this.didEmitSummaryNote = true;
+                        await this.generateAndShowSummaryNote();
+                    }
                 }
             } catch (e) { /* ignore */ }
             return log;
@@ -147,24 +239,156 @@ export class InteractionHandler {
             try {
                 if (this.lastPlannerPlan && this.executedStepIndices.size >= this.lastPlannerPlan.steps.length) {
                     this.webview.postMessage({ type: 'plannerCompleted' });
+                    if (!this.isBatchRun && !this.didEmitSummaryNote) {
+                        this.didEmitSummaryNote = true;
+                        await this.generateAndShowSummaryNote();
+                    }
                 }
             } catch (e2) { /* ignore */ }
             return log;
         }
     }
 
+    /**
+     * LLM'den dönen aracı/argümanı JSON olarak ayrıştırmak için toleranslı parser.
+     * ```json ... ``` bloklarını, düz metin öneklerini/son eklerini ve saf JSON dışı çıktıları temizlemeye çalışır.
+     */
+    private parseToolSelection(raw: string): { tool: string; args?: any } | null {
+        if (!raw) return null;
+        let text = String(raw).trim();
+        // 1) Kod bloğu içeriğini yakala (```json or ```)
+        const fenceMatch = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
+        if (fenceMatch && fenceMatch[1]) {
+            text = fenceMatch[1].trim();
+        }
+        // 2) İlk { ile son } arasını al
+        const first = text.indexOf('{');
+        const last = text.lastIndexOf('}');
+        if (first !== -1 && last !== -1 && last > first) {
+            text = text.slice(first, last + 1);
+        }
+        // 3) JSON parse dene (toleranslı)
+        let parsed: any;
+        try {
+            parsed = JSON.parse(text);
+        } catch (e) {
+            try {
+                const sanitized = this.sanitizeToolSelectionJson(text);
+                parsed = JSON.parse(sanitized);
+            } catch {
+                throw e;
+            }
+        }
+        // Bazı modeller tek öğeli dizi döndürebilir
+        if (Array.isArray(parsed) && parsed.length > 0) parsed = parsed[0];
+        if (parsed && typeof parsed === 'object') {
+            // Bazı modeller tool yerine action döndürebilir; args varsa kullan
+            const tool = typeof parsed.tool === 'string' ? parsed.tool
+                        : (typeof parsed.tool_name === 'string' ? parsed.tool_name
+                        : (typeof parsed.action === 'string' ? parsed.action
+                        : (parsed.function_call && typeof parsed.function_call.name === 'string' ? parsed.function_call.name
+                        : (typeof parsed.name === 'string' ? parsed.name : undefined))));
+            const args = (parsed.args && typeof parsed.args === 'object') ? parsed.args
+                      : (parsed.tool_args && typeof parsed.tool_args === 'object') ? parsed.tool_args
+                      : (parsed.tool_input && typeof parsed.tool_input === 'object') ? parsed.tool_input
+                      : (parsed.arguments && typeof parsed.arguments === 'object') ? parsed.arguments
+                      : (parsed.params && typeof parsed.params === 'object') ? parsed.params
+                      : (parsed.parameters && typeof parsed.parameters === 'object') ? parsed.parameters
+                      : (parsed.input && typeof parsed.input === 'object') ? parsed.input
+                      : (parsed.function_call && typeof parsed.function_call.arguments === 'object') ? parsed.function_call.arguments
+                      : undefined;
+            if (tool) return { tool, args };
+        }
+        return null;
+    }
+
+    // LLM'den gelen "JSON gibi" çıktıyı onarmak için basit bir sanitizer.
+    private sanitizeToolSelectionJson(input: string): string {
+        try {
+            let s = String(input);
+            // 1) Triple backtick blokları tamamen kaldır (plan gereği kod istemiyoruz)
+            s = s.replace(/```[\s\S]*?```/g, '');
+            // 2) content_spec / change_spec / find_spec değerlerini tek satıra indir, backtick ve çift tırnakları kaçır
+            const fixField = (field: string) => {
+                const re = new RegExp(`("${field}"\\s*:\\s*")([\\s\\S]*?)("\n|"\r|"\t|"\s*[},])`, 'g');
+                s = s.replace(re, (_m, p1, p2, p3) => {
+                    const cleaned = String(p2).replace(/[\r\n]+/g, ' ').replace(/`+/g, '').replace(/\\"/g, '"').replace(/"/g, '\\"');
+                    const tail = p3.startsWith('"') ? '"' + p3.slice(1) : '"' + p3; // ensure quote restored
+                    return p1 + cleaned + tail;
+                });
+            };
+            ['content_spec','change_spec','find_spec','query','path'].forEach(fixField);
+            // 3) Genel: kontrol karakterlerini boşlukla değiştir
+            s = s.replace(/[\u0000-\u001F]+/g, ' ');
+            return s;
+        } catch {
+            return input;
+        }
+    }
+
+    /** Gevşek adı verilen aracı kanonik ada dönüştürür; geçerli değilse null döndürür. */
+    private normalizeToolName(name: string): string | null {
+        const n = String(name || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+        const map: Record<string, string> = {
+            'check_index': 'check_index',
+            'checkindex': 'check_index',
+            'search': 'search',
+            'locate_code': 'locate_code',
+            'locatecode': 'locate_code',
+            'retrieve_chunks': 'retrieve_chunks',
+            'retrieve': 'retrieve_chunks',
+            'create_file': 'create_file',
+            'createfile': 'create_file',
+            'edit_file': 'edit_file',
+            'editfile': 'edit_file',
+            'append_file': 'append_file',
+            'appendfile': 'append_file'
+        };
+        return map[n] || null;
+    }
+
+    /** step.ui_text ve step.thought içinden dosya adı/uzantı yakalamaya çalışır. */
+    private inferFilePathFromStep(step: PlannerPlan['steps'][number]): string | undefined {
+        try {
+            const pool = [step?.ui_text, step?.thought, step?.action].filter(Boolean).join(' ');
+            const m = pool.match(/([\w\-./]+\.[\w\d]+)/);
+            if (m && m[1]) return m[1];
+        } catch {}
+        return undefined;
+    }
+
     /** Tüm plan adımlarını sırayla uygular. */
     public async executePlannerAll(): Promise<void> {
         if (!this.lastPlannerPlan || !Array.isArray(this.lastPlannerPlan.steps)) return;
         this.executedStepLogs = [];
-        for (let i = 0; i < this.lastPlannerPlan.steps.length; i++) {
-            await this.executePlannerStep(i);
-        }
-        await this.generateAndShowSummaryNote();
+        this.isBatchRun = true;
         try {
-            // UI: Plan panelini tamamlandı olarak işaretle
-            this.webview.postMessage({ type: 'plannerCompleted' });
-        } catch (e) { /* ignore */ }
+            for (let i = 0; i < this.lastPlannerPlan.steps.length; i++) {
+                await this.executePlannerStep(i);
+            }
+            await this.generateAndShowSummaryNote();
+            this.didEmitSummaryNote = true;
+            try {
+                // UI: Plan panelini tamamlandı olarak işaretle
+                this.webview.postMessage({ type: 'plannerCompleted' });
+            } catch (e) { /* ignore */ }
+        } finally {
+            this.isBatchRun = false;
+        }
+    }
+
+    /** Webview’den gelen düzenlenmiş step JSON’unu bellekteki son plan üzerinde günceller. */
+    public async updatePlannerStep(stepIndex: number, newStep: any): Promise<void> {
+        if (!this.lastPlannerPlan || !Array.isArray(this.lastPlannerPlan.steps)) return;
+        if (typeof stepIndex !== 'number' || stepIndex < 0 || stepIndex >= this.lastPlannerPlan.steps.length) return;
+        try {
+            // Basit doğrulama: nesne mi?
+            if (typeof newStep !== 'object' || newStep == null) throw new Error('Geçersiz adım verisi');
+            this.lastPlannerPlan.steps[stepIndex] = newStep as any;
+        } catch (e) {
+            console.error('[Interaction] updatePlannerStep error:', e);
+            throw e;
+        }
     }
 
     private async generateAndShowSummaryNote(): Promise<void> {

@@ -45,6 +45,8 @@ export const geminiSettings = document.getElementById('gemini-settings');
 export const geminiKeyInput = document.getElementById('gemini-key');
 export const historyLimitInput = document.getElementById('history-limit');
 export const tokenLimitInput = document.getElementById('token-limit');
+export const temperatureInput = document.getElementById('temperature');
+export const temperatureLabel = document.getElementById('temperature-label');
 export const navButtons = document.querySelectorAll('.nav-button');
 export const settingsPanes = document.querySelectorAll('.settings-pane');
 
@@ -52,6 +54,9 @@ export const settingsPanes = document.querySelectorAll('.settings-pane');
 // --- İkon URI'ları ---
 export const AI_ICON_URI = document.body.dataset.aiIconUri;
 export const USER_ICON_URI = document.body.dataset.userIconUri;
+const ICON_URIS_CONTAINER = document.getElementById('icon-uris');
+export const EDIT_ICON_URI = ICON_URIS_CONTAINER?.dataset?.editIcon || '';
+export const APPLY_ICON_URI = ICON_URIS_CONTAINER?.dataset?.applyIcon || '';
 
 // YENİ: Kopyala ve Değişikliği Uygula butonları için SVG ikonları
 export const COPY_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
@@ -76,6 +81,8 @@ export const i18n = {
         copied: 'Kopyalandı!',
         apply: 'Değişikliği Uygula',
         applied: 'Uygulandı!',
+        edit: 'Düzenle',
+        stepJsonTitle: 'Adım JSON',
         stop: 'Durdur',
         send: 'Gönder',
         tokenUsage: '📊 Token Kullanımı',
@@ -110,6 +117,7 @@ export const i18n = {
         conversationHistoryDesc: 'Sohbete gönderilecek önceki mesaj sayısı. Modelin bağlamı hatırlaması için kullanılır.',
         tokenLimit: 'Token Limiti',
         tokenLimitDesc: 'Maksimum token sayısı. Bu limit aşıldığında yeni mesaj gönderilemez.',
+        temperature: 'Sıcaklık (Temperature)',
         cancel: 'İptal',
         save: 'Kaydet',
         showPresentation: 'Geliştirme Paketi Sunumunu Göster',
@@ -128,6 +136,8 @@ export const i18n = {
         copied: 'Copied!',
         apply: 'Apply Change',
         applied: 'Applied!',
+        edit: 'Edit',
+        stepJsonTitle: 'Step JSON',
         stop: 'Stop',
         send: 'Send',
         tokenUsage: '📊 Token Usage',
@@ -162,6 +172,7 @@ export const i18n = {
         conversationHistoryDesc: 'Number of previous messages to send to the conversation. Used for the model to remember context.',
         tokenLimit: 'Token Limit',
         tokenLimitDesc: 'Maximum number of tokens. New messages cannot be sent when this limit is exceeded.',
+        temperature: 'Temperature',
         cancel: 'Cancel',
         save: 'Save',
         showPresentation: 'Show Development Package Presentation',

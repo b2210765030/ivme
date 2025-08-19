@@ -29,6 +29,7 @@ export const COMMAND_IDS = {
 export const SETTINGS_KEYS = {
     // General
     activeApiService: 'api.activeService',
+    temperature: 'chat.temperature',
     // Indexing
     indexingSourceName: 'indexing.sourceName',
     indexingIncludeGlobs: 'indexing.includeGlobs',

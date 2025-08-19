@@ -312,3 +312,103 @@ pre code.hljs {
     color: var(--vscode-editor-foreground);
     line-height: 1.4;
 }
+.planner-steps-list li.completed .planner-step-text {
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+.planner-steps-list li.completed .planner-step-actions button {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Yeni: Planner adım eylem butonları */
+.planner-step-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.planner-step-text {
+    flex: 1;
+}
+.planner-step-actions {
+    display: inline-flex;
+    gap: 6px;
+}
+.step-action-button {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid var(--vscode-button-border);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.step-action-button:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+.step-action-button.primary {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-color: var(--vscode-button-border, transparent);
+}
+.step-action-button.primary:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.step-action-button .icon-img {
+    width: 14px;
+    height: 14px;
+    display: inline-block;
+    filter: invert(1);
+}
+
+/* Inline step editor */
+.step-inline-editor {
+    background-color: rgba(25, 25, 25, 0.2);
+    color: var(--vscode-foreground);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+    border-radius: 10px;
+    padding: 10px 12px;
+    z-index: 1001; /* modal üstünde olmasın, ama input alanının üstünde dursun */
+    left: 25px;
+    right: 25px;
+}
+.step-inline-editor .field-row {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.step-inline-editor .field-label {
+    font-size: 12px;
+    color: var(--vscode-input-placeholderForeground);
+}
+.step-inline-editor .field-input {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--vscode-input-border);
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-size: 12px;
+}
+.step-inline-editor .editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 8px;
+}
+.step-inline-editor .editor-actions .primary-button,
+.step-inline-editor .editor-actions .secondary-button {
+    padding: 4px 10px;
+    font-size: 11px;
+    line-height: 1.2;
+}

@@ -180,6 +180,13 @@
           "default": 12000,
           "description": "Maksimum token sayısı. Bu limit aşıldığında yeni mesaj gönderilemez."
         },
+        "baykar-ai-fixer.chat.temperature": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Tüm LLM istekleri için tek bir global sıcaklık (temperature). Planner, açıklama ve tool içi kod üretimi dahil."
+        },
         "baykar-ai-fixer.ui.agentModeActive": {
           "type": "boolean",
           "default": false,

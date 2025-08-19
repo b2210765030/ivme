@@ -69,10 +69,13 @@ export class VllmApiService implements IApiService {
             throw new Error('vLLM URL veya Model Adı yapılandırılmamış.');
         }
 
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        const temperature = config.get<number>(SETTINGS_KEYS.temperature, 0.7);
         const data = {
             model: model,
             prompt: prompt,
             ...VLLM_PARAMS.completion,
+            temperature,
             stream: false
         };
         const headers = { 'Content-Type': 'application/json' };
@@ -99,7 +102,9 @@ export class VllmApiService implements IApiService {
         
         const url = `${this.getBaseUrl()}/chat/completions`;
         const model = this.getModelName();
-        const data = { model, messages, ...VLLM_PARAMS.chat, stream: false };
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        const temperature = config.get<number>(SETTINGS_KEYS.temperature, 0.7);
+        const data = { model, messages, ...VLLM_PARAMS.chat, temperature, stream: false };
         
         try {
             const response = await axios.post<VllmChatCompletionResponse>(url, data, { signal: cancellationSignal });
@@ -124,7 +129,9 @@ export class VllmApiService implements IApiService {
     private async generateChatContentStream(messages: ChatMessage[], onChunk: (chunk: string) => void, cancellationSignal?: AbortSignal): Promise<void> {
         const url = `${this.getBaseUrl()}/chat/completions`;
         const model = this.getModelName();
-        const data = { model, messages, ...VLLM_PARAMS.chat, stream: true };
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        const temperature = config.get<number>(SETTINGS_KEYS.temperature, 0.7);
+        const data = { model, messages, ...VLLM_PARAMS.chat, temperature, stream: true };
         const headers = { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' };
         
         try {

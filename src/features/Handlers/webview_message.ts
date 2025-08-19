@@ -31,6 +31,19 @@ export class WebviewMessageHandler {
 
     public async handleMessage(data: any) {
         switch (data.type) {
+            // --- Planner: Adım JSON'u webview'den güncellendi ---
+            case 'updatePlannerStep': {
+                try {
+                    const idx = Number(data?.payload?.index ?? -1);
+                    const step = data?.payload?.step;
+                    if (idx >= 0 && step) {
+                        await this.interactionHandler.updatePlannerStep(idx, step);
+                    }
+                } catch (e: any) {
+                    vscode.window.showErrorMessage(`Adım güncellenemedi: ${e?.message || e}`);
+                }
+                break;
+            }
             // --- Planner: Tek adımı uygula ---
             case 'executePlannerStep': {
                 const stepIndex = Number(data?.payload?.index ?? -1);

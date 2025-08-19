@@ -19,7 +19,8 @@ export class SettingsManager {
                 geminiApiKey: config.get<string>(SETTINGS_KEYS.geminiApiKey, ''),
                 conversationHistoryLimit: config.get<number>(SETTINGS_KEYS.conversationHistoryLimit, 2),
                 tokenLimit: config.get<number>(SETTINGS_KEYS.tokenLimit, 12000),
-                agentModeActive: config.get<boolean>(SETTINGS_KEYS.agentModeActive, false)
+                agentModeActive: config.get<boolean>(SETTINGS_KEYS.agentModeActive, false),
+                temperature: config.get<number>(SETTINGS_KEYS.temperature, 0.7)
             }
         });
         
@@ -54,7 +55,8 @@ export class SettingsManager {
                 config.update(SETTINGS_KEYS.vllmModelName, settings.vllmModelName.trim(), vscode.ConfigurationTarget.Global),
                 config.update(SETTINGS_KEYS.geminiApiKey, settings.geminiApiKey.trim(), vscode.ConfigurationTarget.Global),
                 config.update(SETTINGS_KEYS.conversationHistoryLimit, Number(settings.conversationHistoryLimit) || 2, vscode.ConfigurationTarget.Global),
-                config.update(SETTINGS_KEYS.tokenLimit, Number(settings.tokenLimit) || 12000, vscode.ConfigurationTarget.Global)
+                config.update(SETTINGS_KEYS.tokenLimit, Number(settings.tokenLimit) || 12000, vscode.ConfigurationTarget.Global),
+                config.update(SETTINGS_KEYS.temperature, Math.max(0, Math.min(2, Number(settings.temperature))) || 0.7, vscode.ConfigurationTarget.Global)
             ]);
             vscode.window.showInformationMessage('Ayarlar başarıyla kaydedildi.');
             

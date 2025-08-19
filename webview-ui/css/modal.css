@@ -29,6 +29,39 @@
     padding: 0;
 }
 
+/* Yeni: Adım JSON modalı - daha minimal */
+.step-json-modal-content {
+    max-width: 560px;
+    width: 70%;
+    min-height: 320px;
+}
+.step-json-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 15px;
+}
+.step-json-modal-body {
+    width: 100%;
+    padding: 0 15px 15px 15px;
+}
+#step-json-editor {
+    width: 100%;
+    height: 45vh;
+    min-height: 220px;
+    resize: vertical;
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-editor-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 6px;
+    padding: 10px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    box-sizing: border-box;
+}
+
 .modal-sidebar {
     width: 180px;
     flex-shrink: 0;
