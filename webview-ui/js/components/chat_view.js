@@ -544,15 +544,10 @@ export function showPlannerPanelWithPlan(plan) {
                 insertAboveBtn.title = DOM.getText('insertAbove') || 'Üste Ekle';
                 insertAboveBtn.innerHTML = `<img src="${DOM.INSERT_ICON_URI}" alt="insert" class="insert-icon"/>`;
                 
-                // İlk adım completed ise bu butonu devre dışı bırak
-                if (completedPlannerSteps && completedPlannerSteps.has(0)) {
-                    insertAboveBtn.disabled = true;
-                    insertAboveBtn.classList.add('disabled');
-                } else {
-                    insertAboveBtn.addEventListener('click', () => {
-                        try { openNewStepEditor(0, 'above'); } catch {}
-                    });
-                }
+                // İlk adımdan önceki buton hiçbir zaman kilitlenmez
+                insertAboveBtn.addEventListener('click', () => {
+                    try { openNewStepEditor(0, 'above'); } catch {}
+                });
                 insertLi.appendChild(insertAboveBtn);
                 list.appendChild(insertLi);
             } else if (idx > 0) {
@@ -566,10 +561,9 @@ export function showPlannerPanelWithPlan(plan) {
                 insertAboveBtn.title = DOM.getText('insertAbove') || 'Üste Ekle';
                 insertAboveBtn.innerHTML = `<img src="${DOM.INSERT_ICON_URI}" alt="insert" class="insert-icon"/>`;
                 
-                // Önceki veya bu adım completed ise butonu devre dışı bırak
+                // Sadece önceki adım completed ise bu butonu devre dışı bırak (üstteki buton kilitlenir)
                 const prevCompleted = completedPlannerSteps && completedPlannerSteps.has(idx - 1);
-                const thisCompleted = completedPlannerSteps && completedPlannerSteps.has(idx);
-                if (prevCompleted || thisCompleted) {
+                if (prevCompleted) {
                     insertAboveBtn.disabled = true;
                     insertAboveBtn.classList.add('disabled');
                 } else {
@@ -635,16 +629,10 @@ export function showPlannerPanelWithPlan(plan) {
             insertBelowBtn.title = DOM.getText('insertBelow') || 'Alta Ekle';
             insertBelowBtn.innerHTML = `<img src="${DOM.INSERT_ICON_URI}" alt="insert" class="insert-icon"/>`;
             
-            // Son adım completed ise bu butonu devre dışı bırak
-            const lastCompleted = completedPlannerSteps && completedPlannerSteps.has(steps.length - 1);
-            if (lastCompleted) {
-                insertBelowBtn.disabled = true;
-                insertBelowBtn.classList.add('disabled');
-            } else {
-                insertBelowBtn.addEventListener('click', () => {
-                    try { openNewStepEditor(steps.length, 'below'); } catch {}
-                });
-            }
+            // Son adımdan sonraki buton hiçbir zaman kilitlenmez (alttaki buton aktif kalır)
+            insertBelowBtn.addEventListener('click', () => {
+                try { openNewStepEditor(steps.length, 'below'); } catch {}
+            });
             insertLi.appendChild(insertBelowBtn);
             list.appendChild(insertLi);
         }

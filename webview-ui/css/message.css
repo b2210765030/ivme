@@ -307,7 +307,7 @@ pre code.hljs {
     padding-left: 18px;
 }
 .planner-steps-list li {
-    margin: 8px 0;
+    margin: 4px 0;
     font-size: 13px;
     color: var(--vscode-editor-foreground);
     line-height: 1.4;
@@ -416,17 +416,18 @@ pre code.hljs {
 /* Insert step buttons */
 .planner-insert-item {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
-    margin: 2px 0;
+    margin: 1px 0;
     list-style: none;
     position: relative;
+    padding-left: 10px;
 }
 
 .planner-insert-item::before {
     content: '';
     position: absolute;
-    left: 10px;
+    left: 30px;
     right: 10px;
     height: 1px;
     background: rgba(255,255,255,0.1);
