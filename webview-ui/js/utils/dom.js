@@ -73,6 +73,12 @@ export const tokenProgressRing = document.querySelector('.token-progress-ring');
 export const tokenProgressFill = document.querySelector('.token-progress-ring .progress-fill');
 export const tokenPercentageText = document.querySelector('.token-progress-ring .percentage-text');
 
+// Plan/Act Toggle DOM refs
+export const planActToggle = document.getElementById('plan-act-toggle');
+export const planActSwitch = document.getElementById('plan-act-switch');
+export const planActLabelPlan = document.getElementById('plan-act-label-plan');
+export const planActLabelAct = document.getElementById('plan-act-label-act');
+
 // --- UI Metinleri ---
 export const i18n = {
     tr: {

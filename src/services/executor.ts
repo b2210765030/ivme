@@ -21,6 +21,7 @@ const DEFAULT_RERANK_THRESHOLD = 0.7; // düşük ama tamamen alakasızları ele
 export class PlannerExecutor {
     private lastRetrieved: RetrievedChunk[] = [];
     private lastLocations: Record<string, SavedLocation> = {};
+    private lastToolOutputs: Array<{ tool: string; summary: string }> = [];
 
     public async executeStep(
         context: vscode.ExtensionContext,
@@ -35,30 +36,33 @@ export class PlannerExecutor {
         const tool = (step.tool || (Array.isArray(step.tool_calls) && step.tool_calls[0]?.tool)) as string | undefined;
         const args = step.args || (Array.isArray(step.tool_calls) ? step.tool_calls[0]?.args : undefined) || {};
 
+        let result: string;
         switch (tool) {
             case 'check_index':
-                return await this.handleCheckIndex(context, api, args, step);
+                result = await this.handleCheckIndex(context, api, args, step); break;
             case 'search':
-                return await this.handleSearch(context, api, args, step);
+                result = await this.handleSearch(context, api, args, step); break;
             case 'locate_code':
-                return await this.handleLocateCode(context, api, args, step);
+                result = await this.handleLocateCode(context, api, args, step); break;
             case 'retrieve_chunks':
-                return await this.handleRetrieve(context, api, args, step);
+                result = await this.handleRetrieve(context, api, args, step); break;
             // open_file kaldırıldı
             case 'create_file':
-                return await this.handleCreateFile(args, step);
+                result = await this.handleCreateFile(args, step); break;
             case 'edit_file':
-                return await this.handleEditFile(context, api, args, step);
+                result = await this.handleEditFile(context, api, args, step); break;
             case 'append_file':
-                return await this.handleAppendFile(context, api, args, step);
+                result = await this.handleAppendFile(context, api, args, step); break;
             default:
-                // Check if it's a custom tool
                 if (tool) {
-                    return await this.handleCustomTool(context, tool, args, step);
+                    result = await this.handleCustomTool(context, tool, args, step);
+                } else {
+                    result = `Araç belirtilmedi veya desteklenmiyor: ${tool || 'yok'} — Adım: ${step.ui_text || step.action}`;
                 }
-                // Araç belirtilmemişse sadece bilgi mesajı
-                return `Araç belirtilmedi veya desteklenmiyor: ${tool || 'yok'} — Adım: ${step.ui_text || step.action}`;
         }
+        // Kısa özet kaydet (bir sonraki adımın tool seçimi bağlamında kullanılacak)
+        this.recordToolOutput(tool || 'no_tool', args, result);
+        return result;
     }
 
     private async handleCustomTool(
@@ -168,7 +172,7 @@ export class PlannerExecutor {
     }
 
     /** Önceki araç çıktılarından hızlı bir özet döndürür (tool seçim prompt'larında kullanılabilir). */
-    public getContextSnapshot(): { retrievedSummary: string; locationsSummary: string } {
+    public getContextSnapshot(): { retrievedSummary: string; locationsSummary: string; toolOutputsSummary: string } {
         const retrievedSummary = this.bestMatchesSummary();
         let locationsSummary = '';
         try {
@@ -183,7 +187,8 @@ export class PlannerExecutor {
         } catch {
             locationsSummary = Object.keys(this.lastLocations).join(', ');
         }
-        return { retrievedSummary, locationsSummary };
+        const toolOutputsSummary = this.lastToolOutputs.map((o, i) => `${i + 1}. ${o.tool}: ${o.summary}`).join('\n');
+        return { retrievedSummary, locationsSummary, toolOutputsSummary };
     }
 
     private async handleCheckIndex(
@@ -592,6 +597,25 @@ export class PlannerExecutor {
 
     private escapeRegex(s: string): string {
         return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    private recordToolOutput(toolName: string, args: any, result: string) : void {
+        try {
+            const firstLine = String(result || '').split(/\r?\n/)[0] || '';
+            const argHint = (() => {
+                if (!args) return '';
+                if (typeof args.path === 'string') return ` (${args.path})`;
+                if (typeof args.query === 'string') return ` (${args.query})`;
+                if (Array.isArray(args.files) && args.files.length > 0) return ` (${args.files[0]})`;
+                return '';
+            })();
+            const summary = (firstLine + '').trim().slice(0, 200);
+            this.lastToolOutputs.push({ tool: toolName + argHint, summary });
+            // son 8 çıktı ile sınırla
+            if (this.lastToolOutputs.length > 8) {
+                this.lastToolOutputs = this.lastToolOutputs.slice(-8);
+            }
+        } catch { /* ignore */ }
     }
 }
 

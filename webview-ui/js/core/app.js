@@ -7,7 +7,7 @@ import { configureLibraries } from '../utils/config.js';
 import { initMessageListener } from './message_router.js';
 import { initComponents } from '../components/index.js';
 // YENİ: Gerekli state fonksiyonu import edildi
-import { applyVideoState, setAgentMode, setAgentBarExpanded, setIndexingEnabledState } from './state.js';
+import { applyVideoState, setAgentMode, setAgentBarExpanded, setIndexingEnabledState, setAgentActMode } from './state.js';
 import { recalculateTotalAndUpdateUI } from '../components/InputArea.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -29,8 +29,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedAgentMode = localStorage.getItem('agentModeActive') === 'true';
     const savedAgentBarExpanded = localStorage.getItem('agentBarExpanded') === 'true';
     const savedIndexingEnabled = localStorage.getItem('indexingEnabled') === 'true';
+    const savedAgentActMode = localStorage.getItem('agentActMode') === 'true';
     
     setAgentMode(savedAgentMode, '');
+    // Plan/Act modunu yükle
+    setAgentActMode(savedAgentActMode);
     
     // Agent modu aktifse ve bar durumu kaydedilmişse, bar durumunu da yükle
     if (savedAgentMode && savedAgentBarExpanded !== null) {

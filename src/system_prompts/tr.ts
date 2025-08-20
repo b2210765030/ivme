@@ -143,6 +143,7 @@ export async function createPlannerSystemPrompt(plannerContext: string, userQuer
         `- Kod, pseudocode veya kod blokları yazma. Sadece ne yapılacağını tarif et.\n` +
         `- Mevcut dosyaları düzenlemeyi tercih et; gerekirse yeni dosya oluştur. Yapılacak değişiklikleri minimumda tut.\n` +
         `- Her adım için kısa bir ".ui_text" cümlesi ekle; UI bu metni gösterecek.\n` +
+        `- Eğer bir adımda ARAÇ gerekiyorsa, ".tool" alanında ARAÇ ADINI ve ".args" alanında parametrelerini ver. Emin değilsen ".tool" alanını boş bırakabilirsin.\n` +
         `- Sadece GEÇERLİ JSON çıktısı ver; JSON dışı metin ekleme.\n\n` +
         `# KULLANILABİLİR ARAÇLAR\n` +
         await getToolsDescriptions('tr') + `\n\n` +
@@ -150,24 +151,18 @@ export async function createPlannerSystemPrompt(plannerContext: string, userQuer
         `- CONTEXT içinde 'Missing requested files' listeleniyorsa, bu dosyalar için arama yapma; ilk adımlar bu dosyaları oluşturmalı.\n` +
         `- Arama/retrieval yalnızca index'te mevcut dosyalar için kullanılmalı.\n\n` +
         `# JSON OUTPUT SCHEMA\n` +
-        `{
-` +
-        `  "steps": [
-` +
-        `    {
-` +
-        `      "step": <number>,
-` +
-        `      "action": <string>,
-` +
-        `      "thought": <string>,
-` +
-        `      "ui_text": <string|optional>
-` +
-        `    }
-` +
-        `  ]
-` +
+        `{\n` +
+        `  "steps": [\n` +
+        `    {\n` +
+        `      "step": <number>,\n` +
+        `      "action": <string>,\n` +
+        `      "thought": <string>,\n` +
+        `      "ui_text": <string|optional>,\n` +
+        `      "tool": <string|optional>,\n` +
+        `      "args": <object|optional>,\n` +
+        `      "tool_calls": <array|optional>\n` +
+        `    }\n` +
+        `  ]\n` +
         `}`
     );
 }
@@ -184,28 +179,23 @@ export async function createPlannerPrompt(plannerContext: string, userQuery: str
         `- Yapılacak işleri en küçük uygulanabilir adımlara böl.\n` +
         `- Kod veya kod blokları ekleme; yalnızca eylemleri tarif et.\n` +
         `- Her adım kısa ve net olsun; UI için kısa bir ".ui_text" cümlesi ekle.\n` +
+        `- Eğer bir adımda ARAÇ gerekiyorsa, ".tool" alanında ARAÇ ADINI ve ".args" alanında parametrelerini ver. Emin değilsen ".tool" alanını boş bırakabilirsin.\n` +
         `- Sadece geçerli JSON çıktısı ver, aşağıdaki şemaya uy.\n\n` +
         `# KULLANILABİLİR ARAÇLAR\n` +
         await getToolsDescriptions('tr') + `\n\n` +
         `# JSON OUTPUT SCHEMA\n` +
-        `{
-` +
-        `  "steps": [
-` +
-        `    {
-` +
-        `      "step": <number>,
-` +
-        `      "action": <string>,
-` +
-        `      "thought": <string>,
-` +
-        `      "ui_text": <string|optional>
-` +
-        `    }
-` +
-        `  ]
-` +
+        `{\n` +
+        `  "steps": [\n` +
+        `    {\n` +
+        `      "step": <number>,\n` +
+        `      "action": <string>,\n` +
+        `      "thought": <string>,\n` +
+        `      "ui_text": <string|optional>,\n` +
+        `      "tool": <string|optional>,\n` +
+        `      "args": <object|optional>,\n` +
+        `      "tool_calls": <array|optional>\n` +
+        `    }\n` +
+        `  ]\n` +
         `}`
     );
 }

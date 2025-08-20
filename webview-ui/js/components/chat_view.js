@@ -31,6 +31,13 @@ let summaryMessageEl = null;
 
 let shouldAutoScroll = true;
 
+// Available tools cache for planner step tool selectors
+let availableToolNames = [];
+export function setAvailableTools(names) {
+    try { availableToolNames = Array.isArray(names) ? names.slice() : []; } catch { availableToolNames = []; }
+}
+function getAvailableToolNames() { return Array.isArray(availableToolNames) ? availableToolNames : []; }
+
 DOM.chatContainer.addEventListener('scroll', () => {
     const { scrollTop, scrollHeight, clientHeight } = DOM.chatContainer;
     shouldAutoScroll = scrollTop + clientHeight >= scrollHeight - 10;
@@ -584,6 +591,63 @@ export function showPlannerPanelWithPlan(plan) {
             span.textContent = `${stepNumber}. ${text}`;
             span.className = 'planner-step-text';
             li.appendChild(span);
+
+            // Tool selector (butonların solunda)
+            try {
+                const toolWrap = document.createElement('div');
+                toolWrap.className = 'planner-tool-wrap';
+                toolWrap.style.display = 'inline-flex';
+                toolWrap.style.alignItems = 'center';
+                toolWrap.style.gap = '6px';
+                toolWrap.style.marginRight = '8px';
+                const label = document.createElement('span');
+                label.textContent = 'Araç:';
+                label.className = 'planner-tool-label';
+                const select = document.createElement('select');
+                select.className = 'planner-tool-select';
+                // Options
+                const optAuto = document.createElement('option');
+                optAuto.value = 'auto';
+                optAuto.textContent = '(auto)';
+                select.appendChild(optAuto);
+                try {
+                    const names = (getAvailableToolNames?.() || []);
+                    names.forEach(name => {
+                        const opt = document.createElement('option');
+                        opt.value = name;
+                        opt.textContent = name;
+                        select.appendChild(opt);
+                    });
+                } catch (e) { /* ignore */ }
+                // Current value: prefer step.tool, then first tool_calls[].tool, else auto
+                let initialTool = '';
+                if (typeof step?.tool === 'string' && step.tool.trim().length > 0) {
+                    initialTool = step.tool.trim();
+                } else if (Array.isArray(step?.tool_calls) && step.tool_calls.length > 0 && typeof step.tool_calls[0]?.tool === 'string' && step.tool_calls[0].tool.trim().length > 0) {
+                    initialTool = step.tool_calls[0].tool.trim();
+                }
+                try {
+                    const namesNow = (getAvailableToolNames?.() || []);
+                    const exactMatch = initialTool && namesNow.includes(initialTool);
+                    select.value = exactMatch ? initialTool : 'auto';
+                } catch {
+                    select.value = initialTool || 'auto';
+                }
+                // Change handler -> update step
+                select.addEventListener('change', () => {
+                    try {
+                        if (lastPlannerPlan && Array.isArray(lastPlannerPlan.steps) && lastPlannerPlan.steps[idx]) {
+                            const old = lastPlannerPlan.steps[idx];
+                            const updated = { ...old, tool: String(select.value || '') || undefined };
+                            lastPlannerPlan.steps[idx] = updated;
+                            postMessage('updatePlannerStep', { index: idx, step: updated });
+                        }
+                    } catch (e) { /* ignore */ }
+                });
+                toolWrap.appendChild(label);
+                toolWrap.appendChild(select);
+                li.appendChild(toolWrap);
+            } catch (e) { /* ignore */ }
 
             const actions = document.createElement('div');
             actions.className = 'planner-step-actions';

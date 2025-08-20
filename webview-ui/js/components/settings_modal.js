@@ -4,6 +4,7 @@
    
 import * as DOM from '../utils/dom.js';
 import * as VsCode from '../services/vscode.js';
+import * as ChatView from './chat_view.js';
 // YENİ: Gerekli state fonksiyonları import edildi
 import { getState, setBackgroundVideoEnabled } from '../core/state.js';
 
@@ -382,6 +383,13 @@ export function handleCustomToolsList(payload) {
     if (payload.success && Array.isArray(payload.tools)) {
         allTools = payload.tools;
         populateToolsTable();
+        try {
+            // Planner tool selector'larına da güncel listeyi aktar
+            const names = allTools.map(t => t.name);
+            if (typeof ChatView.setAvailableTools === 'function') {
+                ChatView.setAvailableTools(names);
+            }
+        } catch (e) { /* ignore */ }
     }
 }
 

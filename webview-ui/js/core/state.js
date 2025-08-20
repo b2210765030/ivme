@@ -13,6 +13,8 @@ let isAgentModeActive = localStorage.getItem('agentModeActive') === 'true'; // A
 let currentAgentFileName = '';
 let isAgentSelectionActive = false; // YENİ: Agent modunda seçili alan olup olmadığını gösterir.
 let isAgentBarExpanded = localStorage.getItem('agentBarExpanded') === 'true'; // Agent bağlam barının açık/kapalı durumu - localStorage'dan yükle
+// Agent çalışma modu: Plan (false) / Act (true) - kalıcı
+let isAgentActMode = localStorage.getItem('agentActMode') === 'true';
 
 let currentLanguage = localStorage.getItem('language') || 'tr';
 
@@ -51,6 +53,7 @@ export const getState = () => ({
     indexingMessage,
     isIndexingEnabled // YENİ: İndeksleme açık/kapalı durumu
     , hasIndex
+    , isAgentActMode
 });
 
 // --- State Setters (Durumları Güncelleme) ---
@@ -66,6 +69,40 @@ export function setAgentBarExpanded(value) {
     isAgentBarExpanded = !!value;
     // Bar durumunu localStorage'a kaydet
     localStorage.setItem('agentBarExpanded', isAgentBarExpanded.toString());
+}
+
+// Plan/Act durumunu güncelle ve UI'a uygula
+export function setAgentActMode(value) {
+    isAgentActMode = !!value;
+    try { localStorage.setItem('agentActMode', isAgentActMode.toString()); } catch(e) {}
+    // UI toggle'ını güncelle (DOM elemanlarını çalışma zamanında yeniden sorgula)
+    try {
+        const container = document.getElementById('plan-act-toggle') || DOM.planActToggle;
+        const checkbox = document.getElementById('plan-act-switch') || DOM.planActSwitch;
+        if (container) {
+            container.classList.toggle('checked', isAgentActMode);
+            container.setAttribute('aria-checked', isAgentActMode ? 'true' : 'false');
+        }
+        if (checkbox) {
+            checkbox.checked = isAgentActMode;
+        }
+        // Visual enabled state (do not actually disable functionality)
+        updatePlanActToggleEnabledState();
+        // Notify extension (if available)
+        try { DOM.vscode.postMessage({ type: 'agentActModeChanged', isAct: isAgentActMode }); } catch(e) {}
+    } catch (e) {}
+}
+
+// Note: Plan/Act toggle remains available regardless of Agent mode; visual disabled class
+function updatePlanActToggleEnabledState() {
+    try {
+        const container = DOM.planActToggle;
+        const checkbox = DOM.planActSwitch;
+        // Keep visual disabled only (no functional disabling)
+        const enabled = !!isAgentModeActive;
+        if (container) container.classList.toggle('disabled', !enabled);
+        if (checkbox) checkbox.disabled = false; // never actually disable
+    } catch (e) {}
 }
 
 // GÜNCELLENDİ: Agent modunu dosya adına göre güncelleyen fonksiyon
@@ -157,6 +194,8 @@ export function setAgentMode(isActive, activeFileName = '') {
             const { refreshPlannerPanelVisibility } = require('../components/chat_view.js');
             refreshPlannerPanelVisibility();
         }); } catch(e) {}
+        // Plan/Act toggle etkinliğini güncelle
+        try { updatePlanActToggleEnabledState(); } catch(e) {}
     } else {
         agentModeButton.classList.remove('active');
         if (typeof agentModeButton?.textContent === 'string') {
@@ -187,6 +226,8 @@ export function setAgentMode(isActive, activeFileName = '') {
             const { refreshPlannerPanelVisibility } = require('../components/chat_view.js');
             refreshPlannerPanelVisibility();
         }); } catch(e) {}
+        // Plan/Act toggle etkinliğini güncelle
+        try { updatePlanActToggleEnabledState(); } catch(e) {}
     }
 }
 

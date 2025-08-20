@@ -19,7 +19,7 @@ import * as systemPrompts from '../system_prompts';
 type PlannerIndex = Record<string, string>;
 
 export type PlannerToolCall = {
-	tool: 'check_index' | 'search' | 'locate_code' | 'retrieve_chunks' | 'open_file' | 'create_file' | 'edit_file' | 'append_file';
+	tool: string; // Built-in veya custom araç adı
 	args: any; // Gelecekte ayrıntılı argüman tipleri eklenebilir (ör. { keywords: string[] } | { query: string } | ...)
 };
 
@@ -30,7 +30,7 @@ export type PlannerPlanStep = {
 	/** UI'da gösterilecek kısa, tek cümlelik açıklama (opsiyonel) */
 	ui_text?: string;
 	/** Tek adımlı aracı çağrısı (atomik adımlar için önerilir) */
-	tool?: PlannerToolCall['tool'];
+	tool?: string;
 	args?: PlannerToolCall['args'];
 	/** Gerekirse bir adımda birden çok aracı çağrısı */
 	tool_calls?: PlannerToolCall[];
@@ -103,9 +103,10 @@ function sanitizePlannerArgs(tool: string | undefined, argsRaw: any): any | unde
     return args;
 }
 
-function sanitizeToolName(tool: any): PlannerToolCall['tool'] | undefined {
-    const allowed: PlannerToolCall['tool'][] = ['check_index', 'search', 'locate_code', 'retrieve_chunks', 'create_file', 'edit_file', 'append_file'];
-    if (typeof tool === 'string' && (allowed as string[]).includes(tool)) return tool as any;
+function sanitizeToolName(tool: any): string | undefined {
+    // Plan aşamasında hem built-in hem custom araç adlarını destekle.
+    // Geçerli bir string ise olduğu gibi kabul et; boş veya geçersizse undefined döndür.
+    if (typeof tool === 'string' && tool.trim().length > 0) return tool.trim();
     return undefined;
 }
 

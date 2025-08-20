@@ -122,6 +122,15 @@
 
                     </div>
                     <div class="action-group-right">
+                        <!-- Plan/Act kaydırmalı buton (token göstergesinin hemen solunda) -->
+                        <div id="plan-act-toggle" class="plan-act-toggle" role="switch" aria-checked="false" title="Plan / Act">
+                            <input type="checkbox" id="plan-act-switch" class="plan-act-checkbox" aria-label="Plan / Act" />
+                            <label for="plan-act-switch" class="plan-act-label">
+                                <span id="plan-act-label-plan" class="label-text">Plan</span>
+                                <span id="plan-act-label-act" class="label-text">Act</span>
+                                <span class="knob"></span>
+                            </label>
+                        </div>
                         <div id="character-counter" class="character-counter">
                             <div class="token-progress-ring" data-tooltip="📊 Token Kullanımı&#10;0 / 12000 tokens (0%)&#10;&#10;📋 Detay:&#10;• Konuşma: 0 tokens&#10;• Dosyalar: 0 tokens&#10;• Prompt: 0 tokens&#10;• Kalan: 12000 tokens">
                                 <svg viewBox="0 0 36 36">

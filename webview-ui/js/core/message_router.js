@@ -2,13 +2,13 @@
    MESAJ YÖNLENDİRİCİ (MESSAGE ROUTER) (AGENT SEÇİM ÖZELLİĞİ EKLENDİ)
    ========================================================================== */
 
-import { onMessage } from '../services/vscode.js';
+import { onMessage, postMessage } from '../services/vscode.js';
 import * as ChatView from '../components/chat_view.js';
 import * as FileTags from '../components/file_tags.js';
 import * as HistoryPanel from '../components/history_panel.js';
 import * as InputArea from '../components/InputArea.js';
 import * as SettingsModal from '../components/settings_modal.js';
-import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, setWorkspaceName, getState, setTokenLimit, updateUITexts, setHasIndex, setAgentBarExpanded } from './state.js';
+import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, setWorkspaceName, getState, setTokenLimit, updateUITexts, setHasIndex, setAgentBarExpanded, setAgentActMode } from './state.js';
 import * as DOM from '../utils/dom.js';
 
 export function initMessageListener() {
@@ -183,6 +183,14 @@ export function initMessageListener() {
                 // Yeni plan geldiğinde panel tamamlandı işaretini kaldır
                 try { ChatView.setPlannerPanelCompleted(false); } catch (e) {}
                 const plan = data?.plan ?? data?.payload?.plan ?? data;
+                try {
+                    const names = Array.isArray(plan?.steps) ? (data?.toolNames || data?.payload?.toolNames || []) : (data?.payload?.toolNames || []);
+                    if (Array.isArray(names) && names.length > 0 && ChatView.setAvailableTools) {
+                        ChatView.setAvailableTools(names);
+                    }
+                    // Tool isimleri set edildikten hemen sonra planı oluştur ki eşleşme kontrolü yapılsın
+                    ChatView.showPlannerPanelWithPlan(plan);
+                } catch (e) { ChatView.showPlannerPanelWithPlan(plan); }
                 if (!plan || !Array.isArray(plan.steps)) {
                     ChatView.showAiResponse('Plan adımları bulunamadı.');
                     break;
@@ -287,6 +295,10 @@ export function initMessageListener() {
                 setAgentMode(data.isActive, '');
                 if (data.isBarExpanded !== undefined) {
                     setAgentBarExpanded(data.isBarExpanded);
+                }
+                // Opsiyonel: plan/act modu geri çağırma (varsa)
+                if (typeof data.isActMode === 'boolean') {
+                    setAgentActMode(data.isActMode);
                 }
                 try { ChatView.refreshPlannerPanelVisibility(); } catch(e) {}
                 break;

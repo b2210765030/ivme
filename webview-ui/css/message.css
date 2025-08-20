@@ -335,6 +335,32 @@ pre code.hljs {
     display: inline-flex;
     gap: 6px;
 }
+
+/* Planner tool selector (theme-aligned) */
+.planner-tool-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+}
+.planner-tool-label {
+    font-size: 12px;
+    color: var(--vscode-input-placeholderForeground);
+}
+.planner-tool-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 12px;
+}
+.planner-tool-select:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+}
 .step-action-button {
     background-color: var(--vscode-button-secondaryBackground);
     color: var(--vscode-button-secondaryForeground);

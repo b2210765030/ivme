@@ -16,7 +16,7 @@ import { createContextualPrompt } from '../../system_prompts';
 import { build_context_for_query } from '../../services/orchestrator';
 import { run_planner, PlannerPlan } from '../../services/planner';
 import { PlannerExecutor } from '../../services/executor';
-import { toolsTrDetailed } from '../../system_prompts/tool';
+import { getToolsDescriptions } from '../../system_prompts/tool';
 export class InteractionHandler {
     private currentRequestController: AbortController | null = null;
     private lastPlannerPlan: PlannerPlan | null = null;
@@ -82,7 +82,17 @@ export class InteractionHandler {
                     latestSummary
                 );
                 // Plan tamamlandığında nihai sonucu da gönder
-                this.webview.postMessage({ type: 'plannerResult', payload: { plan } });
+                try {
+                    const { getToolsManager } = await import('../../services/tools_manager.js');
+                    const tm = getToolsManager();
+                    // İlk planlamada .ivme/tools.json dosyası henüz oluşmamış olabilir. Emin olmak için initialize çağır.
+                    try { await tm['ensureIvmeDirectory']?.(); } catch {}
+                    try { await (tm as any).initializeBuiltinTools?.(); } catch {}
+                    const names = tm.getToolNames();
+                    this.webview.postMessage({ type: 'plannerResult', payload: { plan, toolNames: names } });
+                } catch {
+                    this.webview.postMessage({ type: 'plannerResult', payload: { plan } });
+                }
                 // Planı hafızada tut
                 this.lastPlannerPlan = plan;
                 // Yeni plan için yürütülen adım izlerini sıfırla
@@ -135,34 +145,76 @@ export class InteractionHandler {
             const ctxText = ctxSnap ? [
                 'Önceki araç bağlamı (özet):',
                 ctxSnap.retrievedSummary ? ('Retrieved files (top):\n' + ctxSnap.retrievedSummary) : '',
-                ctxSnap.locationsSummary ? ('Saved locations:\n' + ctxSnap.locationsSummary) : ''
+                ctxSnap.locationsSummary ? ('Saved locations:\n' + ctxSnap.locationsSummary) : '',
+                ctxSnap.toolOutputsSummary ? ('Recent tool outputs:\n' + ctxSnap.toolOutputsSummary) : ''
             ].filter(Boolean).join('\n') : '';
             // Get all tools from tools manager
             const { getToolsManager } = await import('../../services/tools_manager.js');
             const toolsManager = getToolsManager();
-            const allToolNames = toolsManager.getToolNames();
+            let allToolNames = toolsManager.getToolNames();
+            if (!Array.isArray(allToolNames) || allToolNames.length === 0) {
+                try { await (toolsManager as any).initializeBuiltinTools?.(); } catch {}
+                allToolNames = toolsManager.getToolNames();
+            }
             
-            const validTools = allToolNames;
-            const system = [
-                'Aşağıdaki plan adımı için UYGUN TEK aracı ve argümanlarını çıkar.',
-                'Sadece geçerli araçlardan birini kullan (aşağıda listelenen).',
-                'ÇIKTI FORMAT ZORUNLU: Yalnızca tek satır ve SADE JSON objesi döndür: {"tool":"...","args":{...}}',
-                'BAŞKA ANAHTAR EKLEME: step, action, thought, ui_text, tool_input, parameters, params, arguments, input gibi anahtarları YAZMA.',
-                'TÜM string değerleri TEK SATIR olmalı; kod bloğu/backtick kullanma; \n dahil kaçış karakterleri kullanma.',
-                'Markdown, açıklama, kod bloğu, ön/arka metin YAZMA.',
-                'Örnek: {"tool":"edit_file","args":{"path":"merge.py","change_spec":"...","find_spec":"..."}}',
-                `Geçerli araç isimleri: ${validTools.join(', ')}`
-            ].join(' ');
-            const user = [
-                'Araç Listesi (TR):',
-                toolsTrDetailed,
-                '',
-                ctxText || '',
-                'Plan Adımı (JSON):',
-                '```json',
-                stepJson,
-                '```'
-            ].join('\n');
+            // Eğer adımda önceden UI üzerinden bir araç seçildiyse, seçimde sadece onu geçerli kıl (ikinci aşama yine denetler)
+            const preselected = (typeof step?.tool === 'string' && step.tool.trim().length > 0) ? step.tool.trim() : '';
+            const isAuto = preselected.toLowerCase() === 'auto';
+            const validTools = (!preselected || isAuto) ? allToolNames : [preselected];
+            let system: string;
+            let user: string;
+            if (preselected && !isAuto) {
+                // Args-only prompt for a preselected single tool
+                const toolObj = toolsManager.getToolByName(preselected);
+                const schemaJson = toolObj?.schema ? JSON.stringify(toolObj.schema, null, 2) : '{}';
+                const toolDesc = toolObj?.description || '';
+                system = [
+                    'Aşağıdaki plan adımı için SEÇİLİ TEK aracın argümanlarını çıkar.',
+                    'Başka araç seçme; sadece bu aracı kullan.',
+                    'ÇIKTI FORMAT ZORUNLU: Yalnızca tek satır ve SADE JSON objesi döndür: {"args":{...}}',
+                    'BAŞKA ANAHTAR EKLEME: tool, step, action, thought, ui_text, tool_input, parameters, params, arguments gibi anahtarları YAZMA.',
+                    'TÜM string değerleri TEK SATIR olmalı; kod bloğu/backtick kullanma; \n dahil kaçış karakterleri kullanma.',
+                    'Markdown, açıklama, kod bloğu, ön/arka metin YAZMA.'
+                ].join(' ');
+                user = [
+                    `Seçilen Araç: ${preselected}`,
+                    toolDesc ? (`Açıklama: ${toolDesc}`) : '',
+                    'Araç Şeması (JSON):',
+                    '```json',
+                    schemaJson,
+                    '```',
+                    '',
+                    ctxText || '',
+                    'Plan Adımı (JSON):',
+                    '```json',
+                    stepJson,
+                    '```'
+                ].filter(Boolean).join('\n');
+            } else {
+                // Auto mode: tool + args
+                system = [
+                    'Aşağıdaki plan adımı için UYGUN TEK aracı ve argümanlarını çıkar.',
+                    'Sadece geçerli araçlardan birini kullan (aşağıda listelenen).',
+                    'ÇIKTI FORMAT ZORUNLU: Yalnızca tek satır ve SADE JSON objesi döndür: {"tool":"...","args":{...}}',
+                    'BAŞKA ANAHTAR EKLEME: step, action, thought, ui_text, tool_input, parameters, params, arguments, input gibi anahtarları YAZMA.',
+                    'TÜM string değerleri TEK SATIR olmalı; kod bloğu/backtick kullanma; \n dahil kaçış karakterleri kullanma.',
+                    'Markdown, açıklama, kod bloğu, ön/arka metin YAZMA.',
+                    'Örnek: {"tool":"edit_file","args":{"path":"merge.py","change_spec":"...","find_spec":"..."}}',
+                    `Geçerli araç isimleri: ${validTools.join(', ')}`
+                ].join(' ');
+                const toolsListText = await getToolsDescriptions('tr');
+                user = [
+                    'Araç Listesi (TR):',
+                    toolsListText,
+                    '',
+                    ctxText || '',
+                    'Araç ön-seçimi: AUTO',
+                    'Plan Adımı (JSON):',
+                    '```json',
+                    stepJson,
+                    '```'
+                ].join('\n');
+            }
             // Debug: giden promptu ve adım bilgisini logla
             console.log('[ToolSelect] stepIndex=', stepIndex, 'label=', label);
             console.log('[ToolSelect] system prompt:\n' + system);
@@ -175,16 +227,26 @@ export class InteractionHandler {
             console.log('[ToolSelect] raw response:\n' + raw);
             let selection: { tool: string; args?: any } | null = null;
             try {
-                selection = this.parseToolSelection(raw);
+                selection = preselected && !isAuto ? this.parseArgsOnlySelection(raw, preselected) : this.parseToolSelection(raw);
             } catch (e) {
                 console.warn('[ToolSelect] parse error:', e);
             }
             if (!selection || typeof selection.tool !== 'string') {
-                throw new Error('Araç seçimi yapılamadı.');
+                // Fallback: Eğer ön-seçim tek araca sabitlenmişse onu kullan; aksi halde heuristik seçimi dene
+                if (preselected && !isAuto && validTools.length === 1) {
+                    selection = { tool: preselected, args: {} };
+                } else {
+                    const heuristic = this.deriveToolFromStep(step, validTools);
+                    if (heuristic) {
+                        selection = heuristic;
+                    } else {
+                        throw new Error('Araç seçimi yapılamadı.');
+                    }
+                }
             }
             console.log('[ToolSelect] parsed selection (pre-normalize):', selection);
             // Normalize tool name to allowed set
-            const normalized = this.normalizeToolName(selection.tool);
+            const normalized = this.normalizeToolName(selection.tool, validTools);
             if (!normalized) {
                 throw new Error(`Geçersiz araç adı: ${selection.tool}`);
             }
@@ -308,6 +370,29 @@ export class InteractionHandler {
         return null;
     }
 
+    /** Args-only JSON parser: expects {"args":{...}} and injects the fixed tool name. */
+    private parseArgsOnlySelection(raw: string, fixedTool: string): { tool: string; args?: any } | null {
+        if (!raw) return { tool: fixedTool, args: {} };
+        let text = String(raw).trim();
+        const fenceMatch = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
+        if (fenceMatch && fenceMatch[1]) {
+            text = fenceMatch[1].trim();
+        }
+        const first = text.indexOf('{');
+        const last = text.lastIndexOf('}');
+        if (first !== -1 && last !== -1 && last > first) {
+            text = text.slice(first, last + 1);
+        }
+        try {
+            const parsed = JSON.parse(text);
+            const args = (parsed && typeof parsed === 'object' && typeof parsed.args === 'object') ? parsed.args : {};
+            return { tool: fixedTool, args };
+        } catch {
+            // tolerate minor issues
+            return { tool: fixedTool, args: {} };
+        }
+    }
+
     // LLM'den gelen "JSON gibi" çıktıyı onarmak için basit bir sanitizer.
     private sanitizeToolSelectionJson(input: string): string {
         try {
@@ -333,7 +418,7 @@ export class InteractionHandler {
     }
 
     /** Gevşek adı verilen aracı kanonik ada dönüştürür; geçerli değilse null döndürür. */
-    private normalizeToolName(name: string): string | null {
+    private normalizeToolName(name: string, knownTools: string[]): string | null {
         const n = String(name || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
         const map: Record<string, string> = {
             'check_index': 'check_index',
@@ -350,7 +435,48 @@ export class InteractionHandler {
             'append_file': 'append_file',
             'appendfile': 'append_file'
         };
-        return map[n] || null;
+        return map[n] || (knownTools.includes(n) ? n : null);
+    }
+
+    /** Heuristik araç seçimi: UI metni/action üzerinden olası aracı çıkarır. */
+    private deriveToolFromStep(step: PlannerPlan['steps'][number], validTools: string[]): { tool: string; args: any } | null {
+        try {
+            const text = [step?.ui_text, step?.action, step?.thought].filter(Boolean).join(' ').toLowerCase();
+            const args: any = {};
+            const setPath = () => {
+                const p = this.inferFilePathFromStep(step);
+                if (p) args.path = p;
+            };
+            const has = (name: string) => validTools.includes(name);
+            if ((text.includes('oluştur') || text.includes('create')) && has('create_file')) {
+                setPath();
+                return { tool: 'create_file', args };
+            }
+            if ((text.includes('düzenle') || text.includes('edit')) && has('edit_file')) {
+                setPath();
+                return { tool: 'edit_file', args };
+            }
+            if ((text.includes('ekle') || text.includes('append')) && has('append_file')) {
+                setPath();
+                return { tool: 'append_file', args };
+            }
+            if ((text.includes('ara') || text.includes('search')) && has('search')) {
+                return { tool: 'search', args: {} };
+            }
+            if ((text.includes('retrieve') || text.includes('getir')) && has('retrieve_chunks')) {
+                return { tool: 'retrieve_chunks', args: {} };
+            }
+            if ((text.includes('konum') || text.includes('locate')) && has('locate_code')) {
+                return { tool: 'locate_code', args: {} };
+            }
+            if ((text.includes('kontrol') || text.includes('check')) && has('check_index')) {
+                const p = this.inferFilePathFromStep(step);
+                return { tool: 'check_index', args: p ? { files: [p] } : {} };
+            }
+            return null;
+        } catch {
+            return null;
+        }
     }
 
     /** step.ui_text ve step.thought içinden dosya adı/uzantı yakalamaya çalışır. */

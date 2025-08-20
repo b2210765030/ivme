@@ -143,6 +143,7 @@ export async function createPlannerSystemPrompt(plannerContext: string, userQuer
         `- Do NOT include code, pseudocode, or fenced code blocks. Describe WHAT to do, not the code.\n` +
         `- Prefer editing existing files over creating new ones. Make minimal changes required for correctness.\n` +
         `- Each plan step must include a short English sentence in the field ".ui_text". Keep it concise.\n` +
+        `- If a step REQUIRES a TOOL, provide the tool name in ".tool" and its parameters in ".args". If unsure, you may omit ".tool".\n` +
         `- Output STRICTLY valid JSON only, matching the schema below; do not add prose outside the JSON.\n\n` +
         `# AVAILABLE TOOLS\n` +
         await getToolsDescriptions('en') + `\n\n` +
@@ -150,24 +151,18 @@ export async function createPlannerSystemPrompt(plannerContext: string, userQuer
         `- If CONTEXT lists 'Missing requested files', DO NOT search for them; the first steps must create those files.\n` +
         `- Only use search/retrieve for files already present in the index.\n\n` +
         `# JSON OUTPUT SCHEMA\n` +
-        `{
-` +
-        `  "steps": [
-` +
-        `    {
-` +
-        `      "step": <number>,
-` +
-        `      "action": <string>,
-` +
-        `      "thought": <string>,
-` +
-        `      "ui_text": <string|optional>
-` +
-        `    }
-` +
-        `  ]
-` +
+        `{\n` +
+        `  "steps": [\n` +
+        `    {\n` +
+        `      "step": <number>,\n` +
+        `      "action": <string>,\n` +
+        `      "thought": <string>,\n` +
+        `      "ui_text": <string|optional>,\n` +
+        `      "tool": <string|optional>,\n` +
+        `      "args": <object|optional>,\n` +
+        `      "tool_calls": <array|optional>\n` +
+        `    }\n` +
+        `  ]\n` +
         `}`
     );
 }
@@ -184,28 +179,23 @@ export async function createPlannerPrompt(plannerContext: string, userQuery: str
         `- Break the work into the smallest possible actionable steps.\n` +
         `- Do not include code or code blocks. Describe the actions only.\n` +
         `- Keep each step short and precise; include a short ".ui_text" sentence for UI display.\n` +
+        `- If a step REQUIRES a TOOL, provide the tool name in ".tool" and its parameters in ".args". If unsure, you may omit ".tool".\n` +
         `- Output strictly valid JSON only, following the schema below.\n\n` +
         `# AVAILABLE TOOLS\n` +
         await getToolsDescriptions('en') + `\n\n` +
         `# JSON OUTPUT SCHEMA\n` +
-        `{
-` +
-        `  "steps": [
-` +
-        `    {
-` +
-        `      "step": <number>,
-` +
-        `      "action": <string>,
-` +
-        `      "thought": <string>,
-` +
-        `      "ui_text": <string|optional>
-` +
-        `    }
-` +
-        `  ]
-` +
+        `{\n` +
+        `  "steps": [\n` +
+        `    {\n` +
+        `      "step": <number>,\n` +
+        `      "action": <string>,\n` +
+        `      "thought": <string>,\n` +
+        `      "ui_text": <string|optional>,\n` +
+        `      "tool": <string|optional>,\n` +
+        `      "args": <object|optional>,\n` +
+        `      "tool_calls": <array|optional>\n` +
+        `    }\n` +
+        `  ]\n` +
         `}`
     );
 }

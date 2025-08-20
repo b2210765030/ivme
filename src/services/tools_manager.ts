@@ -56,6 +56,7 @@ export class ToolsManager {
     private async initializeAsync(): Promise<void> {
         try {
             await this.ensureIvmeDirectory();
+            await this.ensureToolsFile();
             await this.loadTools();
         } catch (error) {
             console.error('Failed to initialize tools manager:', error);

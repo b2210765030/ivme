@@ -4,7 +4,7 @@
 
 import * as DOM from '../utils/dom.js';
 import * as VsCode from '../services/vscode.js';
-import { getState, setAiResponding } from '../core/state.js';
+import { getState, setAiResponding, setAgentActMode } from '../core/state.js';
 import { addUserMessage, stopStreaming, addAiResponsePlaceholder } from './chat_view.js';
 import { calculateTokenUsage, calculateTotalTokenUsage } from '../utils/tokenizer.js';
 
@@ -56,6 +56,45 @@ export function init() {
     setTimeout(() => {
         recalculateTotalAndUpdateUI();
     }, 100);
+
+    // Plan/Act toggle: başlangıç durumunu yükle ve olayları bağla
+    try {
+        const { isAgentActMode, isAgentModeActive } = getState();
+        const planActToggleEl = document.getElementById('plan-act-toggle') || DOM.planActToggle;
+        const planActSwitchEl = document.getElementById('plan-act-switch') || DOM.planActSwitch;
+        if (planActToggleEl && planActSwitchEl) {
+            planActToggleEl.classList.toggle('checked', !!isAgentActMode);
+            planActToggleEl.setAttribute('aria-checked', isAgentActMode ? 'true' : 'false');
+            planActSwitchEl.checked = !!isAgentActMode;
+            // Visual disabled state only
+            planActToggleEl.classList.toggle('disabled', !isAgentModeActive);
+            planActSwitchEl.disabled = false; // keep functionally enabled
+
+            planActSwitchEl.addEventListener('change', () => {
+                const newVal = !!planActSwitchEl.checked;
+                // immediate UI update
+                try { planActToggleEl.classList.toggle('checked', newVal); planActToggleEl.setAttribute('aria-checked', newVal ? 'true' : 'false'); } catch(e) {}
+                setAgentActMode(newVal);
+            });
+
+            // Konteyner veya label tıklaması da checkbox'ı tetiklesin (daha güvenli)
+            const labelEl = planActToggleEl.querySelector('.plan-act-label');
+            const toggleHandler = (e) => {
+                if (planActSwitchEl.disabled) return;
+                const newChecked = !planActSwitchEl.checked;
+                planActSwitchEl.checked = newChecked;
+                // immediate UI update
+                try { planActToggleEl.classList.toggle('checked', newChecked); planActToggleEl.setAttribute('aria-checked', newChecked ? 'true' : 'false'); } catch(e) {}
+                setAgentActMode(!!newChecked);
+                e.preventDefault();
+            };
+            if (labelEl) labelEl.addEventListener('click', toggleHandler);
+            planActToggleEl.addEventListener('click', (e) => {
+                if (e.target === planActSwitchEl) return;
+                toggleHandler(e);
+            });
+        }
+    } catch (e) {}
 }
 
 export function autoResize() {

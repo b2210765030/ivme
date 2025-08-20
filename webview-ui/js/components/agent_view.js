@@ -4,7 +4,7 @@
    ========================================================================== */
 
 import * as VsCode from '../services/vscode.js';
-import { setAgentBarExpanded } from '../core/state.js';
+import { setAgentBarExpanded, setAgentActMode, getState } from '../core/state.js';
 
 export function init() {
     const collapsedBtn = document.getElementById('agent-status-collapsed');
@@ -13,6 +13,8 @@ export function init() {
     const modeButton = document.getElementById('agent-mode-button');
     const menu = document.getElementById('agent-mode-menu');
     const toggle = document.getElementById('agent-mode-toggle');
+    const planActToggle = document.getElementById('plan-act-toggle');
+    const planActSwitch = document.getElementById('plan-act-switch');
 
     // 1) Başlangıçta sadece ikon butonu görünür kalır (collapsed)
     if (collapsedBtn && agentStatusBar) {
@@ -103,4 +105,22 @@ export function init() {
             });
         }
     }
+
+    // Agent mod değişince Plan/Act toggle etkinlik durumu güncellensin
+    try {
+        const observer = new MutationObserver(() => {
+            try {
+                const { isAgentModeActive, isAgentActMode } = getState();
+                if (planActToggle && planActSwitch) {
+                    planActToggle.classList.toggle('disabled', !isAgentModeActive);
+                    planActSwitch.disabled = !isAgentModeActive;
+                    planActToggle.classList.toggle('checked', !!isAgentActMode);
+                    planActToggle.setAttribute('aria-checked', isAgentActMode ? 'true' : 'false');
+                    planActSwitch.checked = !!isAgentActMode;
+                }
+            } catch {}
+        });
+        const agentBtn = document.getElementById('agent-mode-button');
+        if (agentBtn) observer.observe(agentBtn, { attributes: true, attributeFilter: ['class'] });
+    } catch {}
 }
