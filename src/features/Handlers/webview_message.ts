@@ -145,7 +145,7 @@ export class WebviewMessageHandler {
                 await this.settingsManager.saveSettings(data.payload, this.webview); 
                 break;
 
-            // Proje indeksleme tetikleyicisi
+            // Proje indeksleme tetikleyicisi (vector store, planner index ve tools.json oluşturma)
             case 'indexProject':
                 await vscode.commands.executeCommand('baykar-ai.indexProject');
                 break;
@@ -227,9 +227,11 @@ export class WebviewMessageHandler {
                 await this.handleRequestCustomTools();
                 break;
 
-            case 'initializeTools':
-                await this.handleInitializeTools();
+            case 'updateCustomToolCode':
+                await this.handleUpdateCustomToolCode(data.payload);
                 break;
+
+
         }
     }
 
@@ -386,6 +388,8 @@ export class WebviewMessageHandler {
                 type: 'customToolDeleted',
                 payload: { ...result, toolName: payload.toolName }
             });
+            // Send fresh tools list after deletion
+            await this.handleRequestCustomTools();
         } catch (error) {
             this.webview.postMessage({
                 type: 'customToolDeleted',
@@ -412,7 +416,8 @@ export class WebviewMessageHandler {
                     tools: allTools.map(tool => ({
                         name: tool.name,
                         description: tool.description,
-                        type: tool.type
+                        type: tool.type,
+                        code: (tool as any).code
                     }))
                 }
             });
@@ -422,6 +427,27 @@ export class WebviewMessageHandler {
                 payload: {
                     success: false,
                     tools: [],
+                    error: error instanceof Error ? error.message : 'Bilinmeyen hata'
+                }
+            });
+        }
+    }
+
+    private async handleUpdateCustomToolCode(payload: { name: string; code: string }) {
+        try {
+            const toolsManager = getToolsManager();
+            if (typeof toolsManager.setExtensionContext === 'function') {
+                toolsManager.setExtensionContext(this.context);
+            }
+            const result = await toolsManager.updateCustomToolCode(payload.name, payload.code);
+            this.webview.postMessage({ type: 'customToolUpdated', payload: result });
+            // Return fresh list so UI has the latest
+            await this.handleRequestCustomTools();
+        } catch (error) {
+            this.webview.postMessage({
+                type: 'customToolUpdated',
+                payload: {
+                    success: false,
                     error: error instanceof Error ? error.message : 'Bilinmeyen hata'
                 }
             });

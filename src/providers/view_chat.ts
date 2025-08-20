@@ -346,6 +346,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             // Yeni: Planner adım aksiyon ikonları
             .replace(/{{edit_icon_uri}}/g, toUri('assets/duzenle.svg').toString())
             .replace(/{{apply_icon_uri}}/g, toUri('assets/uygula.svg').toString())
-            .replace(/{{insert_icon_uri}}/g, toUri('assets/new-chat-icon.svg').toString());
+            .replace(/{{insert_icon_uri}}/g, toUri('assets/new-chat-icon.svg').toString())
+            .replace(/{{tool_code_icon_uri}}/g, toUri('assets/tool_code.svg').toString());
     }
 }

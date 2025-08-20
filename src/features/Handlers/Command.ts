@@ -16,6 +16,7 @@ import { ApplyFixArgs} from '../../types/index';
 import { ProjectIndexer } from '../../services/indexer';
 import { PlannerIndexer } from '../../services/planner_indexer';
 import { loadVectorStoreChunks, topKByEmbedding } from '../../services/vector_store';
+import { getToolsManager } from '../../services/tools_manager';
 import * as path from 'path';
 
 export class CommandHandler {
@@ -143,14 +144,46 @@ export class CommandHandler {
                     }
                 });
 
+                // İndeksleme başarılı olduktan sonra araçları da başlat
+                this.chatProvider['_view']?.webview.postMessage({ type: 'indexingProgress', payload: { message: 'Araçlar başlatılıyor...', percent: 98 } });
+                await this.initializeToolsAfterIndexing();
+                
                 this.chatProvider['_view']?.webview.postMessage({ type: 'indexingDone' });
                 console.log(`[Indexer] Tamamlandı. Toplam parça: ${result.chunks.length}`);
-                vscode.window.showInformationMessage(`İndeksleme tamamlandı. ${result.chunks.length} parça bulundu ve mimari harita oluşturuldu. (${workspaceFolder.name})`);
+                vscode.window.showInformationMessage(`İndeksleme tamamlandı. ${result.chunks.length} parça bulundu ve mimari harita oluşturuldu. Araçlar başlatıldı. (${workspaceFolder.name})`);
             } catch (e: any) {
                 this.chatProvider['_view']?.webview.postMessage({ type: 'indexingDone' });
                 vscode.window.showErrorMessage(`İndeksleme başarısız: ${e?.message || e}`);
             }
         });
+    }
+
+    /**
+     * İndeksleme sonrası araçları başlatır (.ivme/tools.json oluşturur)
+     */
+    private async initializeToolsAfterIndexing(): Promise<void> {
+        try {
+            const providerContext = (this.chatProvider as any)._context as vscode.ExtensionContext;
+            const toolsManager = getToolsManager();
+            
+            // Extension context'i ayarla
+            if (typeof toolsManager.setExtensionContext === 'function') {
+                toolsManager.setExtensionContext(providerContext);
+            }
+            
+            // Built-in araçları başlat (tools.json oluştur)
+            const result = await toolsManager.initializeBuiltinTools();
+            
+            if (result.success) {
+                console.log('[CommandHandler] Araçlar başarıyla başlatıldı:', result.message);
+            } else {
+                console.error('[CommandHandler] Araç başlatma hatası:', result.error);
+                vscode.window.showWarningMessage(`Araçlar başlatılamadı: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('[CommandHandler] initializeToolsAfterIndexing error:', error);
+            vscode.window.showWarningMessage(`Araç başlatma hatası: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`);
+        }
     }
 
     /**

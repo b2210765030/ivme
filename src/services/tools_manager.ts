@@ -275,6 +275,11 @@ export class ToolsManager {
     }
 
     private async saveTools(): Promise<void> {
+        if (!this.toolsFilePath) {
+            // Try to establish tools path lazily
+            await this.ensureIvmeDirectory();
+            await this.ensureToolsFile();
+        }
         if (!this.toolsFilePath) return;
 
         try {
@@ -383,8 +388,27 @@ export class ToolsManager {
         }
     }
 
+    public async updateCustomToolCode(toolName: string, newCode: string): Promise<{ success: boolean; tool?: CustomTool; error?: string }> {
+        try {
+            const tool = this.toolsData.custom_tools.find(t => t.name === toolName);
+            if (!tool) {
+                return { success: false, error: 'Araç bulunamadı' };
+            }
+            tool.code = String(newCode ?? '');
+            tool.updated_at = new Date().toISOString();
+            await this.saveTools();
+            return { success: true, tool };
+        } catch (error) {
+            console.error('Error updating custom tool code:', error);
+            return { success: false, error: error instanceof Error ? error.message : 'Bilinmeyen hata' };
+        }
+    }
+
     public async deleteCustomTool(toolName: string): Promise<{ success: boolean; error?: string }> {
         try {
+            // Ensure file exists before mutating/saving and refresh in-memory state
+            await this.ensureToolsFile();
+            await this.loadTools();
             const toolIndex = this.toolsData.custom_tools.findIndex(tool => tool.name === toolName);
             if (toolIndex === -1) {
                 return { success: false, error: 'Araç bulunamadı' };
@@ -393,6 +417,7 @@ export class ToolsManager {
             // Remove from tools data and save
             this.toolsData.custom_tools.splice(toolIndex, 1);
             await this.saveTools();
+            await this.loadTools();
 
             console.log(`[ToolsManager] Custom tool deleted: ${toolName}`);
             return { success: true };

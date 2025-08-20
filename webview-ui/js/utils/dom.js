@@ -58,6 +58,7 @@ const ICON_URIS_CONTAINER = document.getElementById('icon-uris');
 export const EDIT_ICON_URI = ICON_URIS_CONTAINER?.dataset?.editIcon || '';
 export const APPLY_ICON_URI = ICON_URIS_CONTAINER?.dataset?.applyIcon || '';
 export const INSERT_ICON_URI = ICON_URIS_CONTAINER?.dataset?.insertIcon || '';
+export const TOOL_CODE_ICON_URI = ICON_URIS_CONTAINER?.dataset?.toolCodeIcon || '';
 
 // YENİ: Kopyala ve Değişikliği Uygula butonları için SVG ikonları
 export const COPY_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
