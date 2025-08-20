@@ -13,8 +13,7 @@ let isAgentModeActive = localStorage.getItem('agentModeActive') === 'true'; // A
 let currentAgentFileName = '';
 let isAgentSelectionActive = false; // YENİ: Agent modunda seçili alan olup olmadığını gösterir.
 let isAgentBarExpanded = localStorage.getItem('agentBarExpanded') === 'true'; // Agent bağlam barının açık/kapalı durumu - localStorage'dan yükle
-// Agent çalışma modu: Plan (false) / Act (true) - kalıcı
-let isAgentActMode = localStorage.getItem('agentActMode') === 'true';
+let isAgentActMode = localStorage.getItem('agentActMode') === 'true'; // Plan(false)/Act(true) modu - localStorage
 
 let currentLanguage = localStorage.getItem('language') || 'tr';
 
@@ -69,40 +68,6 @@ export function setAgentBarExpanded(value) {
     isAgentBarExpanded = !!value;
     // Bar durumunu localStorage'a kaydet
     localStorage.setItem('agentBarExpanded', isAgentBarExpanded.toString());
-}
-
-// Plan/Act durumunu güncelle ve UI'a uygula
-export function setAgentActMode(value) {
-    isAgentActMode = !!value;
-    try { localStorage.setItem('agentActMode', isAgentActMode.toString()); } catch(e) {}
-    // UI toggle'ını güncelle (DOM elemanlarını çalışma zamanında yeniden sorgula)
-    try {
-        const container = document.getElementById('plan-act-toggle') || DOM.planActToggle;
-        const checkbox = document.getElementById('plan-act-switch') || DOM.planActSwitch;
-        if (container) {
-            container.classList.toggle('checked', isAgentActMode);
-            container.setAttribute('aria-checked', isAgentActMode ? 'true' : 'false');
-        }
-        if (checkbox) {
-            checkbox.checked = isAgentActMode;
-        }
-        // Visual enabled state (do not actually disable functionality)
-        updatePlanActToggleEnabledState();
-        // Notify extension (if available)
-        try { DOM.vscode.postMessage({ type: 'agentActModeChanged', isAct: isAgentActMode }); } catch(e) {}
-    } catch (e) {}
-}
-
-// Note: Plan/Act toggle remains available regardless of Agent mode; visual disabled class
-function updatePlanActToggleEnabledState() {
-    try {
-        const container = DOM.planActToggle;
-        const checkbox = DOM.planActSwitch;
-        // Keep visual disabled only (no functional disabling)
-        const enabled = !!isAgentModeActive;
-        if (container) container.classList.toggle('disabled', !enabled);
-        if (checkbox) checkbox.disabled = false; // never actually disable
-    } catch (e) {}
 }
 
 // GÜNCELLENDİ: Agent modunu dosya adına göre güncelleyen fonksiyon
@@ -194,8 +159,8 @@ export function setAgentMode(isActive, activeFileName = '') {
             const { refreshPlannerPanelVisibility } = require('../components/chat_view.js');
             refreshPlannerPanelVisibility();
         }); } catch(e) {}
-        // Plan/Act toggle etkinliğini güncelle
-        try { updatePlanActToggleEnabledState(); } catch(e) {}
+        // Plan/Act toggle görünürlüğünü güncelle
+        try { updatePlanActToggleVisibility(); } catch(e) {}
     } else {
         agentModeButton.classList.remove('active');
         if (typeof agentModeButton?.textContent === 'string') {
@@ -226,8 +191,8 @@ export function setAgentMode(isActive, activeFileName = '') {
             const { refreshPlannerPanelVisibility } = require('../components/chat_view.js');
             refreshPlannerPanelVisibility();
         }); } catch(e) {}
-        // Plan/Act toggle etkinliğini güncelle
-        try { updatePlanActToggleEnabledState(); } catch(e) {}
+        // Plan/Act toggle'ı gizle
+        try { updatePlanActToggleVisibility(); } catch(e) {}
     }
 }
 
@@ -371,6 +336,8 @@ export function setIndexingEnabledState(enabled) {
         const { refreshPlannerPanelVisibility } = require('../components/chat_view.js');
         refreshPlannerPanelVisibility();
     }); } catch(e) {}
+    // Plan/Act toggle görünürlüğünü güncelle
+    try { updatePlanActToggleVisibility(); } catch(e) {}
 }
 
 // Workspace'te index vektörlerinin olup olmadığını ayarla
@@ -480,6 +447,40 @@ export function updatePlannerPanelVisual() {
             }
         } else {
             panel.style.setProperty('--indexing-progress', '0%');
+        }
+    } catch (e) {}
+}
+
+// Plan/Act modu ayarı ve UI güncellemesi
+export function setAgentActMode(enabled) {
+    isAgentActMode = !!enabled;
+    try { localStorage.setItem('agentActMode', isAgentActMode.toString()); } catch(e) {}
+    try {
+        const planActToggle = document.getElementById('plan-act-toggle');
+        const planActSwitch = document.getElementById('plan-act-switch');
+        if (planActToggle) {
+            planActToggle.classList.toggle('checked', isAgentActMode);
+            planActToggle.setAttribute('aria-checked', isAgentActMode ? 'true' : 'false');
+        }
+        if (planActSwitch) {
+            planActSwitch.checked = isAgentActMode;
+        }
+    } catch(e) {}
+}
+
+// Plan/Act toggle görünürlüğünü Agent modu ve Indexing etkinliğine göre günceller
+export function updatePlanActToggleVisibility() {
+    try {
+        const el = document.getElementById('plan-act-toggle');
+        if (!el) return;
+        const shouldShow = isAgentModeActive && isIndexingEnabled;
+        if (shouldShow) {
+            el.classList.remove('hidden');
+            el.classList.toggle('disabled', false);
+            const planActSwitch = document.getElementById('plan-act-switch');
+            if (planActSwitch) planActSwitch.disabled = false;
+        } else {
+            el.classList.add('hidden');
         }
     } catch (e) {}
 }
@@ -697,6 +698,14 @@ function updateHTMLTexts() {
     if (agentStatusHide) {
         agentStatusHide.title = DOM.getText('hideContext');
     }
+
+    // Plan/Act toggle metinlerini güncelle
+    try {
+        const planLabel = document.querySelector('#plan-act-toggle .plan');
+        const actLabel = document.querySelector('#plan-act-toggle .act');
+        if (planLabel) planLabel.textContent = DOM.getText('plan');
+        if (actLabel) actLabel.textContent = DOM.getText('act');
+    } catch(e) {}
     
     // Settings modal metinlerini güncelle
     const settingsModal = document.getElementById('settings-modal');

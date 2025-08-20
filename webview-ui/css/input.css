@@ -563,6 +563,70 @@
     color: var(--vscode-errorForeground);
 }
 
+#plan-act-toggle {
+    position: relative;
+    width: 78px;
+    height: 22px;
+    margin-right: 6px;
+}
+
+#plan-act-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+#plan-act-toggle .toggle-bubble {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+#plan-act-toggle .toggle-bubble::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: calc(50% - 4px);
+    height: calc(100% - 4px);
+    background-color: var(--vscode-button-background);
+    border-radius: 30px;
+    transition: left 0.25s ease;
+    z-index: 0;
+}
+
+#plan-act-toggle .plan-option {
+    flex: 1;
+    text-align: center;
+    z-index: 1;
+    color: var(--vscode-foreground);
+    opacity: 0.6;
+    transition: color 0.25s ease, opacity 0.25s ease;
+    pointer-events: none;
+}
+
+#plan-act-switch:checked + .toggle-bubble::after {
+    left: calc(50% + 2px);
+}
+
+#plan-act-switch:checked + .toggle-bubble .plan-option.act,
+#plan-act-switch:not(:checked) + .toggle-bubble .plan-option.plan {
+    color: var(--vscode-button-foreground);
+    opacity: 1;
+}
+
+#plan-act-toggle.disabled { opacity: 0.6; pointer-events: none; }
+
 #attach-file-button, #send-button, #indexer-start-button, #indexer-cancel-button {
     background: transparent;
     border: none;
@@ -634,82 +698,6 @@
     display: block !important;
     pointer-events: none;
 }
-
-/* Plan/Act Toggle */
-.plan-act-toggle {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 64px;
-    height: 20px;
-    border-radius: 12px;
-    border: 1px solid var(--vscode-input-border);
-    background: var(--vscode-input-background);
-    margin-right: 8px; /* token göstergesinin solunda boşluk */
-    cursor: pointer;
-    flex-shrink: 0;
-}
-
-.plan-act-toggle .plan-act-checkbox {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.plan-act-toggle .plan-act-label {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    height: 100%;
-    padding: 0 6px;
-    color: var(--vscode-input-foreground);
-    font-size: 10px;
-    user-select: none;
-}
-
-.plan-act-toggle .label-text {
-    opacity: 0.8;
-    z-index: 1;
-}
-
-.plan-act-toggle .knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 28px;
-    height: 16px;
-    border-radius: 10px;
-    background: var(--vscode-toolbar-hoverBackground);
-    transition: left 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
-    box-shadow: 0 1px 1px rgba(0,0,0,0.08) inset;
-}
-
-/* Checked -> Act tarafına geçiş */
-.plan-act-toggle.checked .knob {
-    left: calc(100% - 30px);
-    background: #2563eb; /* daha mavi (daha koyu) */
-    box-shadow: 0 2px 6px rgba(37,99,235,0.28);
-}
-
-.plan-act-toggle.checked {
-    border-color: #3b82f6;
-    background: rgba(59,130,246,0.06);
-}
-
-.plan-act-toggle.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Label renkleri: seçili tarafı daha belirgin göster */
-.plan-act-toggle .label-text { opacity: 0.6; }
-.plan-act-toggle.checked .label-text { opacity: 0.5; }
-.plan-act-toggle.checked #plan-act-label-act { opacity: 1; font-weight: 600; }
-.plan-act-toggle:not(.checked) #plan-act-label-plan { opacity: 1; font-weight: 600; }
 
 /* GÜNCELLENDİ: Agent Durum Çubuğu Stilleri (Yeni Stil) */
 .agent-status-bar {

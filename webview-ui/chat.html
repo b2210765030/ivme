@@ -122,13 +122,11 @@
 
                     </div>
                     <div class="action-group-right">
-                        <!-- Plan/Act kaydırmalı buton (token göstergesinin hemen solunda) -->
-                        <div id="plan-act-toggle" class="plan-act-toggle" role="switch" aria-checked="false" title="Plan / Act">
-                            <input type="checkbox" id="plan-act-switch" class="plan-act-checkbox" aria-label="Plan / Act" />
-                            <label for="plan-act-switch" class="plan-act-label">
-                                <span id="plan-act-label-plan" class="label-text">Plan</span>
-                                <span id="plan-act-label-act" class="label-text">Act</span>
-                                <span class="knob"></span>
+                        <div id="plan-act-toggle" class="plan-act-toggle hidden" role="switch" aria-checked="false" title="Plan/Act">
+                            <input type="checkbox" id="plan-act-switch" />
+                            <label for="plan-act-switch" class="toggle-bubble">
+                                <span class="plan-option plan">Plan</span>
+                                <span class="plan-option act">Act</span>
                             </label>
                         </div>
                         <div id="character-counter" class="character-counter">

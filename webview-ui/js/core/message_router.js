@@ -15,6 +15,8 @@ export function initMessageListener() {
     let currentStreamingStep = null;
     let plannerStreamActive = false;
     let planTimerStart = null;
+    // ACT modunda plan açıklaması akışını UI'da maskelemek için bayrak
+    let suppressPlannerExplanation = false;
     onMessage(message => {
         const data = message.payload ?? message.value;
         
@@ -92,15 +94,26 @@ export function initMessageListener() {
             // --- Akış (Stream) Mesajları ---
             case 'addResponsePlaceholder': {
                 ChatView.addAiResponsePlaceholder();
+                // ACT modunda: hemen "İvme düşünüyor..." yaz
+                try {
+                    const { isAgentActMode } = getState();
+                    if (isAgentActMode) {
+                        ChatView.replaceStreamingPlaceholderHeader(DOM.getText('thinking') || 'İvme düşünüyor...');
+                    }
+                } catch (e) {}
                 // Planner süresi için başlangıcı da yedekle (plannerResult yoksa kullanılmaz)
                 planTimerStart = ChatView.getPlanTimerStartMs?.() || (performance?.now ? performance.now() : Date.now());
                 break;
             }
             case 'addResponseChunk': {
+                // ACT modunda plan açıklaması chunks'larını gizle
+                if (suppressPlannerExplanation) break;
                 ChatView.appendResponseChunk(data);
                 break;
             }
             case 'streamEnd': {
+                // Plan açıklaması gizleniyorsa finalize etmeyelim; adım/sumary akışı devam edebilir
+                if (suppressPlannerExplanation) { suppressPlannerExplanation = false; break; }
                 ChatView.finalizeStreamedResponse();
                 break;
             }
@@ -142,9 +155,19 @@ export function initMessageListener() {
 
             // --- Planner streaming UI parça mesajı ---
             case 'plannerUiChunk': {
-                const { isAgentModeActive, isIndexingEnabled } = getState();
+                const { isAgentModeActive, isIndexingEnabled, isAgentActMode } = getState();
                 if (!(isAgentModeActive && isIndexingEnabled)) {
                     // Chat modunda bu mesajları yok say
+                    break;
+                }
+                // ACT modunda: sadece "İvme düşünüyor..." göster, UI akışını maskele
+                if (isAgentActMode) {
+                    try {
+                        if (!document.getElementById('ai-streaming-placeholder')) {
+                            ChatView.addAiResponsePlaceholder();
+                        }
+                        ChatView.replaceStreamingPlaceholderHeader(DOM.getText('thinking') || 'İvme düşünüyor...');
+                    } catch (e) {}
                     break;
                 }
                 // Her yeni ui_text geldiğinde mevcut placeholder içeriğini başlıkla sıfırla ve
@@ -175,14 +198,22 @@ export function initMessageListener() {
 
             // --- Planner Sonucu ---
             case 'plannerResult': {
-                const { isAgentModeActive, isIndexingEnabled } = getState();
+                const { isAgentModeActive, isIndexingEnabled, isAgentActMode } = getState();
                 if (!(isAgentModeActive && isIndexingEnabled)) {
                     // Chat modunda planner sonucu yok sayılır (planner zaten çağrılmaz)
                     break;
                 }
+                const plan = data?.plan ?? data?.payload?.plan ?? data;
+                // ACT modunda: paneli gizle, açıklamayı maskele, otomatik uygula
+                if (isAgentActMode) {
+                    try { ChatView.setPlannerPanelCompleted(false); } catch (e) {}
+                    try { ChatView.showPlannerPanelWithPlan(plan); ChatView.hidePlannerPanel(); } catch (e) { try { ChatView.hidePlannerPanel(); } catch (e2) {} }
+                    suppressPlannerExplanation = true;
+                    try { setTimeout(() => { try { postMessage('executePlannerAll'); } catch (e) {} }, 0); } catch (e) {}
+                    break;
+                }
                 // Yeni plan geldiğinde panel tamamlandı işaretini kaldır
                 try { ChatView.setPlannerPanelCompleted(false); } catch (e) {}
-                const plan = data?.plan ?? data?.payload?.plan ?? data;
                 try {
                     const names = Array.isArray(plan?.steps) ? (data?.toolNames || data?.payload?.toolNames || []) : (data?.payload?.toolNames || []);
                     if (Array.isArray(names) && names.length > 0 && ChatView.setAvailableTools) {
@@ -253,6 +284,13 @@ export function initMessageListener() {
             }
             case 'plannerCompleted': {
                 try { ChatView.setPlannerPanelCompleted(true); } catch (e) {}
+                // Plan->Act geçişinde tamamlanınca paneli 3sn sonra kapat
+                try {
+                    const { isAgentActMode } = getState();
+                    if (isAgentActMode) {
+                        setTimeout(() => { try { ChatView.hidePlannerPanel(); } catch (e) {} }, 3000);
+                    }
+                } catch (e) {}
                 break;
             }
 

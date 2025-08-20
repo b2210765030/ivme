@@ -4,7 +4,7 @@
    ========================================================================== */
 
 import * as VsCode from '../services/vscode.js';
-import { setAgentBarExpanded, setAgentActMode, getState } from '../core/state.js';
+import { setAgentBarExpanded, setAgentActMode, getState, updatePlanActToggleVisibility } from '../core/state.js';
 
 export function init() {
     const collapsedBtn = document.getElementById('agent-status-collapsed');
@@ -101,6 +101,8 @@ export function init() {
                     menu.classList.add('hidden');
                     menu.setAttribute('aria-hidden', 'true');
                     modeButton.setAttribute('aria-expanded', 'false');
+                    // Menüden seçim yapıldığında Plan/Act görünürlüğünü de güncelle
+                    try { updatePlanActToggleVisibility(); } catch {}
                 });
             });
         }
@@ -118,9 +120,26 @@ export function init() {
                     planActToggle.setAttribute('aria-checked', isAgentActMode ? 'true' : 'false');
                     planActSwitch.checked = !!isAgentActMode;
                 }
+                updatePlanActToggleVisibility();
             } catch {}
         });
         const agentBtn = document.getElementById('agent-mode-button');
         if (agentBtn) observer.observe(agentBtn, { attributes: true, attributeFilter: ['class'] });
     } catch {}
+
+    // Toggle click/change -> state'e yaz ve persist et
+    if (planActSwitch) {
+        planActSwitch.addEventListener('change', () => {
+            const prevAct = !!getState().isAgentActMode;
+            const nextAct = !!planActSwitch.checked;
+            setAgentActMode(nextAct);
+            // Plan -> Act geçişinde: mevcut plandaki kalan adımları otomatik uygula
+            if (!prevAct && nextAct) {
+                try { VsCode.postMessage('executePlannerAll'); } catch {}
+            }
+        });
+    }
+
+    // İlk yüklemede görünürlüğü ayarla
+    try { updatePlanActToggleVisibility(); } catch {}
 }

@@ -1204,6 +1204,13 @@ export function startInlineSummary() {
     target.appendChild(container);
     try { summaryContainerEl = container; } catch (e) {}
     try { summaryMessageEl = messageEl; } catch (e) {}
+    // ACT modunda özet başladığında plan panelini 3 saniye içinde kapat
+    try {
+        const { isAgentActMode } = require('../core/state.js').getState();
+        if (isAgentActMode) {
+            setTimeout(() => { try { hidePlannerPanel(); } catch (e) {} }, 3000);
+        }
+    } catch (e) {}
 }
 
 export function appendInlineSummary(chunk) {
