@@ -53,7 +53,7 @@ export const SETTINGS_KEYS = {
 // --- Gemini Model Adı ---
 // Bu, kullanıcı tarafından değiştirilen bir varsayılan değil, kod içinde kullanılan
 // sabit bir değer olduğu için burada kalabilir.
-export const GEMINI_MODEL_NAME = 'gemini-2.0-flash';
+export const GEMINI_MODEL_NAME = 'gemini-2.5-flash';
 
 // --- API Parameters ---
 // Bunlar kullanıcı ayarı değil, API'ye gönderilen sabit parametrelerdir. Burada kalmaları doğrudur.

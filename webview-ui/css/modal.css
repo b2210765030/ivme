@@ -298,7 +298,7 @@ input:checked + .slider:before {
 
 .tools-table-header {
     display: grid;
-    grid-template-columns: 180px 1fr 100px;
+    grid-template-columns: 140px 1fr 80px;
     background: linear-gradient(180deg, var(--vscode-list-hoverBackground) 0%, var(--vscode-sideBar-background) 100%);
     border-bottom: 2px solid var(--vscode-focusBorder);
     font-weight: 600;
@@ -329,7 +329,7 @@ input:checked + .slider:before {
 
 .tool-row {
     display: grid;
-    grid-template-columns: 180px 1fr 100px;
+    grid-template-columns: 140px 1fr 80px;
     border-bottom: 1px solid rgba(128, 128, 128, 0.2);
     transition: all 0.15s ease;
     min-height: 44px;

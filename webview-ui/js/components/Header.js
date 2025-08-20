@@ -5,7 +5,7 @@
 
 import * as DOM from '../utils/dom.js';
 import * as VsCode from '../services/vscode.js';
-import { getState, setAgentMode, setLanguage, setIndexingActive, updateUITexts, checkAndUpdateIndexingState, setIndexingEnabledState } from '../core/state.js';
+import { getState, setAgentMode, setLanguage, setIndexingActive, updateUITexts, checkAndUpdateIndexingState, setIndexingEnabledState, updatePlanActToggleVisibility } from '../core/state.js';
 import { refreshPlannerPanelVisibility } from './chat_view.js';
 
 // --- Public Fonksiyonlar ---
@@ -59,16 +59,19 @@ export function init() {
                     // quick complete visually
                     setIndexingEnabledState(true);
                     try { refreshPlannerPanelVisibility(); } catch(e) {}
+                    try { updatePlanActToggleVisibility(); } catch(e) {}
                 } else {
                     // start real indexing
                     setIndexingActive(true);
                     try { refreshPlannerPanelVisibility(); } catch(e) {}
+                    try { updatePlanActToggleVisibility(); } catch(e) {}
                 }
             } else {
                 // disabling retrieval
                 setIndexingActive(false);
                 setIndexingEnabledState(false);
                 try { refreshPlannerPanelVisibility(); } catch(e) {}
+                try { updatePlanActToggleVisibility(); } catch(e) {}
                 // Planner steps balonunu da kaldır (placeholder üstüne eklenen)
                 try { document.querySelectorAll('.planner-steps-message').forEach(el => el.remove()); } catch(e) {}
             }

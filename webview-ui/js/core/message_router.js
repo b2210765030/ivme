@@ -99,6 +99,8 @@ export function initMessageListener() {
                     const { isAgentActMode } = getState();
                     if (isAgentActMode) {
                         ChatView.replaceStreamingPlaceholderHeader(DOM.getText('thinking') || 'İvme düşünüyor...');
+                        // Plan açıklaması akışını uygulama adımına kadar maskele
+                        suppressPlannerExplanation = true;
                     }
                 } catch (e) {}
                 // Planner süresi için başlangıcı da yedekle (plannerResult yoksa kullanılmaz)

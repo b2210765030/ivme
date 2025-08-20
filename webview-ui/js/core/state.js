@@ -227,6 +227,8 @@ export function setIndexingActive(active, options) {
         const { refreshPlannerPanelVisibility } = require('../components/chat_view.js');
         refreshPlannerPanelVisibility();
     }); } catch(e) {}
+    // Plan/Act toggle görünürlüğünü anında senkronize et
+    try { updatePlanActToggleVisibility(); } catch(e) {}
 }
 
 export function updateIndexerProgress(value, message = '') {
@@ -473,7 +475,8 @@ export function updatePlanActToggleVisibility() {
     try {
         const el = document.getElementById('plan-act-toggle');
         if (!el) return;
-        const shouldShow = isAgentModeActive && isIndexingEnabled;
+        // Index açık (enabled) ya da aktif indeksleme sürerken görünür olsun
+        const shouldShow = isAgentModeActive && (isIndexingEnabled || isIndexing);
         if (shouldShow) {
             el.classList.remove('hidden');
             el.classList.toggle('disabled', false);
