@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 
 import { ApiServiceManager } from './manager';
-import { EXTENSION_ID, SETTINGS_KEYS } from '../core/constants';
+import { EXTENSION_ID, SETTINGS_KEYS, RETRIEVAL_DEFAULTS } from '../core/constants';
 
 type PlannerIndex = Record<string, string>;
 
@@ -58,6 +58,203 @@ export class PlannerIndexer {
         progress?.report({ message: 'Planner: Mimari harita kaydedildi.', percent: 100 });
 
         return index;
+    }
+
+    /**
+     * Incremental: Update planner_index.json for the given files and recompute
+     * summaries for their ancestor directories up to the workspace root, plus root summary.
+     * No-op when indexing is disabled or the planner index does not exist yet.
+     */
+    public async updatePlannerIndexForFiles(fsPaths: string[]): Promise<void> {
+        const uniquePaths = Array.from(new Set(fsPaths.filter(Boolean)));
+        if (uniquePaths.length === 0) return;
+
+        // Respect indexing setting and require existing planner index
+        const enabled = this.getIndexingEnabled();
+        if (!enabled) return;
+        let index = await this.readPlannerIndex();
+        if (!index) index = {};
+
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) return;
+        const rootPath = workspaceFolder.uri.fsPath;
+
+        // 1) Update file summaries
+        for (const filePath of uniquePaths) {
+            try {
+                const uri = vscode.Uri.file(filePath);
+                const content = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+                const prompt = this.buildFileSummaryPrompt(filePath, content);
+                const raw = await this.generateContentWithTimeout(prompt, 15000);
+                const parsed = raw ? this.tryParseSummaryJson(raw) : null;
+                if (parsed?.summary) {
+                    index[filePath] = parsed.summary;
+                } else {
+                    index[filePath] = this.buildFallbackFileSummary(filePath, content);
+                }
+            } catch (e) {
+                // If file cannot be read (e.g., transient), skip; delete is handled separately
+                // console.warn('[PlannerIndexer] Incremental file update failed:', filePath, e);
+            }
+        }
+
+        // 2) Recompute directory summaries from deepest to root
+        const affectedDirs = new Set<string>();
+        for (const filePath of uniquePaths) {
+            let dir = path.dirname(filePath);
+            while (dir && dir.startsWith(rootPath)) {
+                affectedDirs.add(dir);
+                const parent = path.dirname(dir);
+                if (parent === dir) break;
+                dir = parent;
+            }
+        }
+        const toRecalc = Array.from(affectedDirs.values()).sort((a, b) => this.depth(b) - this.depth(a));
+        for (const dirPath of toRecalc) {
+            const items = await this.buildDirContentsFromIndex(dirPath, index);
+            if (items.length === 0) {
+                // Remove empty dir entries
+                delete index[dirPath];
+                continue;
+            }
+            const prompt = this.buildDirectorySummaryPrompt(dirPath, items.join('\n'));
+            const raw = await this.generateContentWithTimeout(prompt, 15000);
+            const parsed = raw ? this.tryParseSummaryJson(raw) : null;
+            if (parsed?.summary) {
+                index[dirPath] = parsed.summary;
+            } else {
+                const fileCount = items.filter(x => x.startsWith('- file ')).length;
+                index[dirPath] = `Contains ${items.length} items (${fileCount} files).`;
+            }
+        }
+
+        // 3) Recompute root summary
+        try {
+            const rootSummary = await this.incrementalSummarizeRoot(rootPath, index);
+            index[rootPath] = rootSummary;
+        } catch {}
+
+        // 4) Write back
+        await this.writePlannerIndex(index);
+    }
+
+    /**
+     * Incremental: Remove a file from planner_index.json and recompute affected directories and root.
+     */
+    public async removeFileFromPlannerIndex(fsPath: string): Promise<void> {
+        const enabled = this.getIndexingEnabled();
+        if (!enabled) return;
+        const index = await this.readPlannerIndex();
+        if (!index) return;
+
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) return;
+        const rootPath = workspaceFolder.uri.fsPath;
+
+        delete index[fsPath];
+
+        // Recompute directories from the file's ancestors
+        const affectedDirs = new Set<string>();
+        let dir = path.dirname(fsPath);
+        while (dir && dir.startsWith(rootPath)) {
+            affectedDirs.add(dir);
+            const parent = path.dirname(dir);
+            if (parent === dir) break;
+            dir = parent;
+        }
+        const toRecalc = Array.from(affectedDirs.values()).sort((a, b) => this.depth(b) - this.depth(a));
+        for (const dirPath of toRecalc) {
+            const items = await this.buildDirContentsFromIndex(dirPath, index);
+            if (items.length === 0) {
+                delete index[dirPath];
+                continue;
+            }
+            const prompt = this.buildDirectorySummaryPrompt(dirPath, items.join('\n'));
+            const raw = await this.generateContentWithTimeout(prompt, 15000);
+            const parsed = raw ? this.tryParseSummaryJson(raw) : null;
+            if (parsed?.summary) {
+                index[dirPath] = parsed.summary;
+            } else {
+                const fileCount = items.filter(x => x.startsWith('- file ')).length;
+                index[dirPath] = `Contains ${items.length} items (${fileCount} files).`;
+            }
+        }
+
+        try {
+            const rootSummary = await this.incrementalSummarizeRoot(rootPath, index);
+            index[rootPath] = rootSummary;
+        } catch {}
+
+        await this.writePlannerIndex(index);
+    }
+
+    private getIndexingEnabled(): boolean {
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        return config.get<boolean>(SETTINGS_KEYS.indexingEnabled, RETRIEVAL_DEFAULTS.INDEXING_ENABLED_DEFAULT);
+    }
+
+    private async readPlannerIndex(): Promise<PlannerIndex | null> {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) return null;
+        const dir = vscode.Uri.joinPath(workspaceFolder.uri, '.ivme');
+        const file = vscode.Uri.joinPath(dir, 'planner_index.json');
+        try {
+            const buf = await vscode.workspace.fs.readFile(file);
+            const json = JSON.parse(Buffer.from(buf).toString('utf8'));
+            return (json && typeof json === 'object') ? (json as PlannerIndex) : {};
+        } catch {
+            return null;
+        }
+    }
+
+    private async buildDirContentsFromIndex(dirPath: string, index: PlannerIndex): Promise<string[]> {
+        const entries: string[] = [];
+        const keys = Object.keys(index);
+        for (const key of keys) {
+            if (path.dirname(key) !== dirPath) continue;
+            const uri = vscode.Uri.file(key);
+            let isDir = false;
+            try {
+                const stat = await vscode.workspace.fs.stat(uri);
+                isDir = !!(stat.type & vscode.FileType.Directory);
+            } catch {
+                // If stat fails, assume it's a file entry
+                isDir = false;
+            }
+            const name = path.basename(key);
+            if (isDir) {
+                entries.push(`- dir ${name}: ${index[key]}`);
+            } else {
+                entries.push(`- file ${name}: ${index[key]}`);
+            }
+        }
+        return entries;
+    }
+
+    private async incrementalSummarizeRoot(rootPath: string, index: PlannerIndex): Promise<string> {
+        const contents: string[] = [];
+        const keys = Object.keys(index);
+        for (const key of keys) {
+            if (path.dirname(key) !== rootPath) continue;
+            const uri = vscode.Uri.file(key);
+            let isDir = false;
+            try {
+                const stat = await vscode.workspace.fs.stat(uri);
+                isDir = !!(stat.type & vscode.FileType.Directory);
+            } catch {
+                isDir = false;
+            }
+            const name = path.basename(key);
+            if (isDir) {
+                contents.push(`- dir ${name}: ${index[key]}`);
+            } else {
+                contents.push(`- file ${name}: ${index[key]}`);
+            }
+        }
+        const prompt = this.buildDirectorySummaryPrompt(rootPath, contents.join('\n'));
+        const raw = await this.generateContentWithTimeout(prompt, 20000);
+        const parsed = raw ? this.tryParseSummaryJson(raw) : null;
+        return parsed?.summary || 'A high-level summary describing the overall purpose of the project.';
     }
 
     public async ensureIndexIgnoreExists(): Promise<void> {
@@ -401,6 +598,18 @@ export class PlannerIndexer {
             console.warn('[PlannerIndexer] generateContentWithTimeout error:', e);
             return null;
         }
+    }
+
+    private buildFallbackFileSummary(filePath: string, content: string): string {
+        const base = path.basename(filePath);
+        const firstLine = (content || '')
+            .split(/\r?\n/)
+            .map(l => l.trim())
+            .find(l => l.length > 0) || '';
+        const preview = firstLine.length > 80 ? firstLine.slice(0, 77) + '...' : firstLine;
+        return preview
+            ? `${base} — ${preview}`
+            : `${base} — Source file added.`;
     }
 }
 

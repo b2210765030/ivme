@@ -8,7 +8,7 @@ import * as FileTags from '../components/file_tags.js';
 import * as HistoryPanel from '../components/history_panel.js';
 import * as InputArea from '../components/InputArea.js';
 import * as SettingsModal from '../components/settings_modal.js';
-import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, setWorkspaceName, getState, setTokenLimit, updateUITexts, setHasIndex, setAgentBarExpanded, setAgentActMode } from './state.js';
+import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, setWorkspaceName, getState, setTokenLimit, updateUITexts, setHasIndex, setAgentBarExpanded, setAgentActMode, incrementConversationSize } from './state.js';
 import * as DOM from '../utils/dom.js';
 
 export function initMessageListener() {
@@ -81,11 +81,30 @@ export function initMessageListener() {
                     setHasIndex(!!data.hasIndex);
                 }
                 break;
-            case 'updateTokenLimit':
-                // Token limiti güncellendi
-                setTokenLimit(data.tokenLimit);
-                InputArea.recalculateTotalAndUpdateUI();
-                break;
+            case 'updateTokenLimit': {
+                const limit = Number(data?.tokenLimit || 0);
+                if (limit > 0) {
+                    setTokenLimit(limit);
+                    // Settings modal input'unu da güncel göster
+                    try {
+                        const input = document.getElementById('token-limit');
+                        if (input) {
+                            input.value = String(limit);
+                            input.setAttribute('readonly', 'true');
+                        }
+                    } catch (e) {}
+                    InputArea.recalculateTotalAndUpdateUI();
+                }
+                break; }
+            case 'modelTokenUsage': {
+                // Backend: { prompt_tokens, completion_tokens, total_tokens }
+                const u = data || {};
+                const completion = Number(u.completion_tokens || 0) || 0;
+                if (completion > 0) {
+                    try { incrementConversationSize(completion); } catch (e) {}
+                    try { InputArea.recalculateTotalAndUpdateUI(); } catch (e) {}
+                }
+                break; }
             // --- Standart Mesajlar ---
             case 'addResponse':
                 ChatView.showAiResponse(data);
@@ -354,10 +373,10 @@ export function initMessageListener() {
                 break;
 
             // --- Bağlam (Context) Mesajları ---
-            case 'updateContextSize':
-                setContextSize(data.conversationSize, data.filesSize);
-                InputArea.recalculateTotalAndUpdateUI();
-                break;
+            case 'updateContextSize': {
+                // Tokenizer kaldırıldı; sadece UI refresh yapıyoruz
+                try { InputArea.recalculateTotalAndUpdateUI(); } catch (e) {}
+                break; }
             
             case 'fileContextSet': 
                 FileTags.display(message.fileNames); 

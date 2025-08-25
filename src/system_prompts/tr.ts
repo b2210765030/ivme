@@ -133,18 +133,30 @@ export function createPlanExplanationPrompts(planJson: string): { system: string
 export async function createPlannerSystemPrompt(plannerContext: string, userQuery: string, customTools?: Array<{name: string, description: string, schema: any}>): Promise<string> {
     return (
         `# ROLE & GOAL\n` +
-        `Bir Baş Yazılım Mimarısısın. Kullanıcının isteğini proje mimarisine uygun, uygulanabilir bir plan hâline getir.\n\n` +
+        `Bir Baş Yazılım Mimarısısın. Kullanıcının isteğini proje mimarisine uygun, uygulanabilir ve KOD ODAKLI bir plan hâline getir.\n\n` +
         `# CONTEXT\n` +
         `${plannerContext}\n\n` +
         `# USER REQUEST\n` +
         `"${userQuery}"\n\n` +
         `# INSTRUCTIONS\n` +
         `- Adım adım düşün ve her görevi geliştiricinin uygulayabileceği en küçük atomik eylemlere böl.\n` +
-        `- Kod, pseudocode veya kod blokları yazma. Sadece ne yapılacağını tarif et.\n` +
-        `- Mevcut dosyaları düzenlemeyi tercih et; gerekirse yeni dosya oluştur. Yapılacak değişiklikleri minimumda tut.\n` +
+        `- PLAN ÇIKTISINDA KOD ÜRETME: Kod blokları/pseudocode yazma; sadece ne yapılacağını tarif et. (Kod üretimi uygulama aşamasında yapılır.)\n` +
+        `- Tüm işleri KOD ODAKLI düşün: Kullanıcının talebini dosya/dosyalar bazında hayata geçirmek için somut düzenleme adımları planla.\n` +
+        `- Dosya akışı kuralı (çok önemli):\n` +
+        `  1) Kullanıcının bahsettiği veya mantıksal olarak gereken her dosya için önce 'check_index' adımı ekle (args.files).\n` +
+        `  2) Eksikse 'create_file' adımı ile oluştur (args.path).\n` +
+        `  3) Ardından kodu yazmak/güncellemek için 'edit_file' veya 'append_file' adımı ekle. Plan aşamasında KOD YAZMA; bunun yerine\n` +
+        `     args.change_spec veya args.content_spec alanlarında kısa, net, uygulanacak değişikliği tarif eden düz metin ver.\n` +
+        `  4) Gerekirse kodun konumunu belirlemek için 'locate_code' kullan ve sonraki 'edit_file' adımında args.use_saved_range ile referans ver.\n` +
+        `  5) Kodu doğru yazabilmek için bağlam gerekiyorsa 'search'/'retrieve_chunks' ile referans topla.\n` +
+        `- Mevcut dosyaları düzenlemeyi tercih et; gereksiz yeni dosya oluşturma. Değişiklikleri minimum ve doğru kapsamda tut.\n` +
         `- Her adım için kısa bir ".ui_text" cümlesi ekle; UI bu metni gösterecek.\n` +
         `- Eğer bir adımda ARAÇ gerekiyorsa, ".tool" alanında ARAÇ ADINI ve ".args" alanında parametrelerini ver. Emin değilsen ".tool" alanını boş bırakabilirsin.\n` +
-        `- Sadece GEÇERLİ JSON çıktısı ver; JSON dışı metin ekleme.\n\n` +
+        `- Sadece GEÇERLİ JSON çıktısı ver; JSON dışı metin ekleme.\n` +
+        `- Eğer CONTEXT içinde 'Previous Plan (for revision)' bölümü varsa: mevcut planı KORUYARAK yeni isteği karşılayacak şekilde GÜNCELLE/İRDELE.\n` +
+        `  - 'Completed Plan Steps' listesinde belirtilen adımlar DEĞİŞTİRİLMEZ ve TEKRARLANMAZ. Gerekirse yeni adımlar ekle ve adımları yeniden numaralandır.\n` +
+        `  - Önceki planla ÇAKIŞAN veya YİNELENEN adımları birleştir; yinelenenleri çıkar.\n` +
+        `  - Sonuç: Tüm adımları kapsayan BAŞTAN SONA TUTARLI bir plan döndür.\n\n` +
         `# KULLANILABİLİR ARAÇLAR\n` +
         await getToolsDescriptions('tr') + `\n\n` +
         `# ÖNEMLİ KURAL\n` +
@@ -170,17 +182,21 @@ export async function createPlannerSystemPrompt(plannerContext: string, userQuer
 export async function createPlannerPrompt(plannerContext: string, userQuery: string, customTools?: Array<{name: string, description: string, schema: any}>): Promise<string> {
     return (
         `# ROLE & GOAL\n` +
-        `Bir Baş Yazılım Mimarısısın. Kullanıcının isteğini proje mimarisine uygun şekilde karşılayan bir uygulama planı üret.\n\n` +
+        `Bir Baş Yazılım Mimarısısın. Kullanıcının isteğini proje mimarisine uygun şekilde karşılayan, KOD ODAKLI bir uygulama planı üret.\n\n` +
         `# CONTEXT\n` +
         `${plannerContext}\n\n` +
         `# USER REQUEST\n` +
         `"${userQuery}"\n\n` +
         `# INSTRUCTIONS\n` +
         `- Yapılacak işleri en küçük uygulanabilir adımlara böl.\n` +
-        `- Kod veya kod blokları ekleme; yalnızca eylemleri tarif et.\n` +
+        `- PLAN ÇIKTISINDA KOD YOK: Kod blokları yazma; yapılacak değişikliği args.change_spec/args.content_spec ile kısa ve açık tarif et.\n` +
+        `- Dosya akışı: her hedef dosya için (1) check_index, (2) gerekirse create_file, (3) edit_file/append_file ile kodu yaz/güncelle.\n` +
+        `- Gerekirse locate_code ile aralık belirle, ardından edit_file.use_saved_range kullan. Bağlam gerekiyorsa search/retrieve_chunks ekle.\n` +
         `- Her adım kısa ve net olsun; UI için kısa bir ".ui_text" cümlesi ekle.\n` +
         `- Eğer bir adımda ARAÇ gerekiyorsa, ".tool" alanında ARAÇ ADINI ve ".args" alanında parametrelerini ver. Emin değilsen ".tool" alanını boş bırakabilirsin.\n` +
-        `- Sadece geçerli JSON çıktısı ver, aşağıdaki şemaya uy.\n\n` +
+        `- Sadece geçerli JSON çıktısı ver, aşağıdaki şemaya uy.\n` +
+        `- CONTEXT'te 'Previous Plan (for revision)' varsa mevcut planı revize ederek tam birleştirilmiş plan döndür.\n` +
+        `  - 'Completed Plan Steps' (varsa) korunur, tekrarlanmaz; yeni isteği karşılayacak ek adımlar eklenir.\n\n` +
         `# KULLANILABİLİR ARAÇLAR\n` +
         await getToolsDescriptions('tr') + `\n\n` +
         `# JSON OUTPUT SCHEMA\n` +

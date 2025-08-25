@@ -6,7 +6,6 @@ import * as DOM from '../utils/dom.js';
 import { getState, setAiResponding, incrementConversationSize, setContextSize, resetChatState, lockConversation } from '../core/state.js';
 import { postMessage } from '../services/vscode.js';
 import { recalculateTotalAndUpdateUI, setPlaceholder, focus as focusInput } from './InputArea.js';
-import { countTokensGPT } from '../utils/tokenizer.js';
 
 // --- Değişkenler ---
 let streamingBuffer = '';
@@ -321,9 +320,7 @@ export function addUserMessage(text) {
     p.textContent = text;
     createMessageElement('user', p.outerHTML);
     
-    // Token sayısını hesapla ve ekle
-    const tokenCount = countTokensGPT(text);
-    incrementConversationSize(tokenCount);
+    // Token sayımı model usage ile güncellenecek
     
     lockConversation();
     recalculateTotalAndUpdateUI();
@@ -1373,8 +1370,7 @@ export function load(messages) {
             const content = (msg.role === 'assistant') ? marked.parse(msg.content) : `<p>${msg.content}</p>`;
             const elem = createMessageElement(msg.role, content);
             addCodeBlockActions(elem);
-            // Token sayısını hesapla
-            newConversationTokens += countTokensGPT(msg.content);
+            // Token sayımı model usage ile güncellenecek
         });
         setContextSize(newConversationTokens, getState().filesTokens);
         lockConversation();

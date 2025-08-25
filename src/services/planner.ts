@@ -226,7 +226,9 @@ async function readFileContent(fsPath: string): Promise<string | null> {
 export async function build_planner_context(
 	context: vscode.ExtensionContext,
 	userQuery: string,
-	recentSummaryMemory?: string
+	recentSummaryMemory?: string,
+	previousPlanJson?: string,
+	completedStepIndices?: number[]
 ): Promise<string> {
 	// Sadece indeksleme aktifken çalış
 	const config = vscode.workspace.getConfiguration(EXTENSION_ID);
@@ -299,6 +301,24 @@ export async function build_planner_context(
 	if (typeof recentSummaryMemory === 'string' && recentSummaryMemory.trim().length > 0) {
 		lines.push('## Recent Planner Summary (Memory)');
 		lines.push(recentSummaryMemory.trim());
+		lines.push('');
+	}
+
+	// Include previous plan JSON for revision/merge if provided
+	if (typeof previousPlanJson === 'string' && previousPlanJson.trim().length > 0) {
+		lines.push('## Previous Plan (for revision)');
+		const maxLen = 6000;
+		const truncated = previousPlanJson.length > maxLen ? (previousPlanJson.slice(0, maxLen) + '\n/* ... truncated ... */') : previousPlanJson;
+		lines.push('```json');
+		lines.push(truncated);
+		lines.push('```');
+		lines.push('');
+	}
+
+	// List completed step indices to preserve
+	if (Array.isArray(completedStepIndices) && completedStepIndices.length > 0) {
+		lines.push('## Completed Plan Steps');
+		lines.push('- Already executed step indices (1-based): ' + completedStepIndices.sort((a,b)=>a-b).join(', '));
 		lines.push('');
 	}
 	lines.push('## Key Directories and Their Responsibilities');
@@ -391,10 +411,12 @@ export async function run_planner(
 	userQuery: string,
 	onUiEmit?: (stepNo: number | undefined, uiText: string, isFinal?: boolean) => Promise<void> | void,
 	cancellationSignal?: AbortSignal,
-	recentSummaryMemory?: string
+	recentSummaryMemory?: string,
+	previousPlanJson?: string,
+	completedStepIndices?: number[]
 ): Promise<PlannerPlan> {
 	// GEÇİCİ: Planner her zaman çalışsın (indeksleme açık olmasa da). Bağlam üretimi indeks yoksa temel içerik döndürür.
-	const plannerContext = await build_planner_context(context, userQuery, recentSummaryMemory);
+	const plannerContext = await build_planner_context(context, userQuery, recentSummaryMemory, previousPlanJson, completedStepIndices);
 	
 	// Load tools from tools.json
 	const { getToolsManager } = await import('./tools_manager.js');

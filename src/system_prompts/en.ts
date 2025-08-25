@@ -133,18 +133,29 @@ export function createPlanExplanationPrompts(planJson: string): { system: string
 export async function createPlannerSystemPrompt(plannerContext: string, userQuery: string, customTools?: Array<{name: string, description: string, schema: any}>): Promise<string> {
     return (
         `# ROLE & GOAL\n` +
-        `You are a Principal Software Architect. Design an optimal, actionable implementation plan for the user's request that fits the project's architecture.\n\n` +
+        `You are a Principal Software Architect. Design an optimal, actionable and CODE-CENTRIC implementation plan for the user's request that fits the project's architecture.\n\n` +
         `# CONTEXT\n` +
         `${plannerContext}\n\n` +
         `# USER REQUEST\n` +
         `"${userQuery}"\n\n` +
         `# INSTRUCTIONS\n` +
         `- Think step-by-step and split each task into the smallest atomic actions a developer can follow.\n` +
-        `- Do NOT include code, pseudocode, or fenced code blocks. Describe WHAT to do, not the code.\n` +
-        `- Prefer editing existing files over creating new ones. Make minimal changes required for correctness.\n` +
+        `- NO CODE IN THE PLAN OUTPUT: do not write code/pseudocode/blocks; describe WHAT to change. (Code is generated during execution.)\n` +
+        `- Make it CODE-CENTRIC: reason in terms of concrete file edits to realize the request.\n` +
+        `- File flow (critical):\n` +
+        `  1) For every mentioned or implied file, first add a 'check_index' step (args.files).\n` +
+        `  2) If missing, create it with 'create_file' (args.path).\n` +
+        `  3) Then write/update code via 'edit_file' or 'append_file'. In the plan, do NOT include code;\n` +
+        `     instead provide args.change_spec or args.content_spec as short plain-text instructions for the execution phase.\n` +
+        `  4) Use 'locate_code' if needed to target ranges; reference it via edit_file.args.use_saved_range.\n` +
+        `  5) If additional context is needed, use 'search'/'retrieve_chunks'.\n` +
+        `- Prefer editing existing files; avoid unnecessary new files. Keep changes minimal and correct in scope.\n` +
         `- Each plan step must include a short English sentence in the field ".ui_text". Keep it concise.\n` +
         `- If a step REQUIRES a TOOL, provide the tool name in ".tool" and its parameters in ".args". If unsure, you may omit ".tool".\n` +
-        `- Output STRICTLY valid JSON only, matching the schema below; do not add prose outside the JSON.\n\n` +
+        `- Output STRICTLY valid JSON only, matching the schema below; do not add prose outside the JSON.\n` +
+        `- If the CONTEXT contains 'Previous Plan (for revision)': UPDATE/MERGE the existing plan to incorporate the new request.\n` +
+        `  - Steps listed under 'Completed Plan Steps' MUST NOT be modified or duplicated; add new steps as needed and renumber.\n` +
+        `  - Remove duplicates and merge overlapping steps; produce a single coherent refreshed plan end-to-end.\n\n` +
         `# AVAILABLE TOOLS\n` +
         await getToolsDescriptions('en') + `\n\n` +
         `# IMPORTANT INDEX RULES\n` +
@@ -170,17 +181,20 @@ export async function createPlannerSystemPrompt(plannerContext: string, userQuer
 export async function createPlannerPrompt(plannerContext: string, userQuery: string, customTools?: Array<{name: string, description: string, schema: any}>): Promise<string> {
     return (
         `# ROLE & GOAL\n` +
-        `You are a Principal Software Architect. Produce an implementation plan that addresses the user's request and fits the project's architecture.\n\n` +
+        `You are a Principal Software Architect. Produce a CODE-CENTRIC implementation plan that addresses the user's request and fits the project's architecture.\n\n` +
         `# CONTEXT\n` +
         `${plannerContext}\n\n` +
         `# USER REQUEST\n` +
         `"${userQuery}"\n\n` +
         `# INSTRUCTIONS\n` +
         `- Break the work into the smallest possible actionable steps.\n` +
-        `- Do not include code or code blocks. Describe the actions only.\n` +
+        `- NO CODE in the plan: describe the change in args.change_spec/args.content_spec; code will be generated during execution.\n` +
+        `- File flow: (1) check_index, (2) create_file if missing, (3) edit_file/append_file to implement.\n` +
+        `- Use locate_code to target ranges and search/retrieve_chunks for context when helpful.\n` +
         `- Keep each step short and precise; include a short ".ui_text" sentence for UI display.\n` +
         `- If a step REQUIRES a TOOL, provide the tool name in ".tool" and its parameters in ".args". If unsure, you may omit ".tool".\n` +
-        `- Output strictly valid JSON only, following the schema below.\n\n` +
+        `- Output strictly valid JSON only, following the schema below.\n` +
+        `- If 'Previous Plan (for revision)' is present in CONTEXT, return a revised MERGED plan: keep completed steps intact and add missing steps for the new request.\n\n` +
         `# AVAILABLE TOOLS\n` +
         await getToolsDescriptions('en') + `\n\n` +
         `# JSON OUTPUT SCHEMA\n` +

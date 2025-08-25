@@ -34,6 +34,17 @@ export class InteractionHandler {
         private context: vscode.ExtensionContext
     ) {}
 
+    /** Yeni sohbet/sayfa açıldığında veya sohbet değiştirildiğinde plan/act durumunu sıfırla. */
+    public resetPlannerState(): void {
+        try { this.currentRequestController?.abort(); } catch {}
+        this.currentRequestController = null;
+        this.lastPlannerPlan = null;
+        this.executedStepIndices = new Set();
+        this.executedStepLogs = [];
+        this.didEmitSummaryNote = false;
+        this.isBatchRun = false;
+    }
+
     public cancelStream() {
         if (this.currentRequestController) {
             this.currentRequestController.abort();
@@ -49,6 +60,30 @@ export class InteractionHandler {
         
         this.conversationManager.addMessage('user', instruction);
         console.log('[Planner] User instruction:', instruction);
+
+        // Natural-language trigger: if the user asks to execute all steps, run the whole plan
+        let intentWantsExecuteAll = this.isExecuteAllInstruction(instruction);
+        if (!intentWantsExecuteAll) {
+            try {
+                intentWantsExecuteAll = await this.shouldAutoExecuteByLLM(instruction);
+            } catch {}
+        }
+        if (intentWantsExecuteAll) {
+            if (this.lastPlannerPlan && Array.isArray(this.lastPlannerPlan.steps) && this.lastPlannerPlan.steps.length > 0) {
+                try {
+                    await this.executePlannerAll();
+                    return;
+                } catch (e: any) {
+                    this.webview.postMessage({ type: 'addResponse', payload: `**Hata:** Tüm adımlar uygulanamadı: ${e?.message || e}` });
+                    this.webview.postMessage({ type: 'streamEnd' });
+                    return;
+                }
+            } else {
+                this.webview.postMessage({ type: 'addResponse', payload: 'Önce bir plan oluşturulmalı. Lütfen önce bir plan isteyin (örn. "merge.py oluştur").' });
+                this.webview.postMessage({ type: 'streamEnd' });
+                return;
+            }
+        }
         // Koşullu: Sadece Agent Modu aktif VE indeksleme (index butonu) açıkken planner akışı çalışsın
         try {
             this.currentRequestController = new AbortController();
@@ -70,6 +105,11 @@ export class InteractionHandler {
                 // Streaming: ui_text parçalarını anında UI'a ilet
                 // Planner'ı hafızadaki son özetle zenginleştir
                 const latestSummary = this.conversationManager.getPlannerSummaryMemory?.();
+                // Prepare previous plan JSON and executed step indices for revision
+                const prevPlanJson = this.lastPlannerPlan ? JSON.stringify(this.lastPlannerPlan) : undefined;
+                const completedIndices = Array.isArray(Array.from(this.executedStepIndices)) && this.executedStepIndices.size > 0
+                    ? Array.from(this.executedStepIndices)
+                    : undefined;
                 const plan = await run_planner(
                     this.conversationManager.getExtensionContext(),
                     this.apiManager,
@@ -79,7 +119,9 @@ export class InteractionHandler {
                         this.webview.postMessage({ type: 'plannerUiChunk', payload: { stepNo, uiText, isFinal } });
                     },
                     cancellationSignal as any,
-                    latestSummary
+                    latestSummary,
+                    prevPlanJson,
+                    completedIndices
                 );
                 // Plan tamamlandığında nihai sonucu da gönder
                 try {
@@ -122,7 +164,7 @@ export class InteractionHandler {
     /**
      * Planner planındaki tek bir adımı uygular (tool kullanarak). Kod üretimi bu aşamada yapılır.
      */
-    public async executePlannerStep(stepIndex: number): Promise<{ label: string; elapsedMs: number; error?: string } | null> {
+    public async executePlannerStep(stepIndex: number, useManualArgs?: boolean): Promise<{ label: string; elapsedMs: number; error?: string } | null> {
         if (this.lastPlannerPlan == null) {
             vscode.window.showWarningMessage('Önce bir plan oluşturulmalı.');
             return null;
@@ -137,9 +179,13 @@ export class InteractionHandler {
         const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         // UI placeholder: başlat
         this.webview.postMessage({ type: 'stepExecStart', payload: { index: stepIndex, label } });
-        try {
-            // 1) Tool seçimi + args çıkarımı (LLM)
-            const stepJson = JSON.stringify(step, null, 2);
+
+        const attemptCount = useManualArgs ? 1 : 3;
+        let lastError: any = null;
+        for (let attempt = 1; attempt <= attemptCount; attempt++) {
+            try {
+                // 1) Tool seçimi + args çıkarımı (LLM) veya manuel argüman
+                const stepJson = JSON.stringify(step, null, 2);
             // Önceki araç çıktılarını tool seçiminde bağlama ekle
             const ctxSnap = this.executor.getContextSnapshot?.();
             const ctxText = ctxSnap ? [
@@ -148,89 +194,94 @@ export class InteractionHandler {
                 ctxSnap.locationsSummary ? ('Saved locations:\n' + ctxSnap.locationsSummary) : '',
                 ctxSnap.toolOutputsSummary ? ('Recent tool outputs:\n' + ctxSnap.toolOutputsSummary) : ''
             ].filter(Boolean).join('\n') : '';
-            // Get all tools from tools manager
-            const { getToolsManager } = await import('../../services/tools_manager.js');
-            const toolsManager = getToolsManager();
-            let allToolNames = toolsManager.getToolNames();
-            if (!Array.isArray(allToolNames) || allToolNames.length === 0) {
-                try { await (toolsManager as any).initializeBuiltinTools?.(); } catch {}
-                allToolNames = toolsManager.getToolNames();
-            }
+                // Get all tools from tools manager
+                const { getToolsManager } = await import('../../services/tools_manager.js');
+                const toolsManager = getToolsManager();
+                let allToolNames = toolsManager.getToolNames();
+                if (!Array.isArray(allToolNames) || allToolNames.length === 0) {
+                    try { await (toolsManager as any).initializeBuiltinTools?.(); } catch {}
+                    allToolNames = toolsManager.getToolNames();
+                }
             
             // Eğer adımda önceden UI üzerinden bir araç seçildiyse, seçimde sadece onu geçerli kıl (ikinci aşama yine denetler)
             const preselected = (typeof step?.tool === 'string' && step.tool.trim().length > 0) ? step.tool.trim() : '';
             const isAuto = preselected.toLowerCase() === 'auto';
             const validTools = (!preselected || isAuto) ? allToolNames : [preselected];
-            let system: string;
-            let user: string;
-            if (preselected && !isAuto) {
-                // Args-only prompt for a preselected single tool
-                const toolObj = toolsManager.getToolByName(preselected);
-                const schemaJson = toolObj?.schema ? JSON.stringify(toolObj.schema, null, 2) : '{}';
-                const toolDesc = toolObj?.description || '';
-                system = [
-                    'Aşağıdaki plan adımı için SEÇİLİ TEK aracın argümanlarını çıkar.',
-                    'Başka araç seçme; sadece bu aracı kullan.',
-                    'ÇIKTI FORMAT ZORUNLU: Yalnızca tek satır ve SADE JSON objesi döndür: {"args":{...}}',
-                    'BAŞKA ANAHTAR EKLEME: tool, step, action, thought, ui_text, tool_input, parameters, params, arguments gibi anahtarları YAZMA.',
-                    'TÜM string değerleri TEK SATIR olmalı; kod bloğu/backtick kullanma; \n dahil kaçış karakterleri kullanma.',
-                    'Markdown, açıklama, kod bloğu, ön/arka metin YAZMA.'
-                ].join(' ');
-                user = [
-                    `Seçilen Araç: ${preselected}`,
-                    toolDesc ? (`Açıklama: ${toolDesc}`) : '',
-                    'Araç Şeması (JSON):',
-                    '```json',
-                    schemaJson,
-                    '```',
-                    '',
-                    ctxText || '',
-                    'Plan Adımı (JSON):',
-                    '```json',
-                    stepJson,
-                    '```'
-                ].filter(Boolean).join('\n');
-            } else {
-                // Auto mode: tool + args
-                system = [
-                    'Aşağıdaki plan adımı için UYGUN TEK aracı ve argümanlarını çıkar.',
-                    'Sadece geçerli araçlardan birini kullan (aşağıda listelenen).',
-                    'ÇIKTI FORMAT ZORUNLU: Yalnızca tek satır ve SADE JSON objesi döndür: {"tool":"...","args":{...}}',
-                    'BAŞKA ANAHTAR EKLEME: step, action, thought, ui_text, tool_input, parameters, params, arguments, input gibi anahtarları YAZMA.',
-                    'TÜM string değerleri TEK SATIR olmalı; kod bloğu/backtick kullanma; \n dahil kaçış karakterleri kullanma.',
-                    'Markdown, açıklama, kod bloğu, ön/arka metin YAZMA.',
-                    'Örnek: {"tool":"edit_file","args":{"path":"merge.py","change_spec":"...","find_spec":"..."}}',
-                    `Geçerli araç isimleri: ${validTools.join(', ')}`
-                ].join(' ');
-                const toolsListText = await getToolsDescriptions('tr');
-                user = [
-                    'Araç Listesi (TR):',
-                    toolsListText,
-                    '',
-                    ctxText || '',
-                    'Araç ön-seçimi: AUTO',
-                    'Plan Adımı (JSON):',
-                    '```json',
-                    stepJson,
-                    '```'
-                ].join('\n');
-            }
-            // Debug: giden promptu ve adım bilgisini logla
-            console.log('[ToolSelect] stepIndex=', stepIndex, 'label=', label);
-            console.log('[ToolSelect] system prompt:\n' + system);
-            console.log('[ToolSelect] user prompt:\n' + user);
-            let raw = '';
-            await this.apiManager.generateChatContent([
-                { role: 'system' as const, content: system },
-                { role: 'user' as const, content: user }
-            ], (chunk) => { raw += chunk; }, undefined as any);
-            console.log('[ToolSelect] raw response:\n' + raw);
-            let selection: { tool: string; args?: any } | null = null;
-            try {
-                selection = preselected && !isAuto ? this.parseArgsOnlySelection(raw, preselected) : this.parseToolSelection(raw);
-            } catch (e) {
-                console.warn('[ToolSelect] parse error:', e);
-            }
+                let selection: { tool: string; args?: any } | null = null;
+                if (useManualArgs) {
+                    // Skip LLM selection; use the tool/args already present on the step
+                    selection = { tool: String(step.tool || ''), args: (step as any).args || {} };
+                } else {
+                    let system: string;
+                    let user: string;
+                    if (preselected && !isAuto) {
+                        // Args-only prompt for a preselected single tool
+                        const toolObj = toolsManager.getToolByName(preselected);
+                        const schemaJson = toolObj?.schema ? JSON.stringify(toolObj.schema, null, 2) : '{}';
+                        const toolDesc = toolObj?.description || '';
+                        system = [
+                            'Aşağıdaki plan adımı için SEÇİLİ TEK aracın argümanlarını çıkar.',
+                            'Başka araç seçme; sadece bu aracı kullan.',
+                            'ÇIKTI FORMAT ZORUNLU: Yalnızca tek satır ve SADE JSON objesi döndür: {"args":{...}}',
+                            'BAŞKA ANAHTAR EKLEME: tool, step, action, thought, ui_text, tool_input, parameters, params, arguments gibi anahtarları YAZMA.',
+                            'TÜM string değerleri TEK SATIR olmalı; kod bloğu/backtick kullanma; \n dahil kaçış karakterleri kullanma.',
+                            'Markdown, açıklama, kod bloğu, ön/arka metin YAZMA.'
+                        ].join(' ');
+                        user = [
+                            `Seçilen Araç: ${preselected}`,
+                            toolDesc ? (`Açıklama: ${toolDesc}`) : '',
+                            'Araç Şeması (JSON):',
+                            '```json',
+                            schemaJson,
+                            '```',
+                            '',
+                            ctxText || '',
+                            'Plan Adımı (JSON):',
+                            '```json',
+                            stepJson,
+                            '```'
+                        ].filter(Boolean).join('\n');
+                    } else {
+                        // Auto mode: tool + args
+                        system = [
+                            'Aşağıdaki plan adımı için UYGUN TEK aracı ve argümanlarını çıkar.',
+                            'Sadece geçerli araçlardan birini kullan (aşağıda listelenen).',
+                            'ÇIKTI FORMAT ZORUNLU: Yalnızca tek satır ve SADE JSON objesi döndür: {"tool":"...","args":{...}}',
+                            'BAŞKA ANAHTAR EKLEME: step, action, thought, ui_text, tool_input, parameters, params, arguments, input gibi anahtarları YAZMA.',
+                            'TÜM string değerleri TEK SATIR olmalı; kod bloğu/backtick kullanma; \n dahil kaçış karakterleri kullanma.',
+                            'Markdown, açıklama, kod bloğu, ön/arka metin YAZMA.',
+                            'Örnek: {"tool":"edit_file","args":{"path":"merge.py","change_spec":"...","find_spec":"..."}}',
+                            `Geçerli araç isimleri: ${validTools.join(', ')}`
+                        ].join(' ');
+                        const toolsListText = await getToolsDescriptions('tr');
+                        user = [
+                            'Araç Listesi (TR):',
+                            toolsListText,
+                            '',
+                            ctxText || '',
+                            'Araç ön-seçimi: AUTO',
+                            'Plan Adımı (JSON):',
+                            '```json',
+                            stepJson,
+                            '```'
+                        ].join('\n');
+                    }
+                    // Debug: giden promptu ve adım bilgisini logla
+                    console.log('[ToolSelect] stepIndex=', stepIndex, 'label=', label, 'attempt=', attempt);
+                    console.log('[ToolSelect] system prompt:\n' + system);
+                    console.log('[ToolSelect] user prompt:\n' + user);
+                    let raw = '';
+                    await this.apiManager.generateChatContent([
+                        { role: 'system' as const, content: system },
+                        { role: 'user' as const, content: user }
+                    ], (chunk) => { raw += chunk; }, undefined as any);
+                    console.log('[ToolSelect] raw response:\n' + raw);
+                    try {
+                        selection = preselected && !isAuto ? this.parseArgsOnlySelection(raw, preselected) : this.parseToolSelection(raw);
+                    } catch (e) {
+                        console.warn('[ToolSelect] parse error:', e);
+                    }
+                }
             if (!selection || typeof selection.tool !== 'string') {
                 // Fallback: Eğer ön-seçim tek araca sabitlenmişse onu kullan; aksi halde heuristik seçimi dene
                 if (preselected && !isAuto && validTools.length === 1) {
@@ -278,43 +329,47 @@ export class InteractionHandler {
             (this.lastPlannerPlan.steps[stepIndex] as any).tool = selection.tool;
             (this.lastPlannerPlan.steps[stepIndex] as any).args = selection.args || {};
 
-            // 2) Aracı çalıştır
-            const result = await this.executor.executeStep(ctx, this.apiManager, this.lastPlannerPlan, stepIndex);
-            const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-            const elapsedMs = Math.max(0, t1 - t0);
-            this.webview.postMessage({ type: 'stepExecEnd', payload: { index: stepIndex, label, elapsedMs, result } });
-            const log = { label, elapsedMs };
-            this.executedStepLogs.push(log);
-            this.executedStepIndices.add(stepIndex);
-            // Eğer tüm adımlar (başarılı ya da hatalı) en az bir kez çalıştırıldıysa paneli tamamlandı olarak işaretle
-            try {
-                if (this.lastPlannerPlan && this.executedStepIndices.size >= this.lastPlannerPlan.steps.length) {
-                    this.webview.postMessage({ type: 'plannerCompleted' });
-                    if (!this.isBatchRun && !this.didEmitSummaryNote) {
-                        this.didEmitSummaryNote = true;
-                        await this.generateAndShowSummaryNote();
+                // 2) Aracı çalıştır
+                const result = await this.executor.executeStep(ctx, this.apiManager, this.lastPlannerPlan, stepIndex);
+                const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                const elapsedMs = Math.max(0, t1 - t0);
+                this.webview.postMessage({ type: 'stepExecEnd', payload: { index: stepIndex, label, elapsedMs, result } });
+                const log = { label, elapsedMs };
+                this.executedStepLogs.push(log);
+                this.executedStepIndices.add(stepIndex);
+                // Eğer tüm adımlar başarıyla veya manuel atlama ile tamamlandıysa paneli tamamlandı olarak işaretle
+                try {
+                    if (this.lastPlannerPlan && this.executedStepIndices.size >= this.lastPlannerPlan.steps.length) {
+                        this.webview.postMessage({ type: 'plannerCompleted' });
+                        if (!this.isBatchRun && !this.didEmitSummaryNote) {
+                            this.didEmitSummaryNote = true;
+                            await this.generateAndShowSummaryNote();
+                        }
                     }
+                } catch (e) { /* ignore */ }
+                return log;
+            } catch (e: any) {
+                lastError = e;
+                console.warn(`[StepExec] attempt ${attempt} failed:`, e?.message || String(e));
+                // retry unless last attempt
+                if (attempt < attemptCount) {
+                    continue;
                 }
-            } catch (e) { /* ignore */ }
-            return log;
-        } catch (e: any) {
-            const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-            const elapsedMs = Math.max(0, t1 - t0);
-            this.webview.postMessage({ type: 'stepExecEnd', payload: { index: stepIndex, label, elapsedMs, error: e?.message || String(e) } });
-            const log = { label, elapsedMs, error: e?.message || String(e) };
-            this.executedStepLogs.push(log);
-            this.executedStepIndices.add(stepIndex);
-            try {
-                if (this.lastPlannerPlan && this.executedStepIndices.size >= this.lastPlannerPlan.steps.length) {
-                    this.webview.postMessage({ type: 'plannerCompleted' });
-                    if (!this.isBatchRun && !this.didEmitSummaryNote) {
-                        this.didEmitSummaryNote = true;
-                        await this.generateAndShowSummaryNote();
-                    }
-                }
-            } catch (e2) { /* ignore */ }
-            return log;
+                const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                const elapsedMs = Math.max(0, t1 - t0);
+                this.webview.postMessage({ type: 'stepExecEnd', payload: { index: stepIndex, label, elapsedMs, error: e?.message || String(e) } });
+                const log = { label, elapsedMs, error: e?.message || String(e) };
+                this.executedStepLogs.push(log);
+                // 3 kez denendi ve başarısız: kullanıcıdan manuel giriş iste veya atlama öner
+                try {
+                    this.webview.postMessage({ type: 'plannerStepManualRequired', payload: { index: stepIndex, step, error: e?.message || String(e) } });
+                    this.webview.postMessage({ type: 'addResponse', payload: `Adım '${label}' üç denemede tamamlanamadı. Bu adımı elle araç/argüman girerek uygulamak ister misiniz, yoksa atlayalım mı?` });
+                } catch {}
+                return log;
+            }
         }
+        // Should not reach here; return a safe default if loop exits unexpectedly
+        return { label, elapsedMs: 0, error: String(lastError || 'Bilinmeyen hata') };
     }
 
     /**
@@ -708,6 +763,170 @@ export class InteractionHandler {
         }
     }
 
+    /** UI'dan manuel araç/argüman sağlanırsa bu metot çağrılır ve seçim aşaması atlanır. */
+    public async provideManualToolArgs(stepIndex: number, tool: string, args: any): Promise<void> {
+        if (!this.lastPlannerPlan) return;
+        if (stepIndex < 0 || stepIndex >= this.lastPlannerPlan.steps.length) return;
+        try {
+            (this.lastPlannerPlan.steps[stepIndex] as any).tool = tool;
+            (this.lastPlannerPlan.steps[stepIndex] as any).args = args || {};
+            await this.executePlannerStep(stepIndex, true);
+        } catch (e) {
+            console.error('[Interaction] provideManualToolArgs error:', e);
+        }
+    }
+
+    /** Kullanıcı adımı atlamak isterse çağrılır. */
+    public async skipPlannerStep(stepIndex: number): Promise<void> {
+        if (!this.lastPlannerPlan) return;
+        if (stepIndex < 0 || stepIndex >= this.lastPlannerPlan.steps.length) return;
+        const step = this.lastPlannerPlan.steps[stepIndex];
+        const label = this.formatStepLabel(step);
+        // İşaretle ve UI'a bildir
+        this.executedStepIndices.add(stepIndex);
+        this.webview.postMessage({ type: 'stepSkipped', payload: { index: stepIndex, label } });
+        try {
+            if (this.lastPlannerPlan && this.executedStepIndices.size >= this.lastPlannerPlan.steps.length) {
+                this.webview.postMessage({ type: 'plannerCompleted' });
+                if (!this.isBatchRun && !this.didEmitSummaryNote) {
+                    this.didEmitSummaryNote = true;
+                    await this.generateAndShowSummaryNote();
+                }
+            }
+        } catch {}
+    }
+
+    /** Detects user intent to execute all planner steps using natural-language cues (TR/EN). */
+    private isExecuteAllInstruction(input: string): boolean {
+        try {
+            const s = String(input || '').toLowerCase();
+            const sStripped = s.replace(/[.!?\s]+$/g, '').trim();
+
+            // Does the sentence mention plan/steps?
+            const hasPlanKeyword = /\b(plan|adım|adim|adımları|adimlari|step|steps)\b/i.test(s);
+
+            // Direct patterns that already contain plan/steps cues
+            const directPatterns: RegExp[] = [
+                // Turkish — explicit
+                /(tüm|tum|tamamını|tamamini|bütün|butun)\s+(adımları|adimlari|adımlar|adimlar)\s*(uygula|çalıştır|calistir|başlat|baslat|yürüt|yurut|yap|tamamla|bitir)/i,
+                /tüm\s*plan[ıi]?\s*(uygula|çalıştır|calistir|başlat|baslat|yürüt|yurut|tamamla|bitir)/i,
+                /plan[ıi]?\s*(uygula|çalıştır|calistir|başlat|baslat|yürüt|yurut|tamamla|bitir|devreye\s*al)/i,
+                /(adımları|adimlari)\s*(sırayla|sirayla|tek\s*tek)\s*(uygula|çalıştır|calistir|başlat|baslat|yürüt|yurut|yap|tamamla|bitir)/i,
+                /(kalan|geri\s*kalan)\s*(adımları|adimlari)\s*(uygula|çalıştır|calistir|başlat|baslat|yürüt|yurut|tamamla|bitir)/i,
+                /act\s*modunda/i,
+
+                // English — explicit
+                /(?:execute|run|apply|perform|carry\s*out|complete|finish|kick\s*off|start|begin)\s+(?:the\s+)?(?:(?:entire|whole|full|complete)\s+)?(?:plan|all\s*steps)/i,
+                /go\s*ahead\s*(?:and)?\s*(?:run|execute|apply)\s*(?:the\s+)?(?:plan|all\s*steps)/i,
+                /proceed\s*with\s*(?:the\s+)?plan/i,
+                /run\s*it\s*(?:end\s*to\s*end|e2e)/i
+            ];
+
+            if (directPatterns.some(re => re.test(s))) return true;
+
+            // Broad patterns; require plan/steps keywords to reduce false positives
+            const broadPatterns: RegExp[] = [
+                // Turkish
+                /(hepsini|hepsin(i)?|tümünü|tumunu|tamamını|tamamini|bütününü|butununu)\s*(uygula|çalıştır|calistir|başlat|baslat|yürüt|yurut|yap|tamamla|bitir)/i,
+                /(devam\s*et|sürdür|ilerle)/i,
+                /(hemen\s*başla|başlat\s*gitsin|direkt\s*uygula|şimdi\s*uygula)/i,
+                /(otomatik|auto)\s*(uygula|çalıştır|calistir|başlat|baslat)/i,
+                // English
+                /(execute|run|apply|perform|complete|finish|start|begin)\s*(it|this)/i,
+                /(continue|proceed|go\s*ahead)/i,
+                /(auto\s*run|batch\s*run|run\s*everything|do\s*everything)/i,
+                /(let'?s|lets)\s+(apply|run|do)\b/i
+            ];
+
+            if (hasPlanKeyword && broadPatterns.some(re => re.test(s))) return true;
+
+            // If we already have a plan, allow very short/elliptical triggers like just "çalıştır" or "run"
+            if (this.lastPlannerPlan && Array.isArray(this.lastPlannerPlan.steps) && this.lastPlannerPlan.steps.length > 0) {
+                const singleVerbPatterns: RegExp[] = [
+                    // Turkish (accented and non-accented variants)
+                    /^(çalıştır|calistir)$/i,
+                    /^(başlat|baslat)$/i,
+                    /^(yürüt|yurut)$/i,
+                    /^(uygula)$/i,
+                    /^(tamamla|bitir)$/i,
+                    /^(devreye\s*al)$/i,
+                    /^(başla|basla|başlayalım|baslayalim)$/i,
+                    /^(hadi|hadi\s*başla|hadi\s*basla)$/i,
+                    // English
+                    /^(run|execute|apply|start|begin|go)$/i,
+                    /^(go\s*ahead)$/i,
+                    /^(let'?s\s*(go|run|start|begin))$/i
+                ];
+                if (singleVerbPatterns.some(re => re.test(sStripped))) return true;
+            }
+
+            return false;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * LLM-based intent classifier: asks the model whether the user wants to execute all plan steps now.
+     * Returns true only when the instruction clearly requests auto execution (TR/EN), otherwise false.
+     * Very low token, strict JSON output.
+     */
+    private async shouldAutoExecuteByLLM(instruction: string): Promise<boolean> {
+        try {
+            const hasPlan = !!(this.lastPlannerPlan && Array.isArray(this.lastPlannerPlan.steps) && this.lastPlannerPlan.steps.length > 0);
+            if (!hasPlan) return false; // cannot auto-execute without a plan
+
+            const examplesTR = [
+                'tüm adımları uygula',
+                'planı çalıştır',
+                'adımları sırayla başlat',
+                'hepsini tamamla',
+                'act modunda uygula'
+            ].join(' | ');
+            const examplesEN = [
+                'execute all steps',
+                'run the plan',
+                'apply everything',
+                'proceed with the plan',
+                'run it end to end'
+            ].join(' | ');
+
+            const system = [
+                'You are a strict intent classifier. Decide if the user asks to EXECUTE ALL PLAN STEPS NOW.',
+                'Return ONLY a compact JSON object: {"auto_execute": true|false}. No extra fields, no text.',
+                'If the instruction is ambiguous or general (e.g., asking for planning or code help), return false.',
+                'Turkish and English supported.'
+            ].join(' ');
+
+            const user = [
+                'Context:',
+                `plan_exists: ${hasPlan ? 'true' : 'false'}`,
+                `instruction: "${instruction.replace(/"/g, '\\"')}"`,
+                'Positive examples (TR): ' + examplesTR,
+                'Positive examples (EN): ' + examplesEN,
+                'Output strictly: {"auto_execute": true|false}'
+            ].join('\n');
+
+            let raw = '';
+            await this.apiManager.generateChatContent([
+                { role: 'system' as const, content: system },
+                { role: 'user' as const, content: user }
+            ], (chunk) => { raw += chunk; }, undefined as any);
+
+            // Extract first JSON block or braces
+            const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw);
+            const text = fence && fence[1] ? fence[1].trim() : raw.trim();
+            const first = text.indexOf('{');
+            const last = text.lastIndexOf('}');
+            const jsonSlice = (first !== -1 && last !== -1 && last > first) ? text.slice(first, last + 1) : text;
+            let parsed: any = {};
+            try { parsed = JSON.parse(jsonSlice); } catch { return false; }
+            return parsed && typeof parsed.auto_execute === 'boolean' ? parsed.auto_execute === true : false;
+        } catch {
+            return false;
+        }
+    }
+
     /**
      * Plan çıktılarını çok kısa, sade Türkçe cümlelerle adım adım açıklar ve webview'e stream eder.
      */
@@ -796,6 +1015,17 @@ export class InteractionHandler {
 
             if (!cancellationSignal.aborted) {
                 this.conversationManager.addMessage('assistant', fullResponse);
+                // Model kullanımını (token) UI'a bildir
+                try {
+                    const usage = (this.apiManager as any).getLastUsageIfAvailable?.();
+                    if (usage && typeof usage === 'object') {
+                        const completion = Number((usage as any).completion_tokens || 0) || 0;
+                        if (completion > 0) {
+                            try { this.conversationManager.addUsageTokens(completion); } catch {}
+                        }
+                        this.webview.postMessage({ type: 'modelTokenUsage', payload: usage });
+                    }
+                } catch {}
             }
             
         } catch (error: any) {

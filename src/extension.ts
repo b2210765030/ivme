@@ -1,6 +1,7 @@
 // src/extension.ts
 
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { BaykarAiActionProvider } from './providers/action';
 import { BaykarAiHoverProvider } from './providers/hover';
 import { IvmeSelectionCodeLensProvider, ivmeSelectionCodeLensProvider } from './providers/codelens';
@@ -8,6 +9,8 @@ import { ChatViewProvider } from './providers/view_chat';
 import { ApiServiceManager } from './services/manager';
 import { CommandHandler } from './features/Handlers/Command';
 import { COMMAND_IDS, EXTENSION_NAME, EXTENSION_ID, SETTINGS_KEYS } from './core/constants';
+import { ProjectIndexer } from './services/indexer';
+import { PlannerIndexer } from './services/planner_indexer';
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -89,6 +92,63 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.languages.registerHoverProvider('*', new BaykarAiHoverProvider()),
         vscode.languages.registerCodeLensProvider({ scheme: 'file' }, ivmeSelectionCodeLensProvider)
     );
+
+    // Auto-indexing watcher (incremental updates)
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (workspaceFolder) {
+            const indexer = new ProjectIndexer(apiManager, context);
+            const plannerIndexer = new PlannerIndexer(apiManager, context);
+
+            // Debounce per file to avoid thrashing on rapid saves
+            const pendingTimers = new Map<string, NodeJS.Timeout>();
+            const scheduleUpdate = (fsPath: string) => {
+                // Basic excludes and internal folder
+                if (
+                    fsPath.includes(`${path.sep}node_modules${path.sep}`) ||
+                    fsPath.includes(`${path.sep}dist${path.sep}`) ||
+                    fsPath.includes(`${path.sep}out${path.sep}`) ||
+                    fsPath.includes(`${path.sep}.ivme${path.sep}`)
+                ) {
+                    return;
+                }
+                const existing = pendingTimers.get(fsPath);
+                if (existing) clearTimeout(existing);
+                const t = setTimeout(() => {
+                    // Vector store incremental
+                    indexer.updateVectorStoreForFiles([fsPath]).catch(() => {});
+                    // Planner index incremental
+                    plannerIndexer.updatePlannerIndexForFiles([fsPath]).catch(() => {});
+                    pendingTimers.delete(fsPath);
+                }, 700);
+                pendingTimers.set(fsPath, t);
+            };
+            const scheduleRemove = (fsPath: string) => {
+                indexer.removeFileFromVectorStore(fsPath).catch(() => {});
+                plannerIndexer.removeFileFromPlannerIndex(fsPath).catch(() => {});
+            };
+
+            // Watch common code file extensions; folder excludes handled above
+            const pattern = new vscode.RelativePattern(workspaceFolder, '**/*');
+            const watcher = vscode.workspace.createFileSystemWatcher(pattern, false, false, false);
+            watcher.onDidCreate(uri => scheduleUpdate(uri.fsPath));
+            watcher.onDidChange(uri => scheduleUpdate(uri.fsPath));
+            watcher.onDidDelete(uri => scheduleRemove(uri.fsPath));
+            context.subscriptions.push(watcher);
+
+            // Also listen to explicit rename events (delete+create usually covers it but this is safer)
+            context.subscriptions.push(
+                vscode.workspace.onDidRenameFiles(async (e) => {
+                    for (const f of e.files) {
+                        scheduleRemove(f.oldUri.fsPath);
+                        scheduleUpdate(f.newUri.fsPath);
+                    }
+                })
+            );
+        }
+    } catch (e) {
+        console.warn('[AutoIndex] Watcher setup failed:', e);
+    }
 }
 
 export function deactivate() {}

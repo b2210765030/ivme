@@ -10,14 +10,15 @@ import { Conversation, ChatMessage } from '../../types/index';
 import { generateUUID } from '../../core/utils';
 import { EXTENSION_ID, SETTINGS_KEYS } from '../../core/constants';
 import { createInitialSystemPrompt } from '../../system_prompts';
-import { countTokensGPT } from '../../core/tokenizer';
 
 export class ConversationManager {
     private conversations: Conversation[] = [];
     private activeConversationId: string | null = null;
+    private usageByConversationId: Record<string, number> = {};
 
     constructor(private readonly context: vscode.ExtensionContext) {
         this.loadConversationsFromState();
+        this.loadUsageFromState();
         this.createNew();
     }
 
@@ -36,6 +37,8 @@ export class ConversationManager {
         };
         this.conversations.push(newConv);
         this.activeConversationId = newConv.id;
+        this.usageByConversationId[newConv.id] = this.usageByConversationId[newConv.id] || 0;
+        this.saveUsage();
         return newConv;
     }
 
@@ -54,24 +57,18 @@ export class ConversationManager {
     }
 
     public getActiveConversationSize(): number {
+        // Backward-compat: return accumulated usage so UI can show history + responses
         const activeConv = this.getActive();
-        if (!activeConv) {
-            return 0;
-        }
+        if (!activeConv) return 0;
+        return this.usageByConversationId[activeConv.id] || 0;
+    }
 
-        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
-        const historyLimit = config.get<number>(SETTINGS_KEYS.conversationHistoryLimit, 2);
-
-        // Sistem mesajını da dahil et (kullanıcı talebi: gerçek gönderilen toplamı ölç)
-        const systemMessage = activeConv.messages.find(m => m.role === 'system');
-        const systemTokens = systemMessage ? countTokensGPT(systemMessage.content) : 0;
-
-        // Son kullanıcı mesajı (henüz gönderilecek) hariç, sadece geçmişi topla
-        const messagesWithoutSystem = activeConv.messages.filter(m => m.role !== 'system');
-        const limitedHistory = messagesWithoutSystem.slice(-(historyLimit * 2));
-        const historyTokens = limitedHistory.reduce((total, message) => total + countTokensGPT(message.content), 0);
-
-        return systemTokens + historyTokens;
+    public addUsageTokens(count: number): void {
+        const activeConv = this.getActive();
+        if (!activeConv) return;
+        const current = this.usageByConversationId[activeConv.id] || 0;
+        this.usageByConversationId[activeConv.id] = Math.max(0, current + Math.max(0, Number(count) || 0));
+        this.saveUsage();
     }
 
     public addMessage(role: 'user' | 'assistant', content: string): void {
@@ -192,6 +189,19 @@ export class ConversationManager {
             this.conversations = savedConversations;
         } else {
             this.conversations = [];
+        }
+    }
+
+    private saveUsage() {
+        this.context.workspaceState.update('baykar.conversation.usage', this.usageByConversationId);
+    }
+
+    private loadUsageFromState() {
+        const saved = this.context.workspaceState.get<Record<string, number>>('baykar.conversation.usage');
+        if (saved && typeof saved === 'object') {
+            this.usageByConversationId = saved;
+        } else {
+            this.usageByConversationId = {};
         }
     }
 }

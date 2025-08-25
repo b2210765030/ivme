@@ -199,9 +199,10 @@ export class CommandHandler {
                 vscode.window.showWarningMessage('Vektör mağazasında kayıt bulunamadı. Önce indeksleyin.');
                 return;
             }
-            const embedding = await this.apiManager.getGeminiService().embedText(query);
-            console.log('[Search] Sorgu embedding boyutu:', embedding.length);
-            const results = topKByEmbedding(chunks, embedding, 10);
+            const embedding = await this.apiManager.embedTextIfAvailable(query);
+            const emb = Array.isArray(embedding) ? embedding : [];
+            console.log('[Search] Sorgu embedding boyutu:', emb.length);
+            const results = topKByEmbedding(chunks, emb, 10);
             console.log('[Search] Eşleşme sayısı:', results.length);
             const items = results.map((r: { score: number; chunk: any }) => ({
                 label: `${path.basename(r.chunk.filePath)}:${r.chunk.startLine}-${r.chunk.endLine}  (score: ${r.score.toFixed(3)})`,

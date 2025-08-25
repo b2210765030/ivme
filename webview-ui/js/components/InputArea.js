@@ -6,7 +6,7 @@ import * as DOM from '../utils/dom.js';
 import * as VsCode from '../services/vscode.js';
 import { getState, setAiResponding } from '../core/state.js';
 import { addUserMessage, stopStreaming, addAiResponsePlaceholder } from './chat_view.js';
-import { calculateTokenUsage, calculateTotalTokenUsage } from '../utils/tokenizer.js';
+// Tokenizer kaldırıldı; kullanım modeli vLLM usage ile güncelleniyor
 
 function handleSendMessage() {
     if (getState().isUiBlocked) return;
@@ -86,7 +86,7 @@ export function recalculateTotalAndUpdateUI() {
     const conversationAndFilesTokens = conversationTokens + filesTokens;
     
     // Prompt için token sayısını hesapla
-    const promptTokenUsage = calculateTokenUsage(promptText, TOKEN_LIMIT);
+    const promptTokenUsage = { tokenCount: 0, isLimitExceeded: false, remainingTokens: TOKEN_LIMIT };
     
     // Toplam token sayısı
     let totalTokens = conversationAndFilesTokens + promptTokenUsage.tokenCount;
@@ -99,8 +99,7 @@ export function recalculateTotalAndUpdateUI() {
         DOM.input.value = DOM.input.value.slice(0, Math.max(0, DOM.input.value.length - charsToRemove));
         
         // Yeniden hesapla
-        const newPromptTokenUsage = calculateTokenUsage(DOM.input.value, TOKEN_LIMIT);
-        totalTokens = conversationAndFilesTokens + newPromptTokenUsage.tokenCount;
+        totalTokens = conversationAndFilesTokens + 0;
     }
 
     const isLimitExceeded = totalTokens >= TOKEN_LIMIT;

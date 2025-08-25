@@ -33,6 +33,32 @@ export class WebviewMessageHandler {
 
     public async handleMessage(data: any) {
         switch (data.type) {
+            // --- Planner: Manuel tool/args sağla ve adımı uygula ---
+            case 'provideManualToolArgs': {
+                try {
+                    const idx = Number(data?.payload?.index ?? -1);
+                    const tool = String(data?.payload?.tool || '');
+                    const args = data?.payload?.args || {};
+                    if (idx >= 0 && tool) {
+                        await this.interactionHandler.provideManualToolArgs(idx, tool, args);
+                    }
+                } catch (e: any) {
+                    vscode.window.showErrorMessage(`Manuel araç/argüman uygulanamadı: ${e?.message || e}`);
+                }
+                break;
+            }
+            // --- Planner: Adımı atla ---
+            case 'skipPlannerStep': {
+                try {
+                    const idx = Number(data?.payload?.index ?? -1);
+                    if (idx >= 0) {
+                        await this.interactionHandler.skipPlannerStep(idx);
+                    }
+                } catch (e: any) {
+                    vscode.window.showErrorMessage(`Adım atlanamadı: ${e?.message || e}`);
+                }
+                break;
+            }
             // --- Planner: Adım JSON'u webview'den güncellendi ---
             case 'updatePlannerStep': {
                 try {
@@ -142,7 +168,8 @@ export class WebviewMessageHandler {
                 break;
             
             case 'saveSettings': 
-                await this.settingsManager.saveSettings(data.payload, this.webview); 
+                await this.settingsManager.saveSettings(data.payload, this.webview);
+                try { await this.chatProvider.sendDynamicTokenLimitFromModel(); } catch {}
                 break;
 
             // Proje indeksleme tetikleyicisi (vector store, planner index ve tools.json oluşturma)
@@ -240,20 +267,6 @@ export class WebviewMessageHandler {
         const filesTokens = this.contextManager.getUploadedFilesSize() + this.contextManager.getAgentFileSize();
         // Sadece planner akışı kullanılacaksa hafıza özetini toplam sayaca dahil et
         let memoryTokens = 0;
-        try {
-            const isAgentActive = this.settingsManager.getAgentModeState();
-            const isIndexingEnabled = this.settingsManager.getIndexingEnabled();
-            const agentContextPresent = !!(this.contextManager.agentFileContext || this.contextManager.agentSelectionContext);
-            const shouldUsePlanner = (isAgentActive || agentContextPresent) && isIndexingEnabled;
-            if (shouldUsePlanner) {
-                const mem = this.conversationManager.getPlannerSummaryMemory?.();
-                if (typeof mem === 'string' && mem.trim().length > 0) {
-                    // Runtime import to avoid TS cycle; use extension tokenizer for parity
-                    const { countTokensGPT } = require('../../core/tokenizer');
-                    memoryTokens = countTokensGPT(mem);
-                }
-            }
-        } catch {}
         this.webview.postMessage({
             type: 'updateContextSize',
             payload: { conversationSize: conversationTokens + memoryTokens, filesSize: filesTokens }
@@ -291,6 +304,8 @@ export class WebviewMessageHandler {
         this.contextManager.clearAll(this.webview, false);
         this.conversationManager.createNew();
         this.webview.postMessage({ type: 'clearChat' });
+        // Yeni sohbet açıldı: planner/act state'i sıfırla
+        try { this.interactionHandler.resetPlannerState(); } catch {}
         
         this.chatProvider.handleEditorChange(vscode.window.activeTextEditor);
         this.sendContextSize();
@@ -309,6 +324,8 @@ export class WebviewMessageHandler {
         if (conversation) {
             this.webview.postMessage({ type: 'loadConversation', payload: conversation.messages });
         }
+        // Sohbet değiştirildi: planner/act state'i sıfırla
+        try { this.interactionHandler.resetPlannerState(); } catch {}
         this.sendContextSize();
         // Sohbet değiştirildiğinde indeksleme durumunu koruyalım
         this.sendIndexingStatus();

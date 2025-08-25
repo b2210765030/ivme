@@ -206,11 +206,13 @@ export function init() {
 
     DOM.serviceSelect.addEventListener('change', handleServiceChange);
 
-    // Temperature slider live label update
+    // Temperature slider live label update + ensure precision is preserved
     if (DOM.temperatureInput && DOM.temperatureLabel) {
         const updateTempLabel = () => {
             const v = Number(DOM.temperatureInput.value);
-            DOM.temperatureLabel.textContent = isFinite(v) ? v.toFixed(1) : '0.7';
+            const clamped = Math.max(0, Math.min(2, isFinite(v) ? v : 0.7));
+            DOM.temperatureInput.value = String(clamped);
+            DOM.temperatureLabel.textContent = clamped.toFixed(1);
         };
         DOM.temperatureInput.addEventListener('input', updateTempLabel);
         DOM.temperatureInput.addEventListener('change', updateTempLabel);
@@ -254,7 +256,6 @@ export function init() {
             vllmModelName: DOM.vllmModelInput.value,
             geminiApiKey: DOM.geminiKeyInput.value,
             conversationHistoryLimit: DOM.historyLimitInput.value,
-            tokenLimit: DOM.tokenLimitInput.value,
             temperature: DOM.temperatureInput ? DOM.temperatureInput.value : 0.7
         };
         VsCode.postMessage('saveSettings', settingsPayload);
@@ -342,12 +343,17 @@ export function loadConfig(config) {
     DOM.vllmModelInput.value = config.vllmModelName;
     DOM.geminiKeyInput.value = config.geminiApiKey;
     DOM.historyLimitInput.value = config.conversationHistoryLimit;
-    DOM.tokenLimitInput.value = config.tokenLimit || 12000;
+    // Token limit artık modelden otomatik alınıyor; alanı readonly yap ve güncel değeri backend'den gelen updateTokenLimit ile set edeceğiz
+    if (DOM.tokenLimitInput) {
+        DOM.tokenLimitInput.setAttribute('readonly', 'true');
+        try { DOM.tokenLimitInput.classList.add('readonly'); } catch(e) {}
+    }
     DOM.serviceSelect.value = config.activeApiService;
     if (DOM.temperatureInput) {
         const t = typeof config.temperature === 'number' ? config.temperature : 0.7;
-        DOM.temperatureInput.value = String(t);
-        if (DOM.temperatureLabel) DOM.temperatureLabel.textContent = String(t);
+        const clamped = Math.max(0, Math.min(2, t));
+        DOM.temperatureInput.value = String(clamped);
+        if (DOM.temperatureLabel) DOM.temperatureLabel.textContent = clamped.toFixed(1);
     }
     handleServiceChange();
 

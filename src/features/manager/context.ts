@@ -8,7 +8,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { EXTENSION_ID } from '../../core/constants';
-import { countTokensGPT } from '../../core/tokenizer';
 
 
 export class ContextManager {
@@ -169,13 +168,9 @@ export class ContextManager {
         this.notifyContextSizeChange(webview);
     }
 
-    public getAgentFileSize(): number {
-        return this.agentFileContext?.content ? countTokensGPT(this.agentFileContext.content) : 0;
-    }
+    public getAgentFileSize(): number { return 0; }
 
-    public getUploadedFilesSize(): number {
-        return this.uploadedFileContexts.reduce((total, file) => total + countTokensGPT(file.content), 0);
-    }
+    public getUploadedFilesSize(): number { return 0; }
 
     /**
      * Tüm geçici bağlamları temizler.

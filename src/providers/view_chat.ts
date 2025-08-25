@@ -236,6 +236,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         
         // Workspace bilgisini gönder
         this.sendWorkspaceInfoToWebview();
+
+        // Dinamik: Aktif servis vLLM ise model bağlam limitini al ve UI'ya gönder
+        this.sendDynamicTokenLimitFromModel().catch(() => {});
     }
 
     private sendSavedAgentModeToWebview() {
@@ -261,6 +264,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 }
             }
         }
+    }
+
+    // Aktif servis uygunsa model bağlam limitini alıp UI'a gönderir
+    public async sendDynamicTokenLimitFromModel(): Promise<void> {
+        try {
+            const limit = await this.apiManager.getContextLimitIfAvailable();
+            if (typeof limit === 'number' && limit > 0 && this._view) {
+                this._view.webview.postMessage({ type: 'updateTokenLimit', payload: { tokenLimit: limit } });
+            }
+        } catch {}
     }
 
     private sendWorkspaceInfoToWebview() {

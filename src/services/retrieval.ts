@@ -20,8 +20,8 @@ type Retrieved = Array<CodeChunkMetadata & { score?: number; rerank_score?: numb
  */
 export async function retrieve_initial_candidates(context: vscode.ExtensionContext, api: ApiServiceManager, query_text: string, k: number = RETRIEVAL_DEFAULTS.RETRIEVAL_TOP_K): Promise<Retrieved> {
     const allChunks = await loadVectorStoreChunks(context);
-    const embedding = await api.getGeminiService().embedText(query_text);
-    const top = topKByEmbedding(allChunks, embedding, k);
+    const embedding = await api.embedTextIfAvailable(query_text);
+    const top = topKByEmbedding(allChunks, embedding || [], k);
     const results: Retrieved = top.map(({ score, chunk }) => ({ ...chunk, score, priority: 1 }));
 
     // Basit yapısal arama: tırnak içinde fonksiyon adı varsa dosya adı/işlev adı eşleştirmesi

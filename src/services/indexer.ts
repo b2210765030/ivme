@@ -45,6 +45,88 @@ export class ProjectIndexer {
         }
     }
 
+    /**
+     * Incremental: Given a list of absolute file paths, (re)index only those files
+     * and merge the resulting chunks into the existing vector store. If the
+     * vector store does not yet exist or indexing is disabled, this method is a no-op.
+     */
+    public async updateVectorStoreForFiles(fsPaths: string[]): Promise<void> {
+        const uniquePaths = Array.from(new Set(fsPaths.filter(Boolean)));
+        if (uniquePaths.length === 0) return;
+
+        // Guard: Only run if workspace is already indexed AND indexing is enabled
+        const isIndexed = await this.isWorkspaceIndexed();
+        const isEnabled = await this.getIndexingEnabled();
+        if (!isIndexed || !isEnabled) {
+            return;
+        }
+
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        const sourceName = config.get<string>(SETTINGS_KEYS.indexingSourceName) || 'workspace';
+
+        const newChunks: CodeChunkMetadata[] = [];
+        for (const filePath of uniquePaths) {
+            try {
+                const language = this.detectLanguageByExtension(filePath);
+                if (!language) continue;
+                const uri = vscode.Uri.file(filePath);
+                const fileText = (await vscode.workspace.fs.readFile(uri)).toString();
+                const fileChunks = this.extractChunksFromSource(fileText, filePath, language, sourceName);
+                if (fileChunks.length === 0) {
+                    const totalLines = fileText.split(/\r?\n/).length;
+                    const fallbackChunk = this.makeChunk(sourceName, filePath, language as any, 'other', path.basename(filePath), 1, totalLines, this.simpleDependenciesFromText(fileText), fileText);
+                    fileChunks.push(fallbackChunk);
+                }
+
+                // Optional summary + embedding (best-effort, time-limited)
+                for (const chunk of fileChunks) {
+                    try {
+                        const summaryPrompt = this.buildSummaryPrompt(chunk.content);
+                        const summaryText = await this.generateContentWithTimeout(summaryPrompt, 10000);
+                        const parsed = summaryText ? this.tryParseSummaryJson(summaryText) : null;
+                        if (parsed?.summary) {
+                            chunk.summary = parsed.summary;
+                        }
+                    } catch {}
+
+                    try {
+                        const combined = this.buildCombinedForEmbedding(chunk);
+                        const embedding = await this.embedWithTimeout(combined, 10000);
+                        if (embedding) chunk.embedding = embedding;
+                    } catch {}
+                }
+
+                newChunks.push(...fileChunks);
+            } catch (e) {
+                console.warn('[Indexer] Incremental index failed for', filePath, e);
+            }
+        }
+
+        if (newChunks.length === 0) return;
+
+        // Load existing store; if it doesn't exist, do not create here (require full indexing)
+        const existing = await this.readVectorStoreOrEmpty(/*allowCreate*/ false);
+        if (!existing) return;
+
+        // Remove old chunks for touched files, then append new chunks
+        const touchedSet = new Set(uniquePaths.map(p => path.normalize(p)));
+        const filtered = existing.filter(c => !touchedSet.has(path.normalize(c.filePath)));
+        filtered.push(...newChunks);
+        await this.writeVectorStore(filtered);
+    }
+
+    /**
+     * Incremental: Remove all chunks that belong to the given file from the
+     * existing vector store. No-op if the store does not exist.
+     */
+    public async removeFileFromVectorStore(fsPath: string): Promise<void> {
+        const existing = await this.readVectorStoreOrEmpty(/*allowCreate*/ false);
+        if (!existing) return;
+        const normalized = path.normalize(fsPath);
+        const filtered = existing.filter(c => path.normalize(c.filePath) !== normalized);
+        await this.writeVectorStore(filtered);
+    }
+
     private async generateContentWithTimeout(prompt: string, timeoutMs: number): Promise<string | null> {
         try {
             const p = this.apiManager.generateContent(prompt);
@@ -59,9 +141,7 @@ export class ProjectIndexer {
 
     private async embedWithTimeout(text: string, timeoutMs: number): Promise<number[] | null> {
         try {
-            const gemini = this.apiManager.getGeminiService();
-            if (!gemini || typeof gemini.embedText !== 'function') return null;
-            const p = gemini.embedText(text);
+            const p = this.apiManager.embedTextIfAvailable(text);
             const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs));
             const res = await Promise.race([p, timeout]);
             return Array.isArray(res) ? res as number[] : null;
@@ -131,7 +211,6 @@ export class ProjectIndexer {
         }
 
         // Opsiyonel: Özet ve embedding üretimi (sadece Gemini destekler)
-        const gemini = this.apiManager.getGeminiService();
         let done = 0;
         for (const chunk of chunks) {
             done++;
@@ -550,6 +629,47 @@ export class ProjectIndexer {
         await this.setIndexingEnabled(true);
     }
 
+    /**
+     * Read vector_store.json and return chunks. If allowCreate is false and the
+     * file does not exist, return null to signal that the store is missing.
+     */
+    private async readVectorStoreOrEmpty(allowCreate = false): Promise<CodeChunkMetadata[] | null> {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) return allowCreate ? [] : null;
+
+        const ivmeDir = vscode.Uri.joinPath(workspaceFolder.uri, '.ivme');
+        const storageUri = vscode.Uri.joinPath(ivmeDir, 'vector_store.json');
+        try {
+            const buf = await vscode.workspace.fs.readFile(storageUri);
+            const json = JSON.parse(Buffer.from(buf).toString('utf8'));
+            const chunks: CodeChunkMetadata[] = json?.chunks || [];
+            return chunks;
+        } catch (e) {
+            if (allowCreate) return [];
+            return null;
+        }
+    }
+
+    /**
+     * Write chunks to vector_store.json without changing the indexing-enabled setting.
+     */
+    private async writeVectorStore(chunks: CodeChunkMetadata[]): Promise<void> {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            throw new Error('Aktif workspace bulunamadı');
+        }
+
+        const ivmeDir = vscode.Uri.joinPath(workspaceFolder.uri, '.ivme');
+        const storageUri = vscode.Uri.joinPath(ivmeDir, 'vector_store.json');
+
+        try {
+            await vscode.workspace.fs.createDirectory(ivmeDir);
+        } catch {}
+
+        const contentBytes = Buffer.from(JSON.stringify({ chunks }, null, 2), 'utf8');
+        await vscode.workspace.fs.writeFile(storageUri, contentBytes);
+        console.log(`[Indexer] Vector store güncellendi (incremental): ${storageUri.fsPath} -> ${chunks.length} parçacık`);
+    }
     public async setIndexingEnabled(enabled: boolean): Promise<void> {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID);
         await config.update(SETTINGS_KEYS.indexingEnabled, enabled, vscode.ConfigurationTarget.Workspace);

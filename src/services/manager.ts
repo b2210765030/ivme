@@ -19,6 +19,9 @@ export interface IApiService {
     // Opsiyonel: embedding üretebilen servisler (Gemini)
     // Not: vLLM bu metodu sağlamayabilir; çağırmadan önce servis adına bakın.
     embedText?(text: string): Promise<number[]>;
+    // Opsiyonel: vLLM için model bağlam limiti ve tokenize
+    getModelContextLimit?(): Promise<number>;
+    countTokens?(text: string): Promise<number>;
 }
 
 /**
@@ -82,6 +85,31 @@ export class ApiServiceManager implements IApiService {
         const service = this.getActiveService();
         if (typeof service.embedText === 'function') {
             return service.embedText(text);
+        }
+        return null;
+    }
+
+    public async getContextLimitIfAvailable(): Promise<number | null> {
+        const service = this.getActiveService();
+        if (typeof (service as any).getModelContextLimit === 'function') {
+            try { return await (service as any).getModelContextLimit(); } catch { return null; }
+        }
+        return null;
+    }
+
+    public async countTokensIfAvailable(text: string): Promise<number | null> {
+        const service = this.getActiveService();
+        if (typeof (service as any).countTokens === 'function') {
+            try { return await (service as any).countTokens(text); } catch { return null; }
+        }
+        return null;
+    }
+
+    // Return last usage info (prompt/completion/total tokens) if service provides it
+    public getLastUsageIfAvailable(): { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null {
+        const service = this.getActiveService() as any;
+        if (typeof service.getLastUsage === 'function') {
+            try { return service.getLastUsage(); } catch { return null; }
         }
         return null;
     }
