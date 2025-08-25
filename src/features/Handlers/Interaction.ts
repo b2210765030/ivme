@@ -110,6 +110,21 @@ export class InteractionHandler {
                 const completedIndices = Array.isArray(Array.from(this.executedStepIndices)) && this.executedStepIndices.size > 0
                     ? Array.from(this.executedStepIndices)
                     : undefined;
+                // Build focused context from Agent mode (active editor) if available
+                const agentFile = this.contextManager.agentFileContext;
+                const agentSel = this.contextManager.agentSelectionContext;
+                const ws = vscode.workspace.workspaceFolders?.[0];
+                const focus = agentFile ? {
+                    fileName: agentFile.fileName,
+                    content: agentFile.content,
+                    selection: (agentSel && agentSel.selection) ? {
+                        startLine: agentSel.selection.start.line + 1,
+                        endLine: agentSel.selection.end.line + 1,
+                        content: agentSel.content
+                    } : undefined,
+                    pathRel: (ws && agentFile.uri?.fsPath) ? (require('path').relative(ws.uri.fsPath, agentFile.uri.fsPath).replace(/\\/g, '/')) : undefined
+                } : undefined;
+
                 const plan = await run_planner(
                     this.conversationManager.getExtensionContext(),
                     this.apiManager,
@@ -121,7 +136,8 @@ export class InteractionHandler {
                     cancellationSignal as any,
                     latestSummary,
                     prevPlanJson,
-                    completedIndices
+                    completedIndices,
+                    focus
                 );
                 // Plan tamamlandığında nihai sonucu da gönder
                 try {
@@ -329,7 +345,26 @@ export class InteractionHandler {
             (this.lastPlannerPlan.steps[stepIndex] as any).tool = selection.tool;
             (this.lastPlannerPlan.steps[stepIndex] as any).args = selection.args || {};
 
-                // 2) Aracı çalıştır
+                // 2) Aracı çalıştır - odak dosya yolunu executora ilet (Agent aktif dosya)
+                try {
+                    const focusAbs = this.contextManager.agentFileContext?.uri?.fsPath;
+                    if (focusAbs && typeof (this.executor as any).setFocusPath === 'function') {
+                        (this.executor as any).setFocusPath(focusAbs);
+                    }
+                    const sel = this.contextManager.agentSelectionContext?.selection;
+                    if (sel && typeof (this.executor as any).setFocusSelection === 'function') {
+                        (this.executor as any).setFocusSelection({
+                            startLine: sel.start.line,
+                            startCharacter: sel.start.character,
+                            endLine: sel.end.line,
+                            endCharacter: sel.end.character
+                        });
+                    } else {
+                        if (typeof (this.executor as any).setFocusSelection === 'function') {
+                            (this.executor as any).setFocusSelection(undefined);
+                        }
+                    }
+                } catch {}
                 const result = await this.executor.executeStep(ctx, this.apiManager, this.lastPlannerPlan, stepIndex);
                 const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
                 const elapsedMs = Math.max(0, t1 - t0);

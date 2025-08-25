@@ -228,7 +228,13 @@ export async function build_planner_context(
 	userQuery: string,
 	recentSummaryMemory?: string,
 	previousPlanJson?: string,
-	completedStepIndices?: number[]
+	completedStepIndices?: number[],
+	focus?: {
+		fileName: string;
+		content: string;
+		selection?: { startLine: number; endLine: number; content: string };
+		pathRel?: string;
+	}
 ): Promise<string> {
 	// Sadece indeksleme aktifken çalış
 	const config = vscode.workspace.getConfiguration(EXTENSION_ID);
@@ -297,6 +303,39 @@ export async function build_planner_context(
 	lines.push('## Project Summary');
 	lines.push(`- ${rootSummary}`);
 	lines.push('');
+
+	// If a focus file (active editor) is provided, include it prominently so planner prefers it
+	if (focus && typeof focus.fileName === 'string' && typeof focus.content === 'string') {
+		lines.push('## Active Focus File (High Priority)');
+		lines.push('Prefer planning actions for this ACTIVE editor file unless the user clearly requests otherwise.');
+		lines.push('');
+		lines.push(`- File: \`${focus.fileName}\``);
+		if (typeof focus.pathRel === 'string' && focus.pathRel.trim().length > 0) {
+			lines.push(`- Path: \`${focus.pathRel}\``);
+		}
+		if (focus.selection && typeof focus.selection.startLine === 'number' && typeof focus.selection.endLine === 'number') {
+			lines.push(`- Selected lines: ${focus.selection.startLine}-${focus.selection.endLine}`);
+		}
+		lines.push('');
+		lines.push('```');
+		lines.push(focus.content);
+		lines.push('```');
+		if (focus.selection && typeof focus.selection.content === 'string' && focus.selection.content.trim().length > 0) {
+			lines.push('');
+			lines.push('### Selected Snippet');
+			lines.push('```');
+			lines.push(focus.selection.content);
+			lines.push('```');
+		}
+		lines.push('');
+		// Hard constraints to force planner to only modify the focus file
+		lines.push('### Focus Constraints (STRICT)');
+		const onlyPath = (typeof focus.pathRel === 'string' && focus.pathRel.trim().length > 0) ? focus.pathRel : focus.fileName;
+		lines.push(`- ALL file-modifying steps MUST target ONLY this file: \`${onlyPath}\`.`);
+		lines.push(`- Do NOT create or edit any other files. You may READ other files for reference only.`);
+		lines.push(`- For tools with a 'path' or 'files' argument (check_index, create_file, edit_file, append_file, locate_code), set the path to EXACTLY \`${onlyPath}\`.`);
+		lines.push('---');
+	}
 	// Inject recent planner summary memory for continuity
 	if (typeof recentSummaryMemory === 'string' && recentSummaryMemory.trim().length > 0) {
 		lines.push('## Recent Planner Summary (Memory)');
@@ -312,6 +351,16 @@ export async function build_planner_context(
 		lines.push('```json');
 		lines.push(truncated);
 		lines.push('```');
+		lines.push('');
+	}
+
+	// If there is a focus selection, add strict selection-only constraint
+	if (focus && focus.selection) {
+		lines.push('## Selection Constraints (STRICT)');
+		const onlyPath = (typeof focus.pathRel === 'string' && focus.pathRel.trim().length > 0) ? focus.pathRel : focus.fileName;
+		lines.push(`- ONLY modify the SELECTED RANGE in \`${onlyPath}\`: lines ${focus.selection.startLine}-${focus.selection.endLine}.`);
+		lines.push(`- Do NOT change code outside this range. You may read the rest of the file and other files for reference only.`);
+		lines.push(`- For any tool requiring a 'range' or 'use_saved_range', constrain edits within this selection.`);
 		lines.push('');
 	}
 
@@ -413,10 +462,15 @@ export async function run_planner(
 	cancellationSignal?: AbortSignal,
 	recentSummaryMemory?: string,
 	previousPlanJson?: string,
-	completedStepIndices?: number[]
+	completedStepIndices?: number[],
+	focus?: {
+		fileName: string;
+		content: string;
+		selection?: { startLine: number; endLine: number; content: string };
+	}
 ): Promise<PlannerPlan> {
 	// GEÇİCİ: Planner her zaman çalışsın (indeksleme açık olmasa da). Bağlam üretimi indeks yoksa temel içerik döndürür.
-	const plannerContext = await build_planner_context(context, userQuery, recentSummaryMemory, previousPlanJson, completedStepIndices);
+	const plannerContext = await build_planner_context(context, userQuery, recentSummaryMemory, previousPlanJson, completedStepIndices, focus);
 	
 	// Load tools from tools.json
 	const { getToolsManager } = await import('./tools_manager.js');

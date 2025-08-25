@@ -22,6 +22,20 @@ export class PlannerExecutor {
     private lastRetrieved: RetrievedChunk[] = [];
     private lastLocations: Record<string, SavedLocation> = {};
     private lastToolOutputs: Array<{ tool: string; summary: string }> = [];
+    private focusPathAbs: string | undefined;
+    private focusSelection: { startLine: number; startCharacter: number; endLine: number; endCharacter: number } | undefined;
+
+    public setFocusPath(absPath: string | undefined): void {
+        this.focusPathAbs = absPath && absPath.trim().length > 0 ? absPath : undefined;
+    }
+
+    public setFocusSelection(sel: { startLine: number; startCharacter: number; endLine: number; endCharacter: number } | undefined): void {
+        if (sel && typeof sel.startLine === 'number' && typeof sel.endLine === 'number') {
+            this.focusSelection = sel;
+        } else {
+            this.focusSelection = undefined;
+        }
+    }
 
     public async executeStep(
         context: vscode.ExtensionContext,
@@ -209,7 +223,12 @@ export class PlannerExecutor {
             return 'check_index: planner_index.json okunamadı veya yok.';
         }
 
-        const files: string[] = Array.isArray(args?.files) ? args.files : (args?.file ? [String(args.file)] : []);
+        let files: string[] = Array.isArray(args?.files) ? args.files : (args?.file ? [String(args.file)] : []);
+        // Enforce focus: if focus file exists, override any provided list to contain only it
+        if (this.focusPathAbs) {
+            const rel = path.relative(ws.uri.fsPath, this.focusPathAbs);
+            files = [rel];
+        }
         if (files.length === 0) return 'check_index: files/file parametresi verilmedi.';
         const norm = (s: string) => s.replace(/\\/g, '/').toLowerCase();
         const root = ws.uri.fsPath;
@@ -265,11 +284,18 @@ export class PlannerExecutor {
     // open_file kaldırıldı
 
     private async handleCreateFile(args: any, step: PlannerPlanStep): Promise<string> {
-        const filePath = String(args?.path || '').trim();
-        if (!filePath) return 'create_file: path eksik.';
+        let filePath = String(args?.path || '').trim();
         const ws = vscode.workspace.workspaceFolders?.[0];
         if (!ws) return 'create_file: Workspace bulunamadı.';
-        const abs = path.isAbsolute(filePath) ? filePath : path.join(ws.uri.fsPath, filePath);
+        // Enforce focus: always create/ensure the focus file only
+        let abs = '';
+        if (this.focusPathAbs) {
+            abs = this.focusPathAbs;
+            filePath = path.relative(ws.uri.fsPath, abs);
+        } else {
+            if (!filePath) return 'create_file: path eksik.';
+            abs = path.isAbsolute(filePath) ? filePath : path.join(ws.uri.fsPath, filePath);
+        }
         try {
             // Klasörü oluştur
             const dir = path.dirname(abs);
@@ -298,9 +324,14 @@ export class PlannerExecutor {
         const ws = vscode.workspace.workspaceFolders?.[0];
         if (!ws) return 'edit_file: Workspace bulunamadı.';
         if (!filePath) {
-            const best = this.pickBestRetrieved(step.action || step.ui_text || '');
-            if (!best) return 'edit_file: path eksik ve uygun chunk bulunamadı.';
-            filePath = path.relative(ws.uri.fsPath, best.filePath);
+            // Prefer focused active file if available
+            if (this.focusPathAbs) {
+                filePath = path.relative(ws.uri.fsPath, this.focusPathAbs);
+            } else {
+                const best = this.pickBestRetrieved(step.action || step.ui_text || '');
+                if (!best) return 'edit_file: path eksik ve uygun chunk bulunamadı.';
+                filePath = path.relative(ws.uri.fsPath, best.filePath);
+            }
         }
         const abs = path.isAbsolute(filePath) ? filePath : path.join(ws.uri.fsPath, filePath);
 
@@ -336,6 +367,28 @@ export class PlannerExecutor {
                 range = { start: startChar, end: endChar } as any;
             }
         }
+        
+        // Eğer focus selection varsa, edit'i sadece bu aralık içinde sınırla
+        if (this.focusPathAbs && path.resolve(abs) === path.resolve(this.focusPathAbs) && this.focusSelection) {
+            const sel = this.focusSelection;
+            const lines = original.split(/\n/);
+            const startPrefix = lines.slice(0, sel.startLine).join('\n');
+            const endPrefix = lines.slice(0, sel.endLine).join('\n');
+            const selStart = startPrefix.length + (sel.startLine > 0 ? 1 : 0) + Math.max(0, sel.startCharacter || 0);
+            const selEnd = endPrefix.length + (sel.endLine > 0 ? 1 : 0) + Math.max(0, sel.endCharacter || 0);
+            if (!range) {
+                range = { start: selStart, end: Math.max(selStart, selEnd) } as any;
+            } else {
+                const clampedStart = Math.max(range.start, selStart);
+                const clampedEnd = Math.min(range.end, Math.max(selStart, selEnd));
+                if (clampedEnd <= clampedStart) {
+                    range = { start: selStart, end: Math.max(selStart, selEnd) } as any;
+                } else {
+                    range = { start: clampedStart, end: clampedEnd } as any;
+                }
+            }
+        }
+
         // Eğer hala yoksa ve dosya yeni/boş ise, full file update moduna düş
         if (!range && original.trim().length === 0) {
             // full file update yapılır (aşağıdaki else bloğu)
@@ -399,6 +452,51 @@ export class PlannerExecutor {
             return `Aralık güncellendi: ${filePath} [${range.start}-${range.end}]`;
         } else {
             // Tüm dosyayı güncelle
+            // Eğer focus selection varsa, full file yerine sadece seçim aralığını güncelle moduna zorla
+            if (this.focusPathAbs && path.resolve(abs) === path.resolve(this.focusPathAbs) && this.focusSelection) {
+                const sel = this.focusSelection;
+                const lines = original.split(/\n/);
+                const startPrefix = lines.slice(0, sel.startLine).join('\n');
+                const endPrefix = lines.slice(0, sel.endLine).join('\n');
+                const selStart = startPrefix.length + (sel.startLine > 0 ? 1 : 0) + Math.max(0, sel.startCharacter || 0);
+                const selEnd = endPrefix.length + (sel.endLine > 0 ? 1 : 0) + Math.max(0, sel.endCharacter || 0);
+                const snippetOriginal = original.slice(selStart, selEnd);
+                const system = [
+                    'You are a senior engineer. Update ONLY the provided code snippet based on the change specification.',
+                    'Output ONLY the updated snippet as a single Markdown code block. No prose, no explanation, no surrounding text.'
+                ].join(' ');
+                const userParts: string[] = [];
+                userParts.push('Change specification:');
+                userParts.push('---');
+                userParts.push(String(changeSpec || step.action || step.thought || ''));
+                userParts.push('---');
+                if (step.thought && String(step.thought).trim().length > 0) {
+                    userParts.push('User request (from plan.thought):');
+                    userParts.push('---');
+                    userParts.push(String(step.thought));
+                    userParts.push('---');
+                }
+                if (findSpec) userParts.push(`Helpful find_spec: ${findSpec}`);
+                userParts.push('Current snippet:');
+                userParts.push('```');
+                userParts.push(snippetOriginal);
+                userParts.push('```');
+                if (retrievedContext) {
+                    userParts.push('\nRelevant context (snippets):');
+                    userParts.push(retrievedContext);
+                }
+                const messages = [
+                    { role: 'system' as const, content: system },
+                    { role: 'user' as const, content: userParts.join('\n') }
+                ];
+                let raw = '';
+                await api.generateChatContent(messages, (chunk) => { raw += chunk; }, undefined as any);
+                const newSnippet = extractOnlyCode(raw);
+                if (!newSnippet || newSnippet.trim().length === 0) return 'edit_file: Modelden geçerli snippet alınamadı (selection).';
+                const updated = original.slice(0, selStart) + newSnippet + original.slice(selEnd);
+                await vscode.workspace.fs.writeFile(vscode.Uri.file(abs), Buffer.from(updated, 'utf8'));
+                return `Seçim aralığı güncellendi: ${filePath} [${selStart}-${selEnd}]`;
+            }
             const system = [
                 'You are a senior engineer. Update the given file based on the change specification.',
                 'Output ONLY the complete, final file content as a single Markdown code block. No prose, no explanation.'
@@ -451,11 +549,17 @@ export class PlannerExecutor {
         args: any,
         step: PlannerPlanStep
     ): Promise<string> {
-        const filePath = String(args?.path || '').trim();
+        let filePath = String(args?.path || '').trim();
         const position = (args?.position === 'beginning' || args?.position === 'end') ? args.position : 'end';
-        if (!filePath) return 'append_file: path eksik.';
         const ws = vscode.workspace.workspaceFolders?.[0];
         if (!ws) return 'append_file: Workspace bulunamadı.';
+        if (!filePath) {
+            if (this.focusPathAbs) {
+                filePath = path.relative(ws.uri.fsPath, this.focusPathAbs);
+            } else {
+                return 'append_file: path eksik.';
+            }
+        }
         const abs = path.isAbsolute(filePath) ? filePath : path.join(ws.uri.fsPath, filePath);
 
         let original = '';
@@ -470,7 +574,7 @@ export class PlannerExecutor {
         const contentSpec = typeof args?.content_spec === 'string' ? args.content_spec : (step.action || step.thought || '');
         const retrievedContext = this.composeRetrievedContext();
         const system = [
-            'You are a senior engineer. Produce ONLY the minimal Python code snippet to append based on the high-level specification.',
+            'You are a senior engineer. Produce ONLY the minimal code snippet to insert based on the high-level specification.',
             'Strictly output ONE Markdown code block with ONLY the code. No prose, no comments, no extra text.'
         ].join(' ');
         const user = [
@@ -494,6 +598,20 @@ export class PlannerExecutor {
         const snippet = cleanLLMCodeBlock(raw);
         if (!snippet || snippet.trim().length === 0) {
             return 'append_file: Modelden geçerli içerik alınamadı.';
+        }
+
+        // If focus selection is present and on this file, insert within selection bounds instead of entire file head/tail
+        if (this.focusPathAbs && path.resolve(abs) === path.resolve(this.focusPathAbs) && this.focusSelection) {
+            const sel = this.focusSelection;
+            const lines = original.split(/\n/);
+            const startPrefix = lines.slice(0, sel.startLine).join('\n');
+            const endPrefix = lines.slice(0, sel.endLine).join('\n');
+            const selStart = startPrefix.length + (sel.startLine > 0 ? 1 : 0) + Math.max(0, sel.startCharacter || 0);
+            const selEnd = endPrefix.length + (sel.endLine > 0 ? 1 : 0) + Math.max(0, sel.endCharacter || 0);
+            const insertAt = position === 'beginning' ? selStart : selEnd;
+            const updated = original.slice(0, insertAt) + snippet + original.slice(insertAt);
+            await vscode.workspace.fs.writeFile(vscode.Uri.file(abs), Buffer.from(updated, 'utf8'));
+            return `Seçim içine içerik eklendi: ${filePath}`;
         }
 
         const updated = position === 'beginning' ? (snippet + '\n' + original) : (original + '\n' + snippet);
@@ -536,10 +654,20 @@ export class PlannerExecutor {
                 return `locate_code: Dosya okunamadı: ${inputPath}`;
             }
         } else {
-            const best = this.pickBestRetrieved(name || pattern || '');
-            if (!best) return 'locate_code: Önce search/retrieve çalıştırın veya path verin.';
-            targetAbs = best.filePath;
-            text = best.content;
+            if (this.focusPathAbs) {
+                targetAbs = this.focusPathAbs;
+                try {
+                    const buf = await vscode.workspace.fs.readFile(vscode.Uri.file(targetAbs));
+                    text = Buffer.from(buf).toString('utf8');
+                } catch {
+                    return `locate_code: Dosya okunamadı: ${path.relative(ws.uri.fsPath, targetAbs)}`;
+                }
+            } else {
+                const best = this.pickBestRetrieved(name || pattern || '');
+                if (!best) return 'locate_code: Önce search/retrieve çalıştırın veya path verin.';
+                targetAbs = best.filePath;
+                text = best.content;
+            }
         }
 
         const loc = this.findFunctionRange(text, name, pattern);
