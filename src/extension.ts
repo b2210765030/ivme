@@ -45,6 +45,9 @@ export function activate(context: vscode.ExtensionContext) {
     const showPresentationCommand = vscode.commands.registerCommand(
         COMMAND_IDS.showPresentation, () => commandHandler.showPresentation()
     );
+    const viewVectorStoreCommand = vscode.commands.registerCommand(
+        COMMAND_IDS.viewVectorStore, () => commandHandler.openVectorStore()
+    );
 
     // UI'dan gelen 'indexProject' mesajı için köprü komutu
     const indexProjectCommand = vscode.commands.registerCommand(
@@ -85,6 +88,7 @@ export function activate(context: vscode.ExtensionContext) {
         confirmAgentSelectionCommand,
         indexProjectCommand,
         requestContextSizeCommand,
+        viewVectorStoreCommand,
         serviceStatusButton,
         vscode.languages.registerCodeActionsProvider('*', new BaykarAiActionProvider(), {
             providedCodeActionKinds: BaykarAiActionProvider.providedCodeActionKinds

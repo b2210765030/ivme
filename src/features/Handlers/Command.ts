@@ -107,6 +107,32 @@ export class CommandHandler {
     }
 
     /**
+     * .ivme/vector_store.json dosyasını açar.
+     */
+    public async openVectorStore() {
+        try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                vscode.window.showErrorMessage('Aktif workspace bulunamadı. Lütfen bir klasör açın.');
+                return;
+            }
+            const ivmeDir = vscode.Uri.joinPath(workspaceFolder.uri, '.ivme');
+            const vectorStorePath = vscode.Uri.joinPath(ivmeDir, 'vector_store.json');
+            // Ensure file exists; if not, inform the user
+            try {
+                await vscode.workspace.fs.stat(vectorStorePath);
+            } catch {
+                vscode.window.showWarningMessage('vector_store.json bulunamadı. Önce indeksleme yapın.');
+                return;
+            }
+            const doc = await vscode.workspace.openTextDocument(vectorStorePath);
+            await vscode.window.showTextDocument(doc, { preview: false });
+        } catch (e: any) {
+            vscode.window.showErrorMessage(`vector_store.json açılamadı: ${e?.message || e}`);
+        }
+    }
+
+    /**
      * Workspace-specific proje indeksleme akışını başlatır.
      */
     public async indexProject() {

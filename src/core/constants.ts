@@ -21,6 +21,7 @@ export const COMMAND_IDS = {
     checkVllmStatus: `${EXTENSION_ID}.checkVllmStatus`, // Genel bağlantı kontrolü için kalabilir
     showPresentation: `baykar.showPresentation`,
     indexProject: `baykar-ai.indexProject`,
+    viewVectorStore: `${EXTENSION_ID}.viewVectorStore`,
 
 };
 

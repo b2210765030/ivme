@@ -16,6 +16,7 @@ export class SettingsManager {
                 activeApiService: config.get<ApiServiceName>(SETTINGS_KEYS.activeApiService, API_SERVICES.vllm),
                 vllmBaseUrl: config.get<string>(SETTINGS_KEYS.vllmBaseUrl, ''),
                 vllmModelName: config.get<string>(SETTINGS_KEYS.vllmModelName, ''),
+                vllmEmbeddingModelName: config.get<string>(SETTINGS_KEYS.vllmEmbeddingModelName, ''),
                 geminiApiKey: config.get<string>(SETTINGS_KEYS.geminiApiKey, ''),
                 conversationHistoryLimit: config.get<number>(SETTINGS_KEYS.conversationHistoryLimit, 2),
                 agentModeActive: config.get<boolean>(SETTINGS_KEYS.agentModeActive, false),
@@ -42,11 +43,26 @@ export class SettingsManager {
         
         try {
             const tempValue = Math.max(0, Math.min(2, Number(settings.temperature)));
+            const baseUrl = String(settings.vllmBaseUrl || '').trim();
+            const modelName = String(settings.vllmModelName || '').trim();
+            const embeddingModelName = String(settings.vllmEmbeddingModelName || settings.vllmModelName || '').trim();
             await Promise.all([
+                // Persist both globally and at workspace level so user doesn't need manual edits
                 config.update(SETTINGS_KEYS.activeApiService, settings.activeApiService, vscode.ConfigurationTarget.Global),
-                config.update(SETTINGS_KEYS.vllmBaseUrl, settings.vllmBaseUrl.trim(), vscode.ConfigurationTarget.Global),
-                config.update(SETTINGS_KEYS.vllmModelName, settings.vllmModelName.trim(), vscode.ConfigurationTarget.Global),
-                config.update(SETTINGS_KEYS.geminiApiKey, settings.geminiApiKey.trim(), vscode.ConfigurationTarget.Global),
+                config.update(SETTINGS_KEYS.activeApiService, settings.activeApiService, vscode.ConfigurationTarget.Workspace),
+
+                config.update(SETTINGS_KEYS.vllmBaseUrl, baseUrl, vscode.ConfigurationTarget.Global),
+                config.update(SETTINGS_KEYS.vllmBaseUrl, baseUrl, vscode.ConfigurationTarget.Workspace),
+
+                config.update(SETTINGS_KEYS.vllmModelName, modelName, vscode.ConfigurationTarget.Global),
+                config.update(SETTINGS_KEYS.vllmModelName, modelName, vscode.ConfigurationTarget.Workspace),
+
+                config.update(SETTINGS_KEYS.vllmEmbeddingModelName, embeddingModelName, vscode.ConfigurationTarget.Global),
+                config.update(SETTINGS_KEYS.vllmEmbeddingModelName, embeddingModelName, vscode.ConfigurationTarget.Workspace),
+
+                // Keep Gemini key Global only
+                config.update(SETTINGS_KEYS.geminiApiKey, String(settings.geminiApiKey || '').trim(), vscode.ConfigurationTarget.Global),
+
                 config.update(SETTINGS_KEYS.conversationHistoryLimit, Number(settings.conversationHistoryLimit) || 2, vscode.ConfigurationTarget.Global),
                 // Persist temperature in BOTH Global and Workspace to avoid precedence issues
                 config.update(SETTINGS_KEYS.temperature, (isFinite(tempValue) ? tempValue : 0.7), vscode.ConfigurationTarget.Global),

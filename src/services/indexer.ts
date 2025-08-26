@@ -91,7 +91,8 @@ export class ProjectIndexer {
 
                     try {
                         const combined = this.buildCombinedForEmbedding(chunk);
-                        const embedding = await this.embedWithTimeout(combined, 10000);
+                        const prepared = this.clampTextForEmbedding(combined);
+                        const embedding = await this.embedWithTimeout(prepared, 20000);
                         if (embedding) chunk.embedding = embedding;
                     } catch {}
                 }
@@ -274,8 +275,9 @@ export class ProjectIndexer {
 
             try {
                 const combined = this.buildCombinedForEmbedding(chunk);
+                const prepared = this.clampTextForEmbedding(combined);
                 const startE = Date.now();
-                const embedding = await this.embedWithTimeout(combined, 10000);
+                const embedding = await this.embedWithTimeout(prepared, 20000);
                 const elapsedE = Date.now() - startE;
                 if (!embedding) {
                     console.warn(`[Indexer] (embed) Zaman aşımı veya hata: ${chunk.filePath} :: ${chunk.name} (elapsed ${elapsedE}ms)`);
@@ -633,6 +635,13 @@ export class ProjectIndexer {
         const summaryPart = ` Ne yapar: ${chunk.summary || ''}.`;
         const codePart = ` Kod: \n${chunk.content}`;
         return `${namePart}${summaryPart}${codePart}`.trim();
+    }
+
+    private clampTextForEmbedding(text: string): string {
+        // Keep input under a reasonable size for common embedding models
+        const MAX_CHARS = 24000; // ~6k tokens approx
+        if ((text || '').length <= MAX_CHARS) return text;
+        return text.slice(0, MAX_CHARS);
     }
 
     private async writeToLocalVectorStore(chunks: CodeChunkMetadata[]): Promise<void> {

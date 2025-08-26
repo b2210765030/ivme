@@ -18,7 +18,21 @@ export class VllmApiService implements IApiService {
 
     public getBaseUrl(): string {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID);
-        return config.get<string>(SETTINGS_KEYS.vllmBaseUrl) || '';
+        const raw = config.get<string>(SETTINGS_KEYS.vllmBaseUrl) || '';
+        // Normalize to ensure '/v1' suffix once
+        if (!raw) return '';
+        try {
+            const url = new URL(raw);
+            const needsV1 = !/\/?v1\/?$/.test(url.pathname);
+            if (needsV1) {
+                const normalized = raw.replace(/\/?$/, '') + '/v1';
+                return normalized;
+            }
+            return raw;
+        } catch {
+            // If not a valid URL, return as-is
+            return raw;
+        }
     }
 
     public getModelName(): string {
@@ -28,8 +42,13 @@ export class VllmApiService implements IApiService {
 
     public getEmbeddingModelName(): string {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        const explicit = config.get<string>(SETTINGS_KEYS.vllmEmbeddingModelName) || '';
+        if (!explicit) {
+            // Warn once per session when falling back
+            try { console.warn('[vLLM] No embedding model configured. Falling back to chat model name.'); } catch {}
+        }
         // Fallback to main model name if a dedicated embedding model isn't set
-        return config.get<string>(SETTINGS_KEYS.vllmEmbeddingModelName) || this.getModelName();
+        return explicit || this.getModelName();
     }
     
     public async checkConnection(): Promise<boolean> {

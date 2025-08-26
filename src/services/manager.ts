@@ -98,9 +98,22 @@ export class ApiServiceManager implements IApiService {
     }
 
     public async embedTextIfAvailable(text: string): Promise<number[] | null> {
-        const service = this.getActiveService();
-        if (typeof service.embedText === 'function') {
-            return service.embedText(text);
+        // Try the active service first, then fall back to the other service if available
+        const activeName = this.getActiveServiceName();
+        const tryOrder: IApiService[] = activeName === API_SERVICES.gemini
+            ? [this.geminiService, this.vllmService]
+            : [this.vllmService, this.geminiService];
+
+        for (const svc of tryOrder) {
+            if (typeof svc.embedText === 'function') {
+                try {
+                    const vec = await svc.embedText(text);
+                    if (Array.isArray(vec) && vec.length > 0) return vec;
+                } catch (e) {
+                    try { console.warn('[ApiServiceManager] embedText failed in service, trying next if any.', e instanceof Error ? e.message : String(e)); } catch {}
+                    // continue to next
+                }
+            }
         }
         return null;
     }

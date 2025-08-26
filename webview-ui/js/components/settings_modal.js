@@ -258,6 +258,7 @@ export function init() {
             activeApiService: DOM.serviceSelect.value,
             vllmBaseUrl: DOM.vllmUrlInput.value,
             vllmModelName: DOM.vllmModelInput.value,
+            vllmEmbeddingModelName: (document.getElementById('vllm-embedding-model')?.value || DOM.vllmModelInput.value),
             geminiApiKey: DOM.geminiKeyInput.value,
             conversationHistoryLimit: DOM.historyLimitInput.value,
             temperature: DOM.temperatureInput ? DOM.temperatureInput.value : 0.7
@@ -345,6 +346,13 @@ export function handleSaveResult(payload) {
 export function loadConfig(config) {
     DOM.vllmUrlInput.value = config.vllmBaseUrl;
     DOM.vllmModelInput.value = config.vllmModelName;
+    // If embedding model input exists in UI in future, default to modelName when empty
+    try {
+        const vllmEmbeddingInput = document.getElementById('vllm-embedding-model');
+        if (vllmEmbeddingInput) {
+            vllmEmbeddingInput.value = (config.vllmEmbeddingModelName || config.vllmModelName || '');
+        }
+    } catch (e) {}
     DOM.geminiKeyInput.value = config.geminiApiKey;
     DOM.historyLimitInput.value = config.conversationHistoryLimit;
     // Token limit artık modelden otomatik alınıyor; alanı readonly yap ve güncel değeri backend'den gelen updateTokenLimit ile set edeceğiz
