@@ -63,8 +63,6 @@
         </div>
 
         <div id="chat-container" class="hidden"></div>
-        
-        <div id="file-context-area"></div>
         <!-- Planner panel: input baloncuğunun hemen üzerinde gösterilecek uzun ince panel -->
         <div id="planner-panel" class="planner-panel hidden collapsed">
             <div class="planner-panel-bar">
@@ -84,6 +82,7 @@
 
         <div class="input-area">
             <div class="input-wrapper">
+                <div id="file-context-area"></div>
                 <!-- Yeni: indeksleme overlay log alanı -->
                 <div id="indexer-overlay-log" class="indexer-overlay-log hidden"></div>
                 <textarea id="prompt-input" rows="1" placeholder="ivmeye soru sorun..."></textarea>
@@ -249,11 +248,12 @@
                                 </div>
                             </div>
                             <div class="tools-actions">
-                                <button type="button" id="add-tool-button" class="primary-button">
+                                <button type="button" id="add-tool-button" class="primary-button" disabled aria-disabled="true" title="Bu özellik gelecek versiyonda aktif olacak">
                                     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                                         <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z"/>
                                     </svg>
                                     Yeni Araç Ekle
+                                    <span class="small-note"> — gelecek versiyonda aktif olacak</span>
                                 </button>
                             </div>
                         </div>

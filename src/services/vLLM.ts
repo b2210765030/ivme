@@ -102,16 +102,35 @@ export class VllmApiService implements IApiService {
     /**
      * GÜNCELLEME: AbortSignal parametresi eklendi.
      */
-    public async generateChatContent(messages: ChatMessage[], onChunk?: (chunk: string) => void, cancellationSignal?: AbortSignal): Promise<string | void> {
-        if (onChunk) {
+    public async generateChatContent(
+        messages: ChatMessage[],
+        onChunk?: (chunk: string) => void,
+        cancellationSignal?: AbortSignal,
+        tools?: any[],
+        tool_choice?: any
+    ): Promise<string | void | any> {
+        // Stream ve tool-calling birlikte desteklenmiyor; tools yoksa stream kullanılabilir
+        if (onChunk && !tools) {
+            try { console.log('[vLLM] streaming chat request (no tools). messages=', messages?.length || 0); } catch {}
             return this.generateChatContentStream(messages, onChunk, cancellationSignal);
         }
-        
+
         const url = `${this.getBaseUrl()}/chat/completions`;
         const model = this.getModelName();
         const config = vscode.workspace.getConfiguration(EXTENSION_ID);
         const temperature = config.get<number>(SETTINGS_KEYS.temperature, 0.7);
-        const data = { model, messages, ...VLLM_PARAMS.chat, temperature, stream: false }; // some vLLM builds may not include usage here
+        const data: any = { model, messages, ...VLLM_PARAMS.chat, temperature, stream: false };
+
+        if (tools) data.tools = tools;
+        if (tool_choice) data.tool_choice = tool_choice;
+        try {
+            console.log('[vLLM] chat request (tool-calling possible)', {
+                model,
+                messagesCount: messages?.length || 0,
+                toolsCount: Array.isArray(tools) ? tools.length : 0,
+                toolChoice: tool_choice ? (tool_choice.function?.name || tool_choice) : 'none'
+            });
+        } catch {}
         
         try {
             const response = await axios.post<VllmChatCompletionResponse>(url, data, { signal: cancellationSignal });
@@ -129,7 +148,13 @@ export class VllmApiService implements IApiService {
                 }
             } catch {}
             if (choice && choice.message) {
-                return choice.message.content;
+                const msg: any = choice.message as any;
+                if (Array.isArray(msg.tool_calls)) {
+                    try { console.log('[vLLM] received tool_calls:', msg.tool_calls.map((t: any) => t?.function?.name)); } catch {}
+                    return msg.tool_calls;
+                }
+                try { console.log('[vLLM] received content (no tool_calls). length=', (msg?.content || '').length); } catch {}
+                return msg.content;
             }
             throw new Error('vLLM sunucusundan geçersiz sohbet yanıtı.');
         } catch (error: any) {
@@ -269,7 +294,6 @@ export class VllmApiService implements IApiService {
         } catch (error: any) {
             // İptal hatası bir hata olarak kabul edilmemeli, sessizce sonlandırılmalı.
             if (axios.isCancel(error) || (error as AxiosError).name === 'AbortError') {
-                console.log('vLLM stream request was cancelled.');
                 return;
             }
             console.error("vLLM Chat API Stream Error:", error.response ? error.response.data : error.message);

@@ -10,21 +10,19 @@ import { retrieve_initial_candidates, rerank_results, expand_context } from './r
 import { assemble_final_prompt } from './assembler';
 
 export async function build_context_for_query(context: vscode.ExtensionContext, api: ApiServiceManager, user_query: string): Promise<string> {
-    console.log('Faz 2.1: Geniş kapsamlı bilgi getirme başlatılıyor...');
+    // orchestration phase log removed
     const candidate_chunks = await retrieve_initial_candidates(context, api, user_query, RETRIEVAL_DEFAULTS.RETRIEVAL_TOP_K);
 
-    console.log('Faz 2.2: Sonuçlar yeniden sıralanıyor...');
+    // orchestration phase log removed
     const reranked_chunks = await rerank_results(user_query, candidate_chunks);
 
     const top_chunks = reranked_chunks.slice(0, RETRIEVAL_DEFAULTS.RERANK_TOP_N);
 
-    console.log('Faz 2.3: Bağlam akıllıca genişletiliyor...');
+    // orchestration phase log removed
     const expanded_chunks = await expand_context(context, top_chunks);
 
-    console.log('Faz 2.4: Nihai bağlam paketi oluşturuluyor...');
+    // orchestration phase log removed
     const final_context = assemble_final_prompt(expanded_chunks, RETRIEVAL_DEFAULTS.MAX_CONTEXT_TOKENS);
-
-    console.log('Bağlam başarıyla oluşturuldu!');
     return final_context;
 }
 

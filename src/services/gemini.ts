@@ -87,7 +87,7 @@ export class GeminiApiService implements IApiService {
         }
     }
     
-    public async generateChatContent(messages: ChatMessage[], onChunk?: (chunk: string) => void, cancellationSignal?: AbortSignal): Promise<string | void> {
+    public async generateChatContent(messages: ChatMessage[], onChunk?: (chunk: string) => void, cancellationSignal?: AbortSignal, tools?: any[], tool_choice?: any): Promise<string | void | any> {
         if (!this.genAI) {
             throw new Error('Gemini API anahtarı ayarlanmamış.');
         }
@@ -117,7 +117,6 @@ export class GeminiApiService implements IApiService {
                 for await (const chunk of result.stream) {
                     // YENİ MANTIKSAL KONTROL: Her parçayı işlemeden önce sinyali kontrol et.
                     if (cancellationSignal?.aborted) {
-                        console.log('Gemini stream processing was cancelled by the user.');
                         return; // Döngüden çık ve işlemi sonlandır.
                     }
                     onChunk(chunk.text());
@@ -126,7 +125,6 @@ export class GeminiApiService implements IApiService {
                 // AbortError, döngü içinde manuel olarak çıktığımız için burada yakalanmayacak,
                 // ancak olası diğer API hataları için bu blok kalmalı.
                 if (error.name === 'AbortError') {
-                    console.log('Gemini stream request was aborted.');
                     return;
                 }
                 console.error("Gemini Chat Stream API Error:", error);

@@ -297,12 +297,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         // Webview açıldığında kaydedilmiş mod durumunu gönder
         this.sendSavedAgentModeToWebview();
+        // Ayrıca aktif konuşmanın minimal UI bayrağını (agent/chat) geri yükle
+        try { this.restoreConversationUiState(); } catch {}
         
         // Workspace bilgisini gönder
         this.sendWorkspaceInfoToWebview();
 
         // Dinamik: Aktif servis vLLM ise model bağlam limitini al ve UI'ya gönder
         this.sendDynamicTokenLimitFromModel().catch(() => {});
+    }
+
+    private restoreConversationUiState() {
+        const ui = this.conversationManager.getUiState();
+        if (typeof ui.agentModeActive === 'boolean') {
+            this.isAgentModeActive = ui.agentModeActive;
+            try { this._view?.webview.postMessage({ type: 'restoreAgentMode', payload: { isActive: ui.agentModeActive } }); } catch {}
+        }
     }
 
     private sendSavedAgentModeToWebview() {
@@ -369,10 +379,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         try {
             await vscode.workspace.fs.stat(vectorStorePath);
             // Dosya varsa, önceki indexing durumunu koru
-            console.log(`[ChatViewProvider] Indexing dosyası bulundu: ${vectorStorePath.fsPath}`);
+            // Indexing file found
         } catch (e) {
             // Dosya yoksa indexing'i kapat
-            console.log(`[ChatViewProvider] Indexing dosyası bulunamadı, indexing kapatılıyor: ${vectorStorePath.fsPath}`);
+            // Indexing file not found, disabling indexing
             await this.settingsManager.saveIndexingEnabled(false);
         }
 

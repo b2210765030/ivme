@@ -246,6 +246,251 @@ export class ToolsManager {
                         }
                     },
                     type: 'builtin'
+                },
+                // Extended built-in tools for richer code-agent capabilities
+                {
+                    name: 'read_file',
+                    description: 'Bir dosyanın tamamını veya belirli satır aralığını oku',
+                    schema: {
+                        name: 'read_file',
+                        description: 'Bir dosyanın tamamını veya belirli satır aralığını oku',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                path: { type: 'string', description: 'Okunacak dosya yolu' },
+                                start_line: { type: 'number', description: 'Başlangıç satırı (1-indexed, opsiyonel)' },
+                                end_line: { type: 'number', description: 'Bitiş satırı (1-indexed, opsiyonel)' },
+                                save_as: { type: 'string', description: 'Okunan aralığı ileride kullanmak için anahtar' }
+                            }
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'list_dir',
+                    description: 'Bir dizindeki dosya ve klasörleri listeler',
+                    schema: {
+                        name: 'list_dir',
+                        description: 'Bir dizindeki dosya ve klasörleri listeler',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                path: { type: 'string', description: 'Listelenecek dizin (varsayılan: proje kökü)' },
+                                depth: { type: 'number', description: 'Alt dizin derinliği (varsayılan: 1)' },
+                                glob: { type: 'string', description: 'Dahil edilecek glob (örn. **/*.ts)' },
+                                files_only: { type: 'boolean', description: 'Sadece dosyaları listele' },
+                                dirs_only: { type: 'boolean', description: 'Sadece klasörleri listele' }
+                            }
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'delete_path',
+                    description: 'Belirtilen dosya veya klasörü siler',
+                    schema: {
+                        name: 'delete_path',
+                        description: 'Belirtilen dosya veya klasörü siler',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                path: { type: 'string', description: 'Silinecek yol' },
+                                recursive: { type: 'boolean', description: 'Klasörler için içeriğiyle birlikte sil' }
+                            },
+                            required: ['path']
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'move_path',
+                    description: 'Dosya veya klasörü yeni bir konuma taşır/yeniden adlandırır',
+                    schema: {
+                        name: 'move_path',
+                        description: 'Dosya veya klasörü yeni bir konuma taşır/yeniden adlandırır',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                source: { type: 'string', description: 'Kaynak yol' },
+                                target: { type: 'string', description: 'Hedef yol' },
+                                overwrite: { type: 'boolean', description: 'Üstüne yaz' }
+                            },
+                            required: ['source','target']
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'copy_path',
+                    description: 'Dosya veya klasörü yeni bir konuma kopyalar',
+                    schema: {
+                        name: 'copy_path',
+                        description: 'Dosya veya klasörü yeni bir konuma kopyalar',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                source: { type: 'string', description: 'Kaynak yol' },
+                                target: { type: 'string', description: 'Hedef yol' },
+                                overwrite: { type: 'boolean', description: 'Üstüne yaz' }
+                            },
+                            required: ['source','target']
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'create_directory',
+                    description: 'Yeni bir klasör oluşturur (gerekli üst dizinlerle)',
+                    schema: {
+                        name: 'create_directory',
+                        description: 'Yeni bir klasör oluşturur (gerekli üst dizinlerle)',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                path: { type: 'string', description: 'Oluşturulacak klasör yolu' }
+                            },
+                            required: ['path']
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'search_text',
+                    description: 'Workspace içinde metin/regex araması yapar',
+                    schema: {
+                        name: 'search_text',
+                        description: 'Workspace içinde metin/regex araması yapar',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                query: { type: 'string', description: 'Aranacak metin veya regex' },
+                                is_regex: { type: 'boolean', description: 'Regex olarak ara' },
+                                include: { type: 'string', description: 'Dahil glob (örn. src/**/*.ts)' },
+                                exclude: { type: 'string', description: 'Hariç glob (örn. **/dist/**)' },
+                                top_k: { type: 'number', description: 'Maksimum sonuç' }
+                            },
+                            required: ['query']
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'replace_in_file',
+                    description: 'Bir dosyada metni/regex eşleşmelerini değiştirir',
+                    schema: {
+                        name: 'replace_in_file',
+                        description: 'Bir dosyada metni/regex eşleşmelerini değiştirir',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                path: { type: 'string', description: 'Hedef dosya' },
+                                find: { type: 'string', description: 'Bulunacak metin veya regex' },
+                                replace: { type: 'string', description: 'Yerine konacak metin' },
+                                is_regex: { type: 'boolean', description: 'Regex olarak ara' },
+                                flags: { type: 'string', description: 'Regex bayrakları (örn. gi)' }
+                            },
+                            required: ['path','find','replace']
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'update_json',
+                    description: 'JSON dosyasında belirtilen alanları günceller/ekler',
+                    schema: {
+                        name: 'update_json',
+                        description: 'JSON dosyasında belirtilen alanları günceller/ekler',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                path: { type: 'string', description: 'JSON dosya yolu' },
+                                updates: {
+                                    type: 'array',
+                                    items: {
+                                        type: 'object',
+                                        properties: {
+                                            path: { type: 'string', description: 'Dot notasyonu veya JSON Pointer (/a/b)' },
+                                            value: { description: 'Yeni değer (string/number/boolean/object/array)' }
+                                        },
+                                        required: ['path','value']
+                                    }
+                                },
+                                create_if_missing: { type: 'boolean', description: 'Dosya yoksa oluştur' }
+                            },
+                            required: ['path','updates']
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'run_command',
+                    description: 'Güvenli beyaz liste ile terminal komutu çalıştırır (kısa süreli)',
+                    schema: {
+                        name: 'run_command',
+                        description: 'Güvenli beyaz liste ile terminal komutu çalıştırır (kısa süreli)',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                command: { type: 'string', description: 'Çalıştırılacak komut (örn. npm ci)' },
+                                cwd: { type: 'string', description: 'Çalışma dizini (varsayılan: proje kökü)' },
+                                timeout_ms: { type: 'number', description: 'Zaman aşımı (ms, varsayılan: 60000)' }
+                            },
+                            required: ['command']
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'run_npm_script',
+                    description: 'package.json içindeki bir scripti çalıştırır (npm/pnpm/yarn)',
+                    schema: {
+                        name: 'run_npm_script',
+                        description: 'package.json içindeki bir scripti çalıştırır (npm/pnpm/yarn)',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                script: { type: 'string', description: 'Çalıştırılacak script adı (örn. build, test)' },
+                                package_manager: { type: 'string', enum: ['npm','pnpm','yarn'], description: 'Paket yöneticisi (varsayılan otomatik)' },
+                                args: { type: 'array', items: { type: 'string' }, description: 'Ek argümanlar' }
+                            },
+                            required: ['script']
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'format_file',
+                    description: 'Dosyayı kayıtlı formatlayıcı ile biçimlendirir',
+                    schema: {
+                        name: 'format_file',
+                        description: 'Dosyayı kayıtlı formatlayıcı ile biçimlendirir',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                path: { type: 'string', description: 'Biçimlendirilecek dosya' }
+                            },
+                            required: ['path']
+                        }
+                    },
+                    type: 'builtin'
+                },
+                {
+                    name: 'open_in_editor',
+                    description: 'Bir dosyayı editörde açar ve (opsiyonel) satıra gider',
+                    schema: {
+                        name: 'open_in_editor',
+                        description: 'Bir dosyayı editörde açar ve (opsiyonel) satıra gider',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                path: { type: 'string', description: 'Açılacak dosya' },
+                                line: { type: 'number', description: 'Satır numarası (1-indexed, opsiyonel)' },
+                                column: { type: 'number', description: 'Sütun (opsiyonel)' }
+                            },
+                            required: ['path']
+                        }
+                    },
+                    type: 'builtin'
                 }
             ],
             custom_tools: []
@@ -253,7 +498,7 @@ export class ToolsManager {
 
         const content = Buffer.from(JSON.stringify(initialData, null, 2), 'utf8');
         await vscode.workspace.fs.writeFile(this.toolsFilePath, content);
-        console.log(`[ToolsManager] Created initial tools file: ${this.toolsFilePath.fsPath}`);
+        // Created initial tools file
     }
 
     private async loadTools(): Promise<void> {
@@ -263,10 +508,10 @@ export class ToolsManager {
             const bytes = await vscode.workspace.fs.readFile(this.toolsFilePath);
             const content = Buffer.from(bytes).toString('utf8');
             this.toolsData = JSON.parse(content);
-            console.log(`[ToolsManager] Loaded ${this.toolsData.builtin_tools.length} built-in tools and ${this.toolsData.custom_tools.length} custom tools`);
+            // Tools loaded
         } catch (error) {
             if (error instanceof Error && 'code' in error && error.code === 'FileNotFound') {
-                console.log('[ToolsManager] tools.json not found, starting with empty tools data');
+                // tools.json not found
             } else {
                 console.error('Failed to load tools:', error);
             }
@@ -285,7 +530,7 @@ export class ToolsManager {
         try {
             const content = Buffer.from(JSON.stringify(this.toolsData, null, 2), 'utf8');
             await vscode.workspace.fs.writeFile(this.toolsFilePath, content);
-            console.log(`[ToolsManager] Saved tools to ${this.toolsFilePath.fsPath}`);
+            // Tools saved
         } catch (error) {
             console.error('Failed to save tools:', error);
             throw error;
@@ -379,7 +624,7 @@ export class ToolsManager {
             this.toolsData.custom_tools.push(customTool);
             await this.saveTools();
 
-            console.log(`[ToolsManager] Custom tool created: ${request.name}`);
+            // Custom tool created
             return { success: true, tool: customTool };
 
         } catch (error) {
@@ -419,7 +664,7 @@ export class ToolsManager {
             await this.saveTools();
             await this.loadTools();
 
-            console.log(`[ToolsManager] Custom tool deleted: ${toolName}`);
+            // Custom tool deleted
             return { success: true };
 
         } catch (error) {
@@ -737,4 +982,92 @@ export function getToolsManager(): ToolsManager {
         toolsManagerInstance = new ToolsManager();
     }
     return toolsManagerInstance;
+}
+
+/**
+ * Planner LLM'in tool-calling özelliği için kullanılacak araç şemalarını oluşturur.
+ * Tüm planlama mantığını tek bir 'create_plan' fonksiyonuna sararak LLM'in işini basitleştirir.
+ * OpenAI/vLLM uyumlu tool-calling formatında bir araç dizisi döndürür.
+ */
+export function getToolsForPlanner(): any[] {
+    const tools = [
+        {
+            type: 'function',
+            function: {
+                name: 'create_plan',
+                description: 'İLK planı üretir. Adımları sırayla döndürür. Revizyon için kullanmayın.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        steps: {
+                            type: 'array',
+                            description: 'Uygulanacak eylem adımlarının sıralı listesi.',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    step: { type: 'number', description: 'Adımın 1\'den başlayan sıra numarası.' },
+                                    action: { type: 'string', description: 'Bu adımda yapılacak işlemin geliştirici için net açıklaması.' },
+                                    thought: { type: 'string', description: 'Bu adımı neden ve nasıl yapmayı planladığına dair kısa içsel akıl yürütme.' },
+                                    ui_text: { type: 'string', description: 'Arayüzde gösterilecek tek cümlelik özet.' },
+                                    tool: { type: 'string', description: 'Bu adımı uygulamak için kullanılacak araç adı (örn: edit_file, create_file, search).'},
+                                    args: {
+                                        type: 'object',
+                                        description: 'Seçilen tool için gerekli parametreler. Esnek alanlar içerir.',
+                                        properties: {},
+                                        additionalProperties: true
+                                    },
+                                    files_to_edit: { type: 'array', items: { type: 'string' }, description: 'Bu adımda düzenlenmesi planlanan dosyaların göreli yolları.' },
+                                    notes: { type: 'string', description: 'Opsiyonel ek notlar.' }
+                                },
+                                required: ['step', 'action', 'thought']
+                            }
+                        }
+                    },
+                    required: ['steps'],
+                    additionalProperties: false
+                }
+            }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'propose_plan_changes',
+                description: 'Mevcut plana uygulanacak DEĞİŞİKLİKLERİ (delta) önerir: yeni adım ekle/çıkar/değiştir/sırala. TAM plan değil, sadece değişiklikleri döndür.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        changes: {
+                            type: 'array',
+                            description: 'Plan üzerinde yapılacak değişiklikler listesi.',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    op: { type: 'string', enum: ['insert','delete','update','reorder'], description: 'Değişiklik türü' },
+                                    anchor_step: { type: 'number', description: 'Hedef/Referans adım numarası (örn. 5. adımın önüne ekle)' },
+                                    position: { type: 'string', enum: ['before','after','replace','append_end','prepend_start'], description: 'Yerleştirme biçimi' },
+                                    new_step: {
+                                        type: 'object',
+                                        description: 'Ekleme/değiştirme için önerilen yeni adım içeriği (KISA ve KODSUZ).',
+                                        properties: {
+                                            action: { type: 'string' },
+                                            thought: { type: 'string' },
+                                            ui_text: { type: 'string' },
+                                            tool: { type: 'string' },
+                                            args: { type: 'object', additionalProperties: true }
+                                        },
+                                        required: ['action','thought']
+                                    },
+                                    notes: { type: 'string', description: 'Kısa gerekçe/uyarı (opsiyonel)' }
+                                },
+                                required: ['op']
+                            }
+                        }
+                    },
+                    required: ['changes'],
+                    additionalProperties: false
+                }
+            }
+        }
+    ];
+    return tools;
 }

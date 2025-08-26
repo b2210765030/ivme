@@ -7,7 +7,20 @@ export const toolsEnDetailed = [
     '- retrieve_chunks: { args: { query: string, top_k?: number } } -> Retrieve relevant code/document chunks from the vector index. Use before editing when unsure about files/locations.',
     '- create_file: { args: { path: string, content_spec?: string } } -> Create a new file; DO NOT include code. content_spec MUST be plain natural language (one short line), NO backticks, NO code fences.',
     '- edit_file: { args: { path?: string, find_spec?: string, change_spec?: string, use_saved_range?: string } } -> Edit an existing file. If path omitted, use the best retrieved chunk and update ONLY that chunk\'s content. DO NOT include code in the plan; change_spec MUST be plain text (one line).',
-    '- append_file: { args: { path: string, content_spec?: string, position?: "end"|"beginning" } } -> Append or prepend; DO NOT include code. content_spec MUST be plain natural language (one short line), NO backticks, NO code fences.'
+    '- append_file: { args: { path: string, content_spec?: string, position?: "end"|"beginning" } } -> Append or prepend; DO NOT include code. content_spec MUST be plain natural language (one short line), NO backticks, NO code fences.',
+    '- read_file: { args: { path: string, start_line?: number, end_line?: number, save_as?: string } } -> Read file content fully or a line range; optionally save the range handle for later edits.',
+    '- list_dir: { args: { path?: string, depth?: number, glob?: string, files_only?: boolean, dirs_only?: boolean } } -> List files and directories under a path.',
+    '- delete_path: { args: { path: string, recursive?: boolean } } -> Delete a file or directory.',
+    '- move_path: { args: { source: string, target: string, overwrite?: boolean } } -> Move or rename a file/directory.',
+    '- copy_path: { args: { source: string, target: string, overwrite?: boolean } } -> Copy a file/directory.',
+    '- create_directory: { args: { path: string } } -> Create a new directory (mkdir -p).',
+    '- search_text: { args: { query: string, is_regex?: boolean, include?: string, exclude?: string, top_k?: number } } -> Search across the workspace for text/regex matches.',
+    '- replace_in_file: { args: { path: string, find: string, replace: string, is_regex?: boolean, flags?: string } } -> Replace text/regex matches in a file.',
+    '- update_json: { args: { path: string, updates: { path: string, value: any }[], create_if_missing?: boolean } } -> Update JSON fields by path.',
+    '- run_command: { args: { command: string, cwd?: string, timeout_ms?: number } } -> Run a short, whitelisted shell command.',
+    '- run_npm_script: { args: { script: string, package_manager?: "npm"|"pnpm"|"yarn", args?: string[] } } -> Run an npm/pnpm/yarn script.',
+    '- format_file: { args: { path: string } } -> Format the file with the registered formatter.',
+    '- open_in_editor: { args: { path: string, line?: number, column?: number } } -> Open file in editor and optionally jump to position.'
 ].join('\n');
 
 export const toolsEnShort = [
@@ -24,7 +37,20 @@ export const toolsTrDetailed = [
     '- retrieve_chunks: { args: { query: string, top_k?: number } } -> Vektör indeksinden ilgili kod/doküman parçalarını getirir. Dosya/konumdan emin değilsen önce bunu kullan.',
     '- create_file: { args: { path: string, content_spec?: string } } -> Yeni dosya oluştur; KOD YAZMA. content_spec yalın metin ve KISA olmalı (tek satır), backtick/kod bloğu YOK.',
     '- edit_file: { args: { path?: string, find_spec?: string, change_spec?: string, use_saved_range?: string } } -> Mevcut dosyayı düzenle; KOD YAZMA. change_spec yalın metin (tek satır). Path yoksa en iyi eşleşen chunk kullanılır ve sadece o chunk güncellenir.',
-    '- append_file: { args: { path: string, content_spec?: string, position?: "end"|"beginning" } } -> Dosya başına/sonuna ekle; KOD YAZMA. content_spec yalın metin ve KISA olmalı (tek satır), backtick/kod bloğu YOK.'
+    '- append_file: { args: { path: string, content_spec?: string, position?: "end"|"beginning" } } -> Dosya başına/sonuna ekle; KOD YAZMA. content_spec yalın metin ve KISA olmalı (tek satır), backtick/kod bloğu YOK.',
+    '- read_file: { args: { path: string, start_line?: number, end_line?: number, save_as?: string } } -> Dosyanın tamamını veya satır aralığını oku; aralığı anahtar ile kaydedebilirsin.',
+    '- list_dir: { args: { path?: string, depth?: number, glob?: string, files_only?: boolean, dirs_only?: boolean } } -> Dizindeki dosya ve klasörleri listeler.',
+    '- delete_path: { args: { path: string, recursive?: boolean } } -> Dosya veya klasörü siler.',
+    '- move_path: { args: { source: string, target: string, overwrite?: boolean } } -> Dosya/klasörü taşır/yeniden adlandırır.',
+    '- copy_path: { args: { source: string, target: string, overwrite?: boolean } } -> Dosya/klasörü kopyalar.',
+    '- create_directory: { args: { path: string } } -> Yeni klasör oluşturur.',
+    '- search_text: { args: { query: string, is_regex?: boolean, include?: string, exclude?: string, top_k?: number } } -> Workspace genelinde metin/regex araması yapar.',
+    '- replace_in_file: { args: { path: string, find: string, replace: string, is_regex?: boolean, flags?: string } } -> Dosyada metin/regex değişimi yapar.',
+    '- update_json: { args: { path: string, updates: { path: string, value: any }[], create_if_missing?: boolean } } -> JSON alanlarını günceller/ekler.',
+    '- run_command: { args: { command: string, cwd?: string, timeout_ms?: number } } -> Kısa, beyaz listeli komut çalıştırır.',
+    '- run_npm_script: { args: { script: string, package_manager?: "npm"|"pnpm"|"yarn", args?: string[] } } -> package.json scriptini çalıştırır.',
+    '- format_file: { args: { path: string } } -> Dosyayı formatlar.',
+    '- open_in_editor: { args: { path: string, line?: number, column?: number } } -> Dosyayı editörde aç ve satıra git.'
 ].join('\n');
 
 export const toolsTrShort = [
@@ -143,7 +169,20 @@ export const toolsEnDescriptions = [
     '- retrieve_chunks -> Retrieve relevant code/document chunks from the vector index to inform edits.',
     '- create_file -> Create a new file (describe intended content; do not include actual code).',
     '- edit_file -> Edit an existing file (describe the change; do not include code in the plan).',
-    '- append_file -> Append or prepend content to a file (describe the addition; do not include code).'
+    '- append_file -> Append or prepend content to a file (describe the addition; do not include code).',
+    '- read_file -> Read file content fully or a line range; optionally save the range.',
+    '- list_dir -> List files and directories under a path.',
+    '- delete_path -> Delete a file or directory.',
+    '- move_path -> Move or rename a file/directory.',
+    '- copy_path -> Copy a file/directory.',
+    '- create_directory -> Create a new directory.',
+    '- search_text -> Workspace-wide text/regex search.',
+    '- replace_in_file -> Replace text/regex matches in a file.',
+    '- update_json -> Update JSON fields by path.',
+    '- run_command -> Run a short, whitelisted shell command.',
+    '- run_npm_script -> Run an npm/pnpm/yarn script.',
+    '- format_file -> Format file using registered formatter.',
+    '- open_in_editor -> Open file in editor and jump to position.'
 ].join('\n');
 
 export const toolsTrDescriptions = [
@@ -153,7 +192,20 @@ export const toolsTrDescriptions = [
     '- retrieve_chunks -> Düzenlemeler için ilgili kod/doküman parçalarını vektör indeksinden getirir.',
     '- create_file -> Yeni dosya oluştur (içeriği tarif et; gerçek kod ekleme).',
     '- edit_file -> Mevcut dosyayı düzenle (değişikliği tarif et; planda kod yazma).',
-    '- append_file -> Dosyaya ekle/başına ekle (eklencek içeriği tarif et; kod ekleme).'
+    '- append_file -> Dosyaya ekle/başına ekle (eklencek içeriği tarif et; kod ekleme).',
+    '- read_file -> Dosyanın tamamını veya satır aralığını oku; aralığı kaydet.',
+    '- list_dir -> Dizindeki dosya ve klasörleri listeler.',
+    '- delete_path -> Dosya veya klasörü siler.',
+    '- move_path -> Dosya/klasörü taşır/yeniden adlandırır.',
+    '- copy_path -> Dosya/klasörü kopyalar.',
+    '- create_directory -> Yeni klasör oluşturur.',
+    '- search_text -> Workspace genelinde metin/regex araması yapar.',
+    '- replace_in_file -> Dosyada metin/regex değişimi yapar.',
+    '- update_json -> JSON alanlarını günceller/ekler.',
+    '- run_command -> Kısa, güvenli komut çalıştırır.',
+    '- run_npm_script -> package.json scriptini çalıştırır.',
+    '- format_file -> Dosyayı formatlar.',
+    '- open_in_editor -> Dosyayı aç ve satıra git.'
 ].join('\n');
 
 // Dynamic tool descriptions that load from tools.json

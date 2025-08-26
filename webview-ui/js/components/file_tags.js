@@ -6,7 +6,7 @@
 import * as DOM from '../utils/dom.js';
 import * as VsCode from '../services/vscode.js';
 import { getState, resetFilesSize } from '../core/state.js';
-import { recalculateTotalAndUpdateUI } from './InputArea.js';
+import { recalculateTotalAndUpdateUI, autoResize } from './InputArea.js';
 
 // --- Public Fonksiyonlar ---
 
@@ -40,10 +40,12 @@ export function display(fileNames) {
     });
     VsCode.postMessage('requestContextSize');
     recalculateTotalAndUpdateUI();
+    try { autoResize(); } catch (e) {}
 }
 
 export function clear() {
     DOM.fileContextArea.innerHTML = '';
     resetFilesSize();
     recalculateTotalAndUpdateUI();
+    try { autoResize(); } catch (e) {}
 }

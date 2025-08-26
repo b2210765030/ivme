@@ -8,6 +8,8 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { exec as execCb } from 'child_process';
+import { promisify } from 'util';
 import { ApiServiceManager } from './manager';
 import { PlannerPlan, PlannerPlanStep } from './planner';
 import { cleanLLMCodeBlock } from '../core/utils';
@@ -67,6 +69,32 @@ export class PlannerExecutor {
                 result = await this.handleEditFile(context, api, args, step); break;
             case 'append_file':
                 result = await this.handleAppendFile(context, api, args, step); break;
+            case 'read_file':
+                result = await this.handleReadFile(args); break;
+            case 'list_dir':
+                result = await this.handleListDir(args); break;
+            case 'delete_path':
+                result = await this.handleDeletePath(args); break;
+            case 'move_path':
+                result = await this.handleMovePath(args); break;
+            case 'copy_path':
+                result = await this.handleCopyPath(args); break;
+            case 'create_directory':
+                result = await this.handleCreateDirectory(args); break;
+            case 'search_text':
+                result = await this.handleSearchText(args); break;
+            case 'replace_in_file':
+                result = await this.handleReplaceInFile(args); break;
+            case 'update_json':
+                result = await this.handleUpdateJson(args); break;
+            case 'run_command':
+                result = await this.handleRunCommand(args); break;
+            case 'run_npm_script':
+                result = await this.handleRunNpmScript(args); break;
+            case 'format_file':
+                result = await this.handleFormatFile(args); break;
+            case 'open_in_editor':
+                result = await this.handleOpenInEditor(args); break;
             default:
                 if (tool) {
                     result = await this.handleCustomTool(context, tool, args, step);
@@ -436,16 +464,13 @@ export class PlannerExecutor {
             ];
             // Debug log: prompt ve hedef aralık bilgisi
             try {
-                const preview = (s: string) => (s.length > 2000 ? s.slice(0, 2000) + '... [truncated]' : s);
-                console.log('[EditFile] Path:', filePath, 'range:', range.start + '-' + range.end);
-                console.log('[EditFile] System prompt:\n' + system);
-                console.log('[EditFile] User prompt:\n' + preview(userParts.join('\n')));
+                // EditFile prompt preview suppressed
             } catch {}
             let raw = '';
             await api.generateChatContent(messages, (chunk) => { raw += chunk; }, undefined as any);
-            try { console.log('[EditFile] Raw response length:', raw.length); } catch {}
+            try { /* raw response length suppressed */ } catch {}
             const newSnippet = extractOnlyCode(raw);
-            try { console.log('[EditFile] Extracted snippet length:', (newSnippet || '').length); } catch {}
+            try { /* extracted snippet length suppressed */ } catch {}
             if (!newSnippet || newSnippet.trim().length === 0) return 'edit_file: Modelden geçerli snippet alınamadı.';
             const updated = original.slice(0, range.start) + newSnippet + original.slice(range.end);
             await vscode.workspace.fs.writeFile(vscode.Uri.file(abs), Buffer.from(updated, 'utf8'));
@@ -497,6 +522,17 @@ export class PlannerExecutor {
                 await vscode.workspace.fs.writeFile(vscode.Uri.file(abs), Buffer.from(updated, 'utf8'));
                 return `Seçim aralığı güncellendi: ${filePath} [${selStart}-${selEnd}]`;
             }
+
+            // Güvenli varsayılan: Eğer hedef dosya doluysa ve aralık belirtilmemişse, tam dosya yerine ekleme modunu tercih et
+            // Kullanıcı açıkça "güncelle/değiştir/replace" belirtmediyse, ekleme yap
+            if (original.trim().length > 0 && !args?.force_full_file) {
+                const intentText = String(changeSpec || step.action || step.thought || '').toLowerCase();
+                const looksReplace = /(replace|overwrite|update|modify|değiştir|degistir|güncelle|guncelle)/i.test(intentText);
+                if (!looksReplace) {
+                    const position = (args && typeof args.position === 'string') ? args.position : 'end';
+                    return await this.handleAppendFile(context, api, { path: filePath, content_spec: changeSpec || step.action || step.thought, position }, step);
+                }
+            }
             const system = [
                 'You are a senior engineer. Update the given file based on the change specification.',
                 'Output ONLY the complete, final file content as a single Markdown code block. No prose, no explanation.'
@@ -526,17 +562,12 @@ export class PlannerExecutor {
                 { role: 'user' as const, content: userParts.join('\n') }
             ];
             // Debug log: prompt ve full-file bilgisi
-            try {
-                const preview = (s: string) => (s.length > 2000 ? s.slice(0, 2000) + '... [truncated]' : s);
-                console.log('[EditFile] Path:', filePath, 'FULL FILE UPDATE');
-                console.log('[EditFile] System prompt:\n' + system);
-                console.log('[EditFile] User prompt:\n' + preview(userParts.join('\n')));
-            } catch {}
+            try { /* full file update prompt preview suppressed */ } catch {}
             let raw = '';
             await api.generateChatContent(messages, (chunk) => { raw += chunk; }, undefined as any);
-            try { console.log('[EditFile] Raw response length:', raw.length); } catch {}
+            try { /* raw response length suppressed */ } catch {}
             const newContent = extractOnlyCode(raw);
-            try { console.log('[EditFile] Extracted content length:', (newContent || '').length); } catch {}
+            try { /* extracted content length suppressed */ } catch {}
             if (!newContent || newContent.trim().length === 0) return 'edit_file: Modelden geçerli içerik alınamadı.';
             await vscode.workspace.fs.writeFile(vscode.Uri.file(abs), Buffer.from(newContent, 'utf8'));
             return `Dosya güncellendi: ${filePath}`;
@@ -617,6 +648,296 @@ export class PlannerExecutor {
         const updated = position === 'beginning' ? (snippet + '\n' + original) : (original + '\n' + snippet);
         await vscode.workspace.fs.writeFile(vscode.Uri.file(abs), Buffer.from(updated, 'utf8'));
         return `Dosyaya içerik eklendi: ${filePath}`;
+    }
+
+    private async handleReadFile(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'read_file: Workspace bulunamadı.';
+        const rel = String(args?.path || '').trim();
+        if (!rel) return 'read_file: path eksik.';
+        const abs = path.isAbsolute(rel) ? rel : path.join(ws.uri.fsPath, rel);
+        let text = '';
+        try {
+            const buf = await vscode.workspace.fs.readFile(vscode.Uri.file(abs));
+            text = Buffer.from(buf).toString('utf8');
+        } catch {
+            return `read_file: Dosya okunamadı: ${rel}`;
+        }
+        let startLine = Number(args?.start_line || 1);
+        let endLine = Number(args?.end_line || 0);
+        if (!isFinite(startLine) || startLine < 1) startLine = 1;
+        const lines = text.split(/\n/);
+        if (!isFinite(endLine) || endLine <= 0 || endLine > lines.length) endLine = lines.length;
+        if (startLine > endLine) startLine = Math.max(1, Math.min(endLine, startLine));
+        const snippet = lines.slice(startLine - 1, endLine).join('\n');
+        const saveAs = typeof args?.save_as === 'string' ? args.save_as.trim() : '';
+        if (saveAs) {
+            const startChar = lines.slice(0, startLine - 1).join('\n').length + (startLine > 1 ? 1 : 0);
+            const endChar = lines.slice(0, endLine).join('\n').length;
+            this.lastLocations[saveAs] = { path: abs, start: startChar, end: endChar, startLine, endLine } as any;
+        }
+        return `read_file: ${rel} satırlar ${startLine}-${endLine}\n\n\`\`\`\n${snippet}\n\`\`\``;
+    }
+
+    private async handleListDir(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'list_dir: Workspace bulunamadı.';
+        const rel = String(args?.path || '').trim();
+        const base = rel ? (path.isAbsolute(rel) ? rel : path.join(ws.uri.fsPath, rel)) : ws.uri.fsPath;
+        const depth = Math.max(0, Number(args?.depth ?? 1) || 1);
+        const filesOnly = !!args?.files_only;
+        const dirsOnly = !!args?.dirs_only;
+        const items: string[] = [];
+        const visit = async (dir: string, d: number) => {
+            if (d < 0) return;
+            let entries: [string, vscode.FileType][] = [];
+            try { entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir)); } catch { return; }
+            for (const [name, type] of entries) {
+                const p = path.join(dir, name);
+                const relPath = path.relative(ws.uri.fsPath, p).replace(/\\/g, '/');
+                const isDir = type === vscode.FileType.Directory;
+                if ((filesOnly && isDir) || (dirsOnly && !isDir)) {
+                } else {
+                    items.push((isDir ? '[D] ' : '[F] ') + relPath);
+                }
+                if (isDir && d > 0) await visit(p, d - 1);
+            }
+        };
+        await visit(base, depth);
+        return items.length ? ('list_dir:\n' + items.slice(0, 200).join('\n')) : 'list_dir: (boş)';
+    }
+
+    private async handleDeletePath(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'delete_path: Workspace bulunamadı.';
+        const rel = String(args?.path || '').trim();
+        if (!rel) return 'delete_path: path eksik.';
+        const abs = path.isAbsolute(rel) ? rel : path.join(ws.uri.fsPath, rel);
+        try {
+            await vscode.workspace.fs.delete(vscode.Uri.file(abs), { recursive: !!args?.recursive, useTrash: false } as any);
+            return `Silindi: ${rel}`;
+        } catch (e: any) {
+            return `delete_path hata: ${rel} — ${e?.message || e}`;
+        }
+    }
+
+    private async handleMovePath(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'move_path: Workspace bulunamadı.';
+        const srcRel = String(args?.source || '').trim();
+        const dstRel = String(args?.target || '').trim();
+        if (!srcRel || !dstRel) return 'move_path: source/target eksik.';
+        const src = path.isAbsolute(srcRel) ? srcRel : path.join(ws.uri.fsPath, srcRel);
+        const dst = path.isAbsolute(dstRel) ? dstRel : path.join(ws.uri.fsPath, dstRel);
+        try {
+            await vscode.workspace.fs.rename(vscode.Uri.file(src), vscode.Uri.file(dst), { overwrite: !!args?.overwrite } as any);
+            return `Taşındı: ${srcRel} -> ${dstRel}`;
+        } catch (e: any) {
+            return `move_path hata: ${srcRel} -> ${dstRel} — ${e?.message || e}`;
+        }
+    }
+
+    private async handleCopyPath(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'copy_path: Workspace bulunamadı.';
+        const srcRel = String(args?.source || '').trim();
+        const dstRel = String(args?.target || '').trim();
+        if (!srcRel || !dstRel) return 'copy_path: source/target eksik.';
+        const src = path.isAbsolute(srcRel) ? srcRel : path.join(ws.uri.fsPath, srcRel);
+        const dst = path.isAbsolute(dstRel) ? dstRel : path.join(ws.uri.fsPath, dstRel);
+        try {
+            await vscode.workspace.fs.copy(vscode.Uri.file(src), vscode.Uri.file(dst), { overwrite: !!args?.overwrite } as any);
+            return `Kopyalandı: ${srcRel} -> ${dstRel}`;
+        } catch (e: any) {
+            return `copy_path hata: ${srcRel} -> ${dstRel} — ${e?.message || e}`;
+        }
+    }
+
+    private async handleCreateDirectory(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'create_directory: Workspace bulunamadı.';
+        const rel = String(args?.path || '').trim();
+        if (!rel) return 'create_directory: path eksik.';
+        const abs = path.isAbsolute(rel) ? rel : path.join(ws.uri.fsPath, rel);
+        try { await vscode.workspace.fs.createDirectory(vscode.Uri.file(abs)); return `Klasör oluşturuldu: ${rel}`; } catch (e: any) { return `create_directory hata: ${rel} — ${e?.message || e}`; }
+    }
+
+    private async handleSearchText(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'search_text: Workspace bulunamadı.';
+        const query = String(args?.query || '').trim();
+        if (!query) return 'search_text: query eksik.';
+        const include = typeof args?.include === 'string' && args.include.trim().length > 0 ? args.include.trim() : '**/*';
+        const excludeDefault = '**/{node_modules,.git,.ivme,dist,out,build,.next,.turbo,coverage}/**';
+        const exclude = typeof args?.exclude === 'string' && args.exclude.trim().length > 0 ? args.exclude.trim() : excludeDefault;
+        const maxFiles = 2000;
+        const maxResults = Math.max(1, Math.min(200, Number(args?.top_k || 50)));
+        const isRegex = !!args?.is_regex;
+        let re: RegExp | null = null;
+        if (isRegex) {
+            try { re = new RegExp(query, 'i'); } catch { return 'search_text: Geçersiz regex.'; }
+        }
+        const files = await vscode.workspace.findFiles(include, exclude, maxFiles);
+        const results: Array<{ p: string; line: number; text: string }> = [];
+        for (const uri of files) {
+            if (results.length >= maxResults) break;
+            let content = '';
+            try { const buf = await vscode.workspace.fs.readFile(uri); content = Buffer.from(buf).toString('utf8'); } catch { continue; }
+            const lines = content.split(/\n/);
+            for (let i = 0; i < lines.length; i++) {
+                const ln = lines[i];
+                const ok = re ? re.test(ln) : ln.includes(query);
+                if (ok) {
+                    results.push({ p: path.relative(ws.uri.fsPath, uri.fsPath).replace(/\\/g, '/'), line: i + 1, text: ln.trim().slice(0, 200) });
+                    if (results.length >= maxResults) break;
+                }
+            }
+        }
+        if (results.length === 0) return `search_text: Sonuç yok (query="${query}")`;
+        const body = results.map(r => `${r.p}:${r.line}: ${r.text}`).join('\n');
+        return `search_text sonuçları (ilk ${results.length}):\n${body}`;
+    }
+
+    private async handleReplaceInFile(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'replace_in_file: Workspace bulunamadı.';
+        const rel = String(args?.path || '').trim();
+        if (!rel) return 'replace_in_file: path eksik.';
+        const abs = path.isAbsolute(rel) ? rel : path.join(ws.uri.fsPath, rel);
+        const find = String(args?.find || '').trim();
+        const replace = String(args?.replace ?? '');
+        if (!find) return 'replace_in_file: find eksik.';
+        const isRegex = !!args?.is_regex;
+        const flags = typeof args?.flags === 'string' && args.flags.trim().length > 0 ? args.flags.trim() : 'g';
+        let content = '';
+        try { const buf = await vscode.workspace.fs.readFile(vscode.Uri.file(abs)); content = Buffer.from(buf).toString('utf8'); } catch { return `replace_in_file: Dosya okunamadı: ${rel}`; }
+        let updated = content;
+        if (isRegex) {
+            let re: RegExp;
+            try { re = new RegExp(find, flags.includes('g') ? flags : (flags + 'g')); } catch { return 'replace_in_file: Geçersiz regex/flags.'; }
+            updated = content.replace(re, replace);
+        } else {
+            updated = content.split(find).join(replace);
+        }
+        if (updated === content) return 'replace_in_file: Değişiklik yok (eşleşme bulunamadı).';
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(abs), Buffer.from(updated, 'utf8'));
+        return `replace_in_file: Güncellendi: ${rel}`;
+    }
+
+    private async handleUpdateJson(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'update_json: Workspace bulunamadı.';
+        const rel = String(args?.path || '').trim();
+        if (!rel) return 'update_json: path eksik.';
+        const abs = path.isAbsolute(rel) ? rel : path.join(ws.uri.fsPath, rel);
+        interface UpdateSpec { path: string; value: any }
+        const updates: UpdateSpec[] = Array.isArray(args?.updates) ? args.updates : [];
+        if (!updates.length) return 'update_json: updates boş.';
+        let obj: any = {};
+        try { const buf = await vscode.workspace.fs.readFile(vscode.Uri.file(abs)); obj = JSON.parse(Buffer.from(buf).toString('utf8')); } catch { if (!args?.create_if_missing) return `update_json: Dosya yok veya okunamadı: ${rel}`; obj = {}; }
+        const setByPath = (target: any, p: string, val: any) => {
+            if (!p) return;
+            let parts: string[];
+            if (p.startsWith('/')) { parts = p.split('/').slice(1).map(s => s.replace(/~1/g, '/').replace(/~0/g, '~')); }
+            else { parts = p.replace(/\[(\d+)\]/g, '.$1').split('.'); }
+            let cur = target;
+            for (let i = 0; i < parts.length; i++) {
+                const key = parts[i];
+                const isLast = i === parts.length - 1;
+                if (isLast) { (cur as any)[key] = val; break; }
+                if (cur[key] == null || typeof cur[key] !== 'object') {
+                    const nextIsIndex = /^\d+$/.test(parts[i + 1] || '');
+                    cur[key] = nextIsIndex ? [] : {};
+                }
+                cur = cur[key];
+            }
+        };
+        for (const u of updates) { if (u && typeof u.path === 'string') setByPath(obj, u.path, u.value); }
+        const text = JSON.stringify(obj, null, 2) + '\n';
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(abs), Buffer.from(text, 'utf8'));
+        return `update_json: Güncellendi: ${rel}`;
+    }
+
+    private async handleRunCommand(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'run_command: Workspace bulunamadı.';
+        const command = String(args?.command || '').trim();
+        if (!command) return 'run_command: command eksik.';
+        const cwd = typeof args?.cwd === 'string' && args.cwd.trim().length > 0 ? (path.isAbsolute(args.cwd) ? args.cwd : path.join(ws.uri.fsPath, args.cwd)) : ws.uri.fsPath;
+        const timeoutMs = Math.max(1000, Math.min(300000, Number(args?.timeout_ms || 60000)));
+        const allowedPrefixes = ['npm', 'pnpm', 'yarn', 'npx', 'echo'];
+        const firstToken = command.split(/\s+/)[0].toLowerCase();
+        if (!allowedPrefixes.includes(firstToken)) return 'run_command: Güvenlik nedeniyle bu komut engellendi.';
+        const execAsync = promisify(execCb);
+        try {
+            const { stdout, stderr } = await execAsync(command, { cwd, timeout: timeoutMs, windowsHide: true } as any);
+            const out = (stdout || '').toString();
+            const err = (stderr || '').toString();
+            const combined = [out.trim(), err.trim()].filter(Boolean).join('\n');
+            return combined.length ? combined.slice(0, 8000) : 'run_command: Tamamlandı (çıktı yok)';
+        } catch (e: any) {
+            return `run_command hata: ${e?.message || e}`;
+        }
+    }
+
+    private async handleRunNpmScript(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'run_npm_script: Workspace bulunamadı.';
+        const script = String(args?.script || '').trim();
+        if (!script) return 'run_npm_script: script eksik.';
+        let manager = String(args?.package_manager || '').trim().toLowerCase();
+        if (!manager) {
+            try { await vscode.workspace.fs.stat(vscode.Uri.joinPath(ws.uri, 'pnpm-lock.yaml')); manager = 'pnpm'; } catch {}
+            if (!manager) { try { await vscode.workspace.fs.stat(vscode.Uri.joinPath(ws.uri, 'yarn.lock')); manager = 'yarn'; } catch {} }
+            if (!manager) manager = 'npm';
+        }
+        const extraArgs: string[] = Array.isArray(args?.args) ? args.args.map((a: any) => String(a)) : [];
+        const cmd = manager === 'yarn' ? `yarn ${script} ${extraArgs.join(' ')}` : `${manager} run ${script} ${extraArgs.join(' ')}`;
+        return await this.handleRunCommand({ command: cmd, cwd: ws.uri.fsPath, timeout_ms: args?.timeout_ms });
+    }
+
+    private async handleFormatFile(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'format_file: Workspace bulunamadı.';
+        const rel = String(args?.path || '').trim();
+        if (!rel) return 'format_file: path eksik.';
+        const uri = vscode.Uri.file(path.isAbsolute(rel) ? rel : path.join(ws.uri.fsPath, rel));
+        try {
+            const doc = await vscode.workspace.openTextDocument(uri);
+            const edits = await vscode.commands.executeCommand<vscode.TextEdit[]>('vscode.executeFormatDocumentProvider', uri);
+            if (Array.isArray(edits) && edits.length > 0) {
+                const we = new vscode.WorkspaceEdit();
+                we.set(uri, edits);
+                await vscode.workspace.applyEdit(we);
+                await doc.save();
+                return `format_file: Biçimlendirildi: ${path.relative(ws.uri.fsPath, uri.fsPath).replace(/\\/g, '/')}`;
+            }
+            return 'format_file: Biçimlendirme uygulanmadı (edit yok).';
+        } catch (e: any) {
+            return `format_file hata: ${e?.message || e}`;
+        }
+    }
+
+    private async handleOpenInEditor(args: any): Promise<string> {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (!ws) return 'open_in_editor: Workspace bulunamadı.';
+        const rel = String(args?.path || '').trim();
+        if (!rel) return 'open_in_editor: path eksik.';
+        const uri = vscode.Uri.file(path.isAbsolute(rel) ? rel : path.join(ws.uri.fsPath, rel));
+        try {
+            const doc = await vscode.workspace.openTextDocument(uri);
+            const editor = await vscode.window.showTextDocument(doc, { preview: false });
+            const line = Number(args?.line || 0);
+            const col = Number(args?.column || 0);
+            if (isFinite(line) && line > 0) {
+                const pos = new vscode.Position(Math.max(0, line - 1), Math.max(0, col - 1));
+                editor.selection = new vscode.Selection(pos, pos);
+                editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+            }
+            return `open_in_editor: Açıldı: ${path.relative(ws.uri.fsPath, uri.fsPath).replace(/\\/g, '/')}`;
+        } catch (e: any) {
+            return `open_in_editor hata: ${e?.message || e}`;
+        }
     }
 
     private composeRetrievedContext(): string {

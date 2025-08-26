@@ -113,11 +113,10 @@ export function initMessageListener() {
             // --- Akış (Stream) Mesajları ---
             case 'addResponsePlaceholder': {
                 ChatView.addAiResponsePlaceholder();
-                // ACT modunda: hemen "İvme düşünüyor..." yaz
+                // ACT modunda plan açıklamasını maskele; başlık yazma
                 try {
                     const { isAgentActMode } = getState();
                     if (isAgentActMode) {
-                        ChatView.replaceStreamingPlaceholderHeader(DOM.getText('thinking') || 'İvme düşünüyor...');
                         // Plan açıklaması akışını uygulama adımına kadar maskele
                         suppressPlannerExplanation = true;
                     }
@@ -176,41 +175,21 @@ export function initMessageListener() {
 
             // --- Planner streaming UI parça mesajı ---
             case 'plannerUiChunk': {
-                const { isAgentModeActive, isIndexingEnabled, isAgentActMode } = getState();
+                const { isAgentModeActive, isIndexingEnabled } = getState();
                 if (!(isAgentModeActive && isIndexingEnabled)) {
-                    // Chat modunda bu mesajları yok say
+                    // Index modu kapalıysa planlama bildirimi göstermeyelim
                     break;
                 }
-                // ACT modunda: sadece "İvme düşünüyor..." göster, UI akışını maskele
-                if (isAgentActMode) {
-                    try {
-                        if (!document.getElementById('ai-streaming-placeholder')) {
-                            ChatView.addAiResponsePlaceholder();
-                        }
-                        ChatView.replaceStreamingPlaceholderHeader(DOM.getText('thinking') || 'İvme düşünüyor...');
-                    } catch (e) {}
-                    break;
-                }
-                // Her yeni ui_text geldiğinde mevcut placeholder içeriğini başlıkla sıfırla ve
-                // daktilo efektini ChatView tarafındaki animasyonla (requestAnimationFrame) yap
+                // PLAN AKIŞI: Index aktifken shimmer ve başlık
                 try {
-                    const stepNo = data?.stepNo;
-                    const uiText = String(data?.uiText ?? '');
                     plannerStreamActive = true;
-
-                    // Her parçada başlığı yeniden kur (Adım numarası varsa göster)
-                    const header = (typeof stepNo === 'number') ? `Adım ${stepNo}: ` : '';
-                    currentStreamingStep = stepNo;
-                    ChatView.replaceStreamingPlaceholderHeader(header);
-                    ChatView.setPlannerStreaming(true);
-                    // Adım akarken shimmer aktif (sadece placeholder için)
-                    ChatView.setShimmerActive(true);
-                    // Tek seferde metni kuyruğa ekle; animasyon ChatView.processTypingQueue ile yapılır
-                    if (uiText.length > 0) {
-                        // Her parça öncesi shimmer konumunu resetle
-                        try { document.getElementById('ai-streaming-placeholder')?.querySelector('.message-content')?.style?.setProperty('background-position', '-150% 0'); } catch {}
-                        ChatView.appendResponseChunk(uiText);
+                    currentStreamingStep = data?.stepNo ?? null;
+                    if (!document.getElementById('ai-streaming-placeholder')) {
+                        ChatView.addAiResponsePlaceholder();
                     }
+                    ChatView.setPlannerStreaming(true);
+                    ChatView.setShimmerActive(true);
+                    ChatView.replaceStreamingPlaceholderHeader('İvme planlıyor...');
                 } catch (e) {
                     console.warn('plannerUiChunk render error', e);
                 }
@@ -267,40 +246,21 @@ export function initMessageListener() {
                     } catch(e) { console.warn('showPlannerPanelWithPlan error', e); }
                     break;
                 }
-                // Streaming yoksa da tek placeholder üzerinde sırayla yaz ve finalize et
+                // Streaming yoksa da sade: sadece "İvme planladı (Xs)" yaz ve paneli güncelle
                 if (!document.getElementById('ai-streaming-placeholder')) {
                     ChatView.addAiResponsePlaceholder();
                 }
-                (async () => {
-                    for (const step of plan.steps) {
-                        const stepNo = typeof step?.step === 'number' ? step.step : 0;
-                        const uiTextFromPlan = typeof step?.ui_text === 'string' && step.ui_text.trim().length > 0
-                            ? step.ui_text.trim()
-                            : (typeof step?.action === 'string' ? step.action : '');
-                        const header = stepNo > 0 ? `**Adım ${stepNo}:** ` : '';
-                        ChatView.replaceStreamingPlaceholderHeader(header);
-                        const totalMs = 500;
-                        const interval = Math.max(10, Math.floor(totalMs / Math.max(1, uiTextFromPlan.length)));
-                        let i = 0;
-                        await new Promise(resolve => {
-                            const timer = setInterval(() => {
-                                if (i >= uiTextFromPlan.length) { clearInterval(timer); resolve(null); return; }
-                                ChatView.appendResponseChunk(uiTextFromPlan[i++]);
-                            }, interval);
-                        });
-                    }
-                    const plannedBase = DOM.getText('planned') || 'İvme planladı';
-                    const msNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-                    const started = ChatView.getPlanTimerStartMs?.() || planTimerStart;
-                    const elapsedSec = started ? Math.max(0, (msNow - started) / 1000) : 0;
-                    const plannedText = `${plannedBase} (${elapsedSec.toFixed(2)}s)`;
-                    ChatView.setPlannerStreaming(false);
-                    ChatView.setShimmerActive(false);
-                    ChatView.replaceStreamingPlaceholderWithPlanned(plannedText);
-                    try {
-                        ChatView.showPlannerPanelWithPlan(plan);
-                    } catch(e) { console.warn('showPlannerPanelWithPlan error', e); }
-                })();
+                const plannedBase = DOM.getText('planned') || 'İvme planladı';
+                const msNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                const started = ChatView.getPlanTimerStartMs?.() || planTimerStart;
+                const elapsedSec = started ? Math.max(0, (msNow - started) / 1000) : 0;
+                const plannedText = `${plannedBase} (${elapsedSec.toFixed(2)}s)`;
+                ChatView.setPlannerStreaming(false);
+                ChatView.setShimmerActive(false);
+                ChatView.replaceStreamingPlaceholderWithPlanned(plannedText);
+                try {
+                    ChatView.showPlannerPanelWithPlan(plan);
+                } catch(e) { console.warn('showPlannerPanelWithPlan error', e); }
                 break;
             }
             case 'plannerCompleted': {
@@ -351,14 +311,19 @@ export function initMessageListener() {
                 try { ChatView.refreshPlannerPanelVisibility(); } catch(e) {}
                 break;
             case 'restoreAgentMode':
-                setAgentMode(data.isActive, '');
-                if (data.isBarExpanded !== undefined) {
-                    setAgentBarExpanded(data.isBarExpanded);
-                }
-                // Opsiyonel: plan/act modu geri çağırma (varsa)
-                if (typeof data.isActMode === 'boolean') {
-                    setAgentActMode(data.isActMode);
-                }
+                // Accept payload nested or flat for compatibility
+                try {
+                    const p = message.payload || message.value || data || {};
+                    const isActive = typeof p.isActive === 'boolean' ? p.isActive : !!p.payload?.isActive;
+                    const isBarExpanded = (Object.prototype.hasOwnProperty.call(p, 'isBarExpanded') ? p.isBarExpanded : p.payload?.isBarExpanded);
+                    const isActMode = (Object.prototype.hasOwnProperty.call(p, 'isActMode') ? p.isActMode : p.payload?.isActMode);
+                    // Apply bar expansion first so setAgentMode can reflect it in DOM
+                    if (typeof isBarExpanded === 'boolean') setAgentBarExpanded(!!isBarExpanded);
+                    setAgentMode(!!isActive, '');
+                    if (typeof isActMode === 'boolean') setAgentActMode(!!isActMode);
+                    // Ensure toggle visibility is synced after applying modes
+                    try { updatePlanActToggleVisibility(); } catch (e) {}
+                } catch {}
                 try { ChatView.refreshPlannerPanelVisibility(); } catch(e) {}
                 break;
             case 'languageChanged':
@@ -374,7 +339,12 @@ export function initMessageListener() {
 
             // --- Bağlam (Context) Mesajları ---
             case 'updateContextSize': {
-                // Tokenizer kaldırıldı; sadece UI refresh yapıyoruz
+                // Backend'den gelen konuşma ve dosya token sayılarını state'e uygula
+                try {
+                    const conv = Number(data?.conversationSize || 0) || 0;
+                    const files = Number(data?.filesSize || 0) || 0;
+                    setContextSize(conv, files);
+                } catch (e) {}
                 try { InputArea.recalculateTotalAndUpdateUI(); } catch (e) {}
                 break; }
             

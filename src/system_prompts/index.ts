@@ -28,5 +28,4 @@ export const createContextualPrompt = (
 
 // Returns an object with `system` and `user` fields to be sent as messages
 export const createPlanExplanationPrompts = (planJson: string) => getModule().createPlanExplanationPrompts(planJson);
-export const createPlannerSystemPrompt = async (plannerContext: string, userQuery: string, customTools?: Array<{name: string, description: string, schema: any}>) => await getModule().createPlannerSystemPrompt(plannerContext, userQuery, customTools);
-export const createPlannerPrompt = async (plannerContext: string, userQuery: string, customTools?: Array<{name: string, description: string, schema: any}>) => await getModule().createPlannerPrompt(plannerContext, userQuery, customTools);
+export const createPlannerToolCallingSystemPrompt = () => getModule().createPlannerToolCallingSystemPrompt();

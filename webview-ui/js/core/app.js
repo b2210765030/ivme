@@ -11,7 +11,7 @@ import { applyVideoState, setAgentMode, setAgentBarExpanded, setIndexingEnabledS
 import { recalculateTotalAndUpdateUI } from '../components/InputArea.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("İvme Chat UI Başlatılıyor...");
+    // Startup log removed in production build
 
     // 1. Harici kütüphaneleri yapılandır
     configureLibraries();
@@ -50,5 +50,5 @@ document.addEventListener('DOMContentLoaded', () => {
         recalculateTotalAndUpdateUI();
     }, 200);
 
-    console.log("İvme Chat UI Hazır.");
+    // UI ready
 });

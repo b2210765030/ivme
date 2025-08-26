@@ -440,6 +440,12 @@ input:checked + .slider:before {
     gap: 12px;
 }
 
+.tools-actions .small-note {
+    margin-left: 8px;
+    font-size: 12px;
+    color: var(--muted-text, #888);
+}
+
 #initialize-tools-button {
     background: var(--vscode-button-secondaryBackground);
     color: var(--vscode-button-secondaryForeground);
@@ -463,6 +469,15 @@ input:checked + .slider:before {
 .tools-actions .primary-button svg {
     width: 12px;
     height: 12px;
+}
+
+/* Disabled (muted) primary button style for feature-gated controls */
+.tools-actions .primary-button[disabled], .tools-actions .primary-button[aria-disabled="true"] {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    opacity: 0.5;
+    cursor: default;
+    pointer-events: none;
 }
 
 /* ==========================================================================

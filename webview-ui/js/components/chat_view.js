@@ -1150,7 +1150,6 @@ export function updateCompletedStepsAfterInsertion(insertedIndex) {
         }
         
         completedPlannerSteps = newCompletedSteps;
-        console.log('[ChatView] Updated completed steps after insertion at', insertedIndex, ':', Array.from(completedPlannerSteps));
     } catch (e) { console.warn('updateCompletedStepsAfterInsertion error', e); }
 }
 
@@ -1173,7 +1172,6 @@ export function updateCompletedStepsAfterDeletion(deletedIndex) {
         }
         
         completedPlannerSteps = newCompletedSteps;
-        console.log('[ChatView] Updated completed steps after deletion at', deletedIndex, ':', Array.from(completedPlannerSteps));
     } catch (e) { console.warn('updateCompletedStepsAfterDeletion error', e); }
 }
 
@@ -1367,8 +1365,16 @@ export function load(messages) {
         DOM.chatContainer.classList.remove('hidden');
         let newConversationTokens = 0;
         conversationMessages.forEach(msg => {
-            const content = (msg.role === 'assistant') ? marked.parse(msg.content) : `<p>${msg.content}</p>`;
+            const raw = String(msg.content || '');
+            // Basit: adım notlarını özel bir görünümle vurgula (persisted step notes)
+            const isStepNote = /^Adım (başlıyor|tamamlandı|hatası)/.test(raw);
+            const content = (msg.role === 'assistant')
+                ? marked.parse(raw)
+                : `<p>${raw}</p>`;
             const elem = createMessageElement(msg.role, content);
+            if (isStepNote) {
+                try { elem.classList.add('planner-steps-message'); } catch (e) {}
+            }
             addCodeBlockActions(elem);
             // Token sayımı model usage ile güncellenecek
         });

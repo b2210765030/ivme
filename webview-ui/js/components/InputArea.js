@@ -5,7 +5,7 @@
 import * as DOM from '../utils/dom.js';
 import * as VsCode from '../services/vscode.js';
 import { getState, setAiResponding } from '../core/state.js';
-import { addUserMessage, stopStreaming, addAiResponsePlaceholder } from './chat_view.js';
+import { addUserMessage, stopStreaming, addAiResponsePlaceholder, setShimmerActive, setPlannerStreaming, replaceStreamingPlaceholderHeader } from './chat_view.js';
 // Tokenizer kaldırıldı; kullanım modeli vLLM usage ile güncelleniyor
 
 function handleSendMessage() {
@@ -15,6 +15,14 @@ function handleSendMessage() {
 
     addUserMessage(text);
     addAiResponsePlaceholder();
+    try {
+        const { isAgentModeActive, isIndexingEnabled } = getState();
+        if (isAgentModeActive && isIndexingEnabled) {
+            setPlannerStreaming(true);
+            setShimmerActive(true);
+            replaceStreamingPlaceholderHeader('İvme planlıyor...');
+        }
+    } catch (e) {}
     DOM.input.value = '';
     
     autoResize();

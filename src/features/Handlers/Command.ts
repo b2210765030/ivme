@@ -149,7 +149,7 @@ export class CommandHandler {
                 await this.initializeToolsAfterIndexing();
                 
                 this.chatProvider['_view']?.webview.postMessage({ type: 'indexingDone' });
-                console.log(`[Indexer] Tamamlandı. Toplam parça: ${result.chunks.length}`);
+                // Indexing completed
                 vscode.window.showInformationMessage(`İndeksleme tamamlandı. ${result.chunks.length} parça bulundu ve mimari harita oluşturuldu. Araçlar başlatıldı. (${workspaceFolder.name})`);
             } catch (e: any) {
                 this.chatProvider['_view']?.webview.postMessage({ type: 'indexingDone' });
@@ -175,7 +175,7 @@ export class CommandHandler {
             const result = await toolsManager.initializeBuiltinTools();
             
             if (result.success) {
-                console.log('[CommandHandler] Araçlar başarıyla başlatıldı:', result.message);
+                // Tools initialized successfully
             } else {
                 console.error('[CommandHandler] Araç başlatma hatası:', result.error);
                 vscode.window.showWarningMessage(`Araçlar başlatılamadı: ${result.error}`);
@@ -201,9 +201,7 @@ export class CommandHandler {
             }
             const embedding = await this.apiManager.embedTextIfAvailable(query);
             const emb = Array.isArray(embedding) ? embedding : [];
-            console.log('[Search] Sorgu embedding boyutu:', emb.length);
             const results = topKByEmbedding(chunks, emb, 10);
-            console.log('[Search] Eşleşme sayısı:', results.length);
             const items = results.map((r: { score: number; chunk: any }) => ({
                 label: `${path.basename(r.chunk.filePath)}:${r.chunk.startLine}-${r.chunk.endLine}  (score: ${r.score.toFixed(3)})`,
                 description: `${r.chunk.contentType} • ${r.chunk.name}`,

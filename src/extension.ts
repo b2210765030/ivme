@@ -14,7 +14,7 @@ import { PlannerIndexer } from './services/planner_indexer';
 
 export function activate(context: vscode.ExtensionContext) {
 
-    console.log(`"${EXTENSION_NAME}" eklentisi başarıyla aktif edildi!`);
+    // Extension activated
 
     const apiManager = new ApiServiceManager();
     const chatProvider = new ChatViewProvider(context, apiManager);

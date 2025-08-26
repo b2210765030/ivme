@@ -15,7 +15,13 @@ export interface IApiService {
     // Akışsız, tekil yanıt bekleyen durumlar için (örn: niyet analizi).
     generateContent(prompt: string): Promise<string>;
     // Hem akışlı (callback ile) hem de akışsız (callback'siz) çağrıları destekler.
-    generateChatContent(messages: ChatMessage[], onChunk?: (chunk: string) => void, cancellationSignal?: AbortSignal): Promise<string | void>;
+    generateChatContent(
+        messages: ChatMessage[],
+        onChunk?: (chunk: string) => void,
+        cancellationSignal?: AbortSignal,
+        tools?: any[],
+        tool_choice?: any
+    ): Promise<string | void | any>;
     // Opsiyonel: embedding üretebilen servisler (Gemini)
     // Not: vLLM bu metodu sağlamayabilir; çağırmadan önce servis adına bakın.
     embedText?(text: string): Promise<number[]>;
@@ -77,8 +83,18 @@ export class ApiServiceManager implements IApiService {
         return this.getActiveService().generateContent(prompt);
     }
 
-    public async generateChatContent(messages: ChatMessage[], onChunk?: (chunk: string) => void, cancellationSignal?: AbortSignal): Promise<string | void> {
-        return this.getActiveService().generateChatContent(messages, onChunk, cancellationSignal);
+    public async generateChatContent(
+        messages: ChatMessage[],
+        onChunk?: (chunk: string) => void,
+        cancellationSignal?: AbortSignal,
+        tools?: any[],
+        tool_choice?: any
+    ): Promise<string | void | any> {
+        const active = this.getActiveServiceName();
+        try {
+            console.log(`[ApiServiceManager] generateChatContent via ${active} — messages=${messages?.length || 0}, tools=${Array.isArray(tools) ? tools.length : 0}, tool_choice=${tool_choice ? JSON.stringify(tool_choice) : 'none'}`);
+        } catch {}
+        return this.getActiveService().generateChatContent(messages, onChunk, cancellationSignal, tools, tool_choice);
     }
 
     public async embedTextIfAvailable(text: string): Promise<number[] | null> {

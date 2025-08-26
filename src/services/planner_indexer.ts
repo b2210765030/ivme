@@ -32,7 +32,37 @@ export class PlannerIndexer {
         const excludeGlobs = await this.getExcludeGlobs();
 
         // 1) Dosyaları topla
-        const fileUris = await this.findFiles(includeGlobs, excludeGlobs);
+        let fileUris = await this.findFiles(includeGlobs, excludeGlobs);
+        // Top-up: Kullanıcı ayarları bazı dilleri dışlasa bile, yerleşik desenlerle güvenli exclude kullanarak ek dosyaları da topla
+        try {
+            const safeExcludes = ['**/node_modules/**', '**/.git/**', '**/.ivme/**', '**/.vscode/**'];
+            const builtinFound = await this.findFiles(this.getBuiltinIncludeGlobs(), safeExcludes);
+            if (builtinFound.length > 0) {
+                const map = new Map<string, vscode.Uri>();
+                for (const u of fileUris) map.set(u.fsPath, u);
+                for (const u of builtinFound) map.set(u.fsPath, u);
+                fileUris = Array.from(map.values());
+            }
+        } catch {}
+        // Fallback: Eğer kullanıcı ayarlarıyla hiç dosya bulunamazsa, güvenli varsayılanlarla tekrar dene
+        if (fileUris.length === 0) {
+            try {
+                const fallbackIncludes = this.getBuiltinIncludeGlobs();
+                const safeExcludes = ['**/node_modules/**', '**/.git/**', '**/.ivme/**'];
+                const retry = await this.findFiles(fallbackIncludes, safeExcludes);
+                if (retry.length > 0) {
+                    console.warn('[PlannerIndexer] No files matched custom include/exclude globs; using safe defaults.');
+                    fileUris = retry;
+                } else {
+                    // Son bir deneme: tüm uzantılı dosyaları ara (çok geniş ama güvenli exclude ile)
+                    const broad = await this.findFiles(['**/*.*'], safeExcludes);
+                    if (broad.length > 0) {
+                        console.warn('[PlannerIndexer] Fallback broad scan matched files.');
+                        fileUris = broad;
+                    }
+                }
+            } catch {}
+        }
 
         // 2) Dosya özetleri
         progress?.report({ message: 'Planner: Dosya özetleri üretiliyor...', percent: 95 });
@@ -312,11 +342,26 @@ export class PlannerIndexer {
     private getIncludeGlobs(): string[] {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID);
         const fromSettings = config.get<string[]>(SETTINGS_KEYS.indexingIncludeGlobs);
-        if (fromSettings && fromSettings.length > 0) return fromSettings;
+        const builtins = this.getBuiltinIncludeGlobs();
+        if (fromSettings && fromSettings.length > 0) {
+            // Akıllı birleşim: Kullanıcı desenlerine ek olarak built-in desenleri de dahil et
+            const set = new Set<string>([...fromSettings, ...builtins]);
+            return Array.from(set.values());
+        }
         // Planner için varsayılanlar (kaynak ve bazı config dosyaları)
+        return builtins;
+    }
+
+    private getBuiltinIncludeGlobs(): string[] {
         return [
+            // JS/TS
             '**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx',
-            '**/*.py', '**/*.java', '**/*.go', '**/*.cs', '**/*.cpp', '**/*.c', '**/*.hpp', '**/*.h',
+            // Python, Java, Go, C#
+            '**/*.py', '**/*.java', '**/*.go', '**/*.cs',
+            // C/C++ and common extensions
+            '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.c++', '**/*.c',
+            '**/*.hpp', '**/*.hh', '**/*.hxx', '**/*.h',
+            // Config/Docs
             '**/*.json', '**/*.md', '**/*.yml', '**/*.yaml'
         ];
     }
@@ -397,16 +442,23 @@ export class PlannerIndexer {
                         const content = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
                         const prompt = this.buildFileSummaryPrompt(uri.fsPath, content);
                         const raw = await this.generateContentWithTimeout(prompt, 15000);
+                        let picked: string | undefined;
                         if (!raw) {
                             console.warn('[PlannerIndexer] Dosya özeti zaman aşımına uğradı veya boş döndü:', uri.fsPath);
                         } else {
                             const parsed = this.tryParseSummaryJson(raw);
                             if (parsed?.summary) {
-                                summaries[uri.fsPath] = parsed.summary;
+                                picked = parsed.summary;
                             }
                         }
+                        summaries[uri.fsPath] = picked || this.buildFallbackFileSummary(uri.fsPath, content);
                     } catch (e) {
                         console.warn('[PlannerIndexer] Dosya özeti hata:', uri.fsPath, e);
+                        // Hata halinde de fallback ile doldur
+                        try {
+                            const content = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+                            summaries[uri.fsPath] = this.buildFallbackFileSummary(uri.fsPath, content);
+                        } catch {}
                     } finally {
                         done++;
                         onProgress?.(done, files.length);
@@ -451,14 +503,25 @@ export class PlannerIndexer {
                 const raw = await this.generateContentWithTimeout(prompt, 15000);
                 if (!raw) {
                     console.warn('[PlannerIndexer] Dizin özeti zaman aşımına uğradı veya boş döndü:', dirPath);
+                    const fileCount = items.filter(x => x.startsWith('- file ')).length;
+                    dirSummaryMap[dirPath] = `Contains ${items.length} items (${fileCount} files).`;
                 } else {
                     const parsed = this.tryParseSummaryJson(raw);
                     if (parsed?.summary) {
                         dirSummaryMap[dirPath] = parsed.summary;
+                    } else {
+                        const fileCount = items.filter(x => x.startsWith('- file ')).length;
+                        dirSummaryMap[dirPath] = `Contains ${items.length} items (${fileCount} files).`;
                     }
                 }
             } catch (e) {
                 console.warn('[PlannerIndexer] Dizin özeti hata:', dirPath, e);
+                // Hata halinde de fallback kullan
+                try {
+                    const items = this.collectImmediateChildrenSummaries(dirPath, fileSummaries, dirSummaryMap);
+                    const fileCount = items.filter(x => x.startsWith('- file ')).length;
+                    dirSummaryMap[dirPath] = `Contains ${items.length} items (${fileCount} files).`;
+                } catch {}
             } finally {
                 done++;
                 onProgress?.(done, total);

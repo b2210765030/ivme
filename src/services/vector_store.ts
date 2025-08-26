@@ -17,14 +17,12 @@ export function isIndexingEnabled(): boolean {
 export async function loadVectorStoreChunks(context: vscode.ExtensionContext): Promise<CodeChunkMetadata[]> {
     // İndeksleme kapalıysa boş dizi döndür
     if (!isIndexingEnabled()) {
-        console.log('[VectorStore] İndeksleme kapalı, boş dizi döndürülüyor');
         return [];
     }
 
     // Workspace-specific vector store path
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
-        console.log('[VectorStore] Aktif workspace bulunamadı');
         return [];
     }
 
@@ -35,7 +33,7 @@ export async function loadVectorStoreChunks(context: vscode.ExtensionContext): P
         const buf = await vscode.workspace.fs.readFile(storageUri);
         const json = JSON.parse(Buffer.from(buf).toString('utf8'));
         const chunks: CodeChunkMetadata[] = json?.chunks || [];
-        console.log(`[VectorStore] Yüklendi: ${chunks.length} chunk (${storageUri.fsPath})`);
+        // vector store loaded
         return chunks;
     } catch (e) {
         console.warn('[VectorStore] Okuma başarısız:', storageUri.fsPath, e);

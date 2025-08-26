@@ -14,7 +14,6 @@ import * as path from 'path';
 import { ApiServiceManager } from './manager';
 import { cleanLLMJsonBlock } from '../core/utils';
 import { EXTENSION_ID, SETTINGS_KEYS } from '../core/constants';
-import * as systemPrompts from '../system_prompts';
 
 type PlannerIndex = Record<string, string>;
 
@@ -227,6 +226,7 @@ export async function build_planner_context(
 	context: vscode.ExtensionContext,
 	userQuery: string,
 	recentSummaryMemory?: string,
+	recentExecutionsMemory?: string,
 	previousPlanJson?: string,
 	completedStepIndices?: number[],
 	focus?: {
@@ -343,6 +343,13 @@ export async function build_planner_context(
 		lines.push('');
 	}
 
+	// Inject recent executions memory for continuity (what files were created/edited, etc.)
+	if (typeof recentExecutionsMemory === 'string' && recentExecutionsMemory.trim().length > 0) {
+		lines.push('## Recent Executions (Memory)');
+		lines.push(recentExecutionsMemory.trim());
+		lines.push('');
+	}
+
 	// Include previous plan JSON for revision/merge if provided
 	if (typeof previousPlanJson === 'string' && previousPlanJson.trim().length > 0) {
 		lines.push('## Previous Plan (for revision)');
@@ -412,13 +419,15 @@ export async function build_planner_context(
 // which selects the prompt from `src/system_prompts/en.ts` or `src/system_prompts/tr.ts` based on the current language.
 
 /** Model yanıtını ayrıştırır ve temel şemaya göre doğrular. */
-export function parse_and_validate_plan(rawResponse: string): PlannerPlan {
-	const jsonText = cleanLLMJsonBlock(rawResponse);
-	let parsed: any;
-	try {
-		parsed = JSON.parse(jsonText);
-	} catch (e) {
-		throw new Error('Planner yanıtı geçerli JSON değil.');
+export function parse_and_validate_plan(rawResponseOrObject: string | any): PlannerPlan {
+	let parsed: any = rawResponseOrObject;
+	if (typeof rawResponseOrObject === 'string') {
+		const jsonText = cleanLLMJsonBlock(rawResponseOrObject);
+		try {
+			parsed = JSON.parse(jsonText);
+		} catch (e) {
+			throw new Error('Planner yanıtı geçerli JSON değil.');
+		}
 	}
 
 	if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.steps)) {
@@ -453,6 +462,80 @@ export function parse_and_validate_plan(rawResponse: string): PlannerPlan {
 	return { steps };
 }
 
+function renumberStepsInPlace(plan: PlannerPlan): void {
+	try {
+		plan.steps.forEach((s, idx) => { s.step = idx + 1; });
+	} catch {}
+}
+
+function applyDeltaChangesToPlan(basePlan: PlannerPlan, delta: any): PlannerPlan {
+	const plan: PlannerPlan = { steps: Array.isArray(basePlan.steps) ? [...basePlan.steps.map(s => ({ ...s }))] : [] };
+	const changes = Array.isArray(delta?.changes) ? delta.changes : [];
+	for (const ch of changes) {
+		const op = String(ch?.op || '').toLowerCase();
+		switch (op) {
+			case 'insert': {
+				const anchor = Number(ch?.anchor_step);
+				const position = String(ch?.position || 'after');
+				const newStep = ch?.new_step && typeof ch.new_step === 'object' ? ch.new_step : null;
+				if (!newStep) break;
+				const idx = Math.max(0, Math.min(plan.steps.length, (isFinite(anchor) ? (anchor - 1) : plan.steps.length)));
+				const target = position === 'before' ? idx : (position === 'after' ? (idx + 1) : plan.steps.length);
+				plan.steps.splice(Math.max(0, Math.min(plan.steps.length, target)), 0, {
+					step: 0,
+					action: String(newStep.action || ''),
+					thought: String(newStep.thought || ''),
+					ui_text: typeof newStep.ui_text === 'string' ? newStep.ui_text : undefined,
+					tool: typeof newStep.tool === 'string' ? newStep.tool : undefined,
+					args: (newStep.args && typeof newStep.args === 'object') ? newStep.args : undefined
+				});
+				break;
+			}
+			case 'delete': {
+				const anchor = Number(ch?.anchor_step);
+				if (!isFinite(anchor)) break;
+				const idx = anchor - 1;
+				if (idx >= 0 && idx < plan.steps.length) plan.steps.splice(idx, 1);
+				break;
+			}
+			case 'update': {
+				const anchor = Number(ch?.anchor_step);
+				if (!isFinite(anchor)) break;
+				const idx = anchor - 1;
+				if (idx >= 0 && idx < plan.steps.length) {
+					const ns = ch?.new_step || {};
+					plan.steps[idx] = {
+						...plan.steps[idx],
+						action: typeof ns.action === 'string' ? ns.action : plan.steps[idx].action,
+						thought: typeof ns.thought === 'string' ? ns.thought : plan.steps[idx].thought,
+						ui_text: typeof ns.ui_text === 'string' ? ns.ui_text : plan.steps[idx].ui_text,
+						tool: typeof ns.tool === 'string' ? ns.tool : plan.steps[idx].tool,
+						args: (ns.args && typeof ns.args === 'object') ? ns.args : plan.steps[idx].args
+					};
+				}
+				break;
+			}
+			case 'reorder': {
+				// Minimal reorder: move anchor_step before/after another anchor (using position)
+				const anchor = Number(ch?.anchor_step);
+				const targetAnchor = Number(ch?.target_step);
+				const position = String(ch?.position || 'after');
+				if (!isFinite(anchor) || !isFinite(targetAnchor)) break;
+				const from = anchor - 1;
+				const toBase = targetAnchor - 1;
+				if (from < 0 || from >= plan.steps.length || toBase < 0 || toBase >= plan.steps.length) break;
+				const [moved] = plan.steps.splice(from, 1);
+				const to = position === 'before' ? toBase : (toBase + 1);
+				plan.steps.splice(Math.max(0, Math.min(plan.steps.length, to)), 0, moved);
+				break;
+			}
+			default: break;
+		}
+	}
+	renumberStepsInPlace(plan);
+	return plan;
+}
+
 /** Uçtan uca: Bağlamı inşa eder, prompt'u kurar, LLM'i çağırır ve planı döndürür. */
 export async function run_planner(
 	context: vscode.ExtensionContext,
@@ -461,6 +544,7 @@ export async function run_planner(
 	onUiEmit?: (stepNo: number | undefined, uiText: string, isFinal?: boolean) => Promise<void> | void,
 	cancellationSignal?: AbortSignal,
 	recentSummaryMemory?: string,
+	recentExecutionsMemory?: string,
 	previousPlanJson?: string,
 	completedStepIndices?: number[],
 	focus?: {
@@ -469,65 +553,103 @@ export async function run_planner(
 		selection?: { startLine: number; endLine: number; content: string };
 	}
 ): Promise<PlannerPlan> {
-	// GEÇİCİ: Planner her zaman çalışsın (indeksleme açık olmasa da). Bağlam üretimi indeks yoksa temel içerik döndürür.
-	const plannerContext = await build_planner_context(context, userQuery, recentSummaryMemory, previousPlanJson, completedStepIndices, focus);
-	
-	// Load tools from tools.json
-	const { getToolsManager } = await import('./tools_manager.js');
-	const toolsManager = getToolsManager();
-	const allTools = toolsManager.getAllTools();
-	
-	const systemPrompt = await systemPrompts.createPlannerSystemPrompt(plannerContext, userQuery, allTools);
-	console.log('[Planner] System prompt sent to LLM (truncated to 2000 chars):', systemPrompt.slice(0, 2000));
+	// 1) Bağlamı hazırla
+	const plannerContext = await build_planner_context(context, userQuery, recentSummaryMemory, recentExecutionsMemory, previousPlanJson, completedStepIndices, focus);
 
-	if (typeof onUiEmit === 'function') {
-		const messages = [
-			{ role: 'system' as const, content: systemPrompt },
-			{ role: 'user' as const, content: await systemPrompts.createPlannerPrompt(plannerContext, userQuery, allTools) }
-		];
-		let buffer = '';
-		let fullRaw = '';
-		const emittedOffsets = new Set<number>();
-		const reUi = /\"ui_text\"\s*:\s*\"((?:\\\\.|[^\"\\\\])*)\"/g;
+	// 2) Tool-calling için plan aracı şemasını al
+	const { getToolsForPlanner } = await import('./tools_manager.js');
+	const tools = typeof getToolsForPlanner === 'function' ? getToolsForPlanner() : [];
 
-		const onChunk = (chunk: string) => {
-			if ((cancellationSignal as any)?.aborted) return;
-			buffer += chunk;
-			fullRaw += chunk;
-
-			let m: RegExpExecArray | null;
-			while ((m = reUi.exec(buffer)) !== null) {
-				const idx = m.index;
-				if (emittedOffsets.has(idx)) continue;
-				emittedOffsets.add(idx);
-				const before = buffer.slice(Math.max(0, idx - 200), idx + m[0].length);
-				const stepMatch = /\"step\"\s*:\s*(\d+)/.exec(before);
-				const stepNo = stepMatch ? Number(stepMatch[1]) : undefined;
-				const rawUi = m[1].replace(/\\\\\"/g, '"').replace(/\\\\\\/g, '\\');
-				try { onUiEmit(stepNo, rawUi, true); } catch (e) { console.warn('[Planner] onUiEmit error', e); }
-			}
-			if (buffer.length > 20000) buffer = buffer.slice(-10000);
-		};
-
-		await api.generateChatContent(messages, onChunk, cancellationSignal as any);
-		console.log('[Planner] Raw response from LLM (truncated to 2000 chars):', String(fullRaw).slice(0, 2000));
-		return parse_and_validate_plan(fullRaw);
-	}
-
-	// Non-streaming: prefer chat-style system prompt
+	// 3) Basit system prompt ve kullanıcı mesajı
+	const { createPlannerToolCallingSystemPrompt } = await import('../system_prompts/index.js');
+	const systemPrompt = createPlannerToolCallingSystemPrompt();
 	const chatMessages = [
 		{ role: 'system' as const, content: systemPrompt },
-		{ role: 'user' as const, content: await systemPrompts.createPlannerPrompt(plannerContext, userQuery, allTools) }
+		{ role: 'user' as const, content: `Proje Bağlamı:\n${plannerContext}\n\nKullanıcı İsteği: "${userQuery}"` }
 	];
-	let raw = '';
 	try {
-		await api.generateChatContent(chatMessages, (chunk) => { raw += chunk; }, undefined as any);
+		console.log('[Planner] Prepared tool-calling request', {
+			messagesCount: chatMessages.length,
+			toolsCount: Array.isArray(tools) ? tools.length : 0,
+			forcedTool: 'create_plan'
+		});
+		const sys = chatMessages[0]?.content || '';
+		const usr = chatMessages[1]?.content || '';
+		console.log('[Planner] Outgoing messages (preview):', {
+			systemLen: sys.length,
+			systemPreview: sys.slice(0, 1500),
+			userLen: usr.length,
+			userPreview: usr.slice(0, 1500)
+		});
+		const toolsJson = JSON.stringify(tools, null, 2);
+		console.log('[Planner] Outgoing tools schema (truncated):', toolsJson.length > 2000 ? (toolsJson.slice(0, 2000) + ' ... [truncated]') : toolsJson);
+	} catch {}
+
+	// 4) LLM'i uygun fonksiyonu çağırmaya zorlayarak çağır
+	let response: any;
+	const hasPreviousPlan = typeof previousPlanJson === 'string' && previousPlanJson.trim().length > 0;
+	const forcedTool = hasPreviousPlan ? 'propose_plan_changes' : 'create_plan';
+	try {
+		response = await api.generateChatContent(
+			chatMessages,
+			undefined,
+			cancellationSignal as any,
+			tools,
+			{ type: 'function', function: { name: forcedTool } }
+		);
+		try { console.log('[Planner] Tool-calling response received, forcedTool=', forcedTool); } catch {}
 	} catch (e) {
-		// fallback to text completion
-		raw = await api.generateContent(systemPrompt);
+		console.warn('[Planner] Tool-calling failed, falling back to legacy JSON prompting.', e);
 	}
-	console.log('[Planner] Raw response from LLM (truncated to 2000 chars):', String(raw).slice(0, 2000));
-	return parse_and_validate_plan(raw);
+
+	// 5) Tool-calls döndüyse parse edip doğrula
+	if (Array.isArray(response) && response.length > 0 && response[0]?.type === 'function' && response[0]?.function) {
+		try {
+			const callsPreview = response.map((tc: any) => ({
+				name: tc?.function?.name,
+				argsLen: String(tc?.function?.arguments || '').length
+			}));
+			console.log('[Planner] Incoming tool_calls:', callsPreview);
+		} catch {}
+		const fn = response[0].function;
+		if (fn?.name === 'create_plan' && typeof fn.arguments === 'string') {
+			try {
+				const planArgs = JSON.parse(fn.arguments);
+				return parse_and_validate_plan(planArgs);
+			} catch (e) {
+				console.error('Tool-call arguments JSON parse failed:', fn?.arguments, e);
+				throw new Error("Planner, 'create_plan' aracından geçersiz JSON döndürdü.");
+			}
+		}
+		if (fn?.name === 'propose_plan_changes' && typeof fn.arguments === 'string') {
+			try {
+				const delta = JSON.parse(fn.arguments);
+				// Delta değişiklikleri mevcut plana uygula ve tam planı üret
+				let basePlan: PlannerPlan | null = null;
+				try { basePlan = previousPlanJson ? JSON.parse(previousPlanJson) : null; } catch {}
+				if (!basePlan || !Array.isArray(basePlan.steps)) {
+					throw new Error('Revizyon için geçerli bir önceki plan bulunamadı.');
+				}
+				const merged = applyDeltaChangesToPlan(basePlan, delta);
+				return parse_and_validate_plan(merged);
+			} catch (e) {
+				console.error('Tool-call delta JSON parse/apply failed:', fn?.arguments, e);
+				throw new Error("Planner, 'propose_plan_changes' geçersiz delta döndürdü.");
+			}
+		}
+	}
+
+	// 6) Fallback: Eski JSON metin yaklaşımı
+	try {
+		const { getToolsManager } = await import('./tools_manager.js');
+		const toolsManager = getToolsManager();
+		const allTools = toolsManager.getAllTools();
+		// Legacy fallback removed: tool-calling is required for planning.
+		throw new Error('Planner legacy fallback disabled: tool-calling required.');
+	} catch (e) {
+		console.error('[Planner] Planning failed.', e);
+		throw new Error('Planner beklenen planı oluşturamadı.');
+	}
 }
 
 

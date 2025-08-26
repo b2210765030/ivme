@@ -33,8 +33,12 @@ function setupToolButtons() {
     // Add Tool button event listener
     const addToolButton = document.getElementById('add-tool-button');
     if (addToolButton) {
-        addToolButton.removeEventListener('click', openToolCreator);
-        addToolButton.addEventListener('click', openToolCreator);
+        // Ensure previously bound listener is removed
+        try { addToolButton.removeEventListener('click', openToolCreator); } catch (e) {}
+        // If the button is disabled (feature gated), do not bind click handler so it's not clickable
+        if (!addToolButton.disabled && addToolButton.getAttribute('aria-disabled') !== 'true') {
+            addToolButton.addEventListener('click', openToolCreator);
+        }
     }
 }
 
@@ -165,7 +169,7 @@ async function createCustomTool(toolData) {
         // Close modal
         closeToolCreator();
         
-        console.log('Tool creation request sent (pending row added):', toolData);
+        // Tool creation request sent (pending row added)
         
     } catch (error) {
         console.error('Error creating custom tool:', error);
@@ -394,7 +398,7 @@ export function handleCustomToolCreated(payload) {
             populateToolsTable();
             // Fetch the persisted tools.json instantly to reflect final state
             VsCode.postMessage('requestCustomTools');
-            console.log('Custom tool created successfully:', name);
+            // Custom tool created successfully
         } else {
             const name = String(payload?.tool?.name || '');
             allTools = allTools.map(t => t.name === name ? { ...t, status: 'error' } : t);
@@ -417,7 +421,7 @@ export function handleCustomToolDeleted(payload) {
             populateToolsTable();
             // Fetch fresh list from tools.json to guarantee persistence reflected
             VsCode.postMessage('requestCustomTools');
-            console.log('Custom tool deleted successfully:', payload.toolName);
+            // Custom tool deleted successfully
         } catch (e) { console.error('handleCustomToolDeleted sync error', e); }
     } else {
         alert('Araç silinirken bir hata oluştu: ' + (payload.error || 'Bilinmeyen hata'));

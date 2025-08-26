@@ -148,6 +148,8 @@ export function init() {
             const prevAct = !!getState().isAgentActMode;
             const nextAct = !!planActSwitch.checked;
             setAgentActMode(nextAct);
+            // Persist per-conversation Plan/Act state to backend
+            try { VsCode.postMessage('agentActModeChanged', { isActMode: nextAct }); } catch {}
             // Plan -> Act geçişinde: mevcut plandaki kalan adımları otomatik uygula
             if (!prevAct && nextAct) {
                 try { VsCode.postMessage('executePlannerAll'); } catch {}

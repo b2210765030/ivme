@@ -49,7 +49,6 @@ export class InteractionHandler {
         if (this.currentRequestController) {
             this.currentRequestController.abort();
             this.currentRequestController = null;
-            console.log('Stream cancelled by user.');
         }
     }
 
@@ -59,7 +58,6 @@ export class InteractionHandler {
         }
         
         this.conversationManager.addMessage('user', instruction);
-        console.log('[Planner] User instruction:', instruction);
 
         // Natural-language trigger: if the user asks to execute all steps, run the whole plan
         let intentWantsExecuteAll = this.isExecuteAllInstruction(instruction);
@@ -99,7 +97,7 @@ export class InteractionHandler {
             const agentContextPresent = !!(this.contextManager.agentFileContext || this.contextManager.agentSelectionContext);
             const shouldUsePlanner = (isAgentActive || agentContextPresent) && isIndexEnabled;
 
-            console.log('[Interaction] Planner decision:', { isAgentActive, agentContextPresent, isIndexEnabled, shouldUsePlanner });
+            // Planner decision logged
 
             if (shouldUsePlanner) {
                 // Streaming: ui_text parçalarını anında UI'a ilet
@@ -135,10 +133,22 @@ export class InteractionHandler {
                     },
                     cancellationSignal as any,
                     latestSummary,
+                    this.conversationManager.getPlannerExecutionsMemory?.(),
                     prevPlanJson,
                     completedIndices,
                     focus
                 );
+                // Planner tool-calling kullanımını token sayacına yansıt
+                try {
+                    const usage = (this.apiManager as any).getLastUsageIfAvailable?.();
+                    if (usage && typeof usage === 'object') {
+                        const completion = Number((usage as any).completion_tokens || 0) || 0;
+                        if (completion > 0) {
+                            try { this.conversationManager.addUsageTokens(completion); } catch {}
+                        }
+                        this.webview.postMessage({ type: 'modelTokenUsage', payload: usage });
+                    }
+                } catch {}
                 // Plan tamamlandığında nihai sonucu da gönder
                 try {
                     const { getToolsManager } = await import('../../services/tools_manager.js');
@@ -160,9 +170,21 @@ export class InteractionHandler {
                 this.currentRequestController = null;
 
                 // Plan finalize edildikten sonra, aynı placeholder altında açıklamayı stream et
+                // UI'da bozulmaları önlemek için kısa bir gecikme ekle (500ms)
                 setTimeout(() => {
+                    // Planner LLM çağrısından bağımsız ikinci akış: token kullanımını yakalamak için
+                    try {
+                        const usage = (this.apiManager as any).getLastUsageIfAvailable?.();
+                        if (usage && typeof usage === 'object') {
+                            const completion = Number((usage as any).completion_tokens || 0) || 0;
+                            if (completion > 0) {
+                                try { this.conversationManager.addUsageTokens(completion); } catch {}
+                            }
+                            this.webview.postMessage({ type: 'modelTokenUsage', payload: usage });
+                        }
+                    } catch {}
                     this.streamPlanExplanationInline(plan).catch(err => console.error('[Interaction] Plan explanation error:', err));
-                }, 50);
+                }, 500);
             } else {
                 // Standart sohbet akışına geri dön
                 await this.streamStandardChat();
@@ -193,6 +215,10 @@ export class InteractionHandler {
         const step = this.lastPlannerPlan.steps[stepIndex];
         const label = this.formatStepLabel(step);
         const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        // Kalıcılık: Adım başlangıcını da konuşma geçmişine yaz
+        try {
+            this.conversationManager.addMessage('assistant', `Adım başlıyor: ${label}`);
+        } catch {}
         // UI placeholder: başlat
         this.webview.postMessage({ type: 'stepExecStart', payload: { index: stepIndex, label } });
 
@@ -283,15 +309,13 @@ export class InteractionHandler {
                         ].join('\n');
                     }
                     // Debug: giden promptu ve adım bilgisini logla
-                    console.log('[ToolSelect] stepIndex=', stepIndex, 'label=', label, 'attempt=', attempt);
-                    console.log('[ToolSelect] system prompt:\n' + system);
-                    console.log('[ToolSelect] user prompt:\n' + user);
+                    // Tool selection debug logs removed
                     let raw = '';
                     await this.apiManager.generateChatContent([
                         { role: 'system' as const, content: system },
                         { role: 'user' as const, content: user }
                     ], (chunk) => { raw += chunk; }, undefined as any);
-                    console.log('[ToolSelect] raw response:\n' + raw);
+                    // raw response logged for debugging
                     try {
                         selection = preselected && !isAuto ? this.parseArgsOnlySelection(raw, preselected) : this.parseToolSelection(raw);
                     } catch (e) {
@@ -311,14 +335,14 @@ export class InteractionHandler {
                     }
                 }
             }
-            console.log('[ToolSelect] parsed selection (pre-normalize):', selection);
+            // parsed selection (pre-normalize)
             // Normalize tool name to allowed set
             const normalized = this.normalizeToolName(selection.tool, validTools);
             if (!normalized) {
                 throw new Error(`Geçersiz araç adı: ${selection.tool}`);
             }
             selection.tool = normalized;
-            console.log('[ToolSelect] normalized selection:', selection);
+            // normalized selection
 
             // Eksik args'ı adım metninden tamamlamaya çalış
             try {
@@ -366,12 +390,40 @@ export class InteractionHandler {
                     }
                 } catch {}
                 const result = await this.executor.executeStep(ctx, this.apiManager, this.lastPlannerPlan, stepIndex);
+                // Capture token usage produced by the tool's internal LLM calls (if any)
+                try {
+                    const usage = (this.apiManager as any).getLastUsageIfAvailable?.();
+                    if (usage && typeof usage === 'object') {
+                        const completion = Number((usage as any).completion_tokens || 0) || 0;
+                        if (completion > 0) {
+                            try { this.conversationManager.addUsageTokens(completion); } catch {}
+                        }
+                        this.webview.postMessage({ type: 'modelTokenUsage', payload: usage });
+                    }
+                } catch {}
                 const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
                 const elapsedMs = Math.max(0, t1 - t0);
                 this.webview.postMessage({ type: 'stepExecEnd', payload: { index: stepIndex, label, elapsedMs, result } });
+                // Persist concise step completion note so history fully reflects UI
+                try {
+                    const seconds = (elapsedMs / 1000).toFixed(2);
+                    const summary = `Adım tamamlandı: ${label} (${seconds}s)`;
+                    this.conversationManager.addMessage('assistant', summary);
+                } catch {}
                 const log = { label, elapsedMs };
                 this.executedStepLogs.push(log);
                 this.executedStepIndices.add(stepIndex);
+                // Persist execution record to conversation memory (for future planning continuity)
+                try {
+                    await this.conversationManager.addPlannerExecution({
+                        stepIndex,
+                        label,
+                        tool: (this.lastPlannerPlan?.steps?.[stepIndex]?.tool || this.lastPlannerPlan?.steps?.[stepIndex]?.tool_calls?.[0]?.tool) as any,
+                        args: (this.lastPlannerPlan?.steps?.[stepIndex]?.args || this.lastPlannerPlan?.steps?.[stepIndex]?.tool_calls?.[0]?.args),
+                        result,
+                        elapsedMs
+                    });
+                } catch {}
                 // Eğer tüm adımlar başarıyla veya manuel atlama ile tamamlandıysa paneli tamamlandı olarak işaretle
                 try {
                     if (this.lastPlannerPlan && this.executedStepIndices.size >= this.lastPlannerPlan.steps.length) {
@@ -393,8 +445,25 @@ export class InteractionHandler {
                 const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
                 const elapsedMs = Math.max(0, t1 - t0);
                 this.webview.postMessage({ type: 'stepExecEnd', payload: { index: stepIndex, label, elapsedMs, error: e?.message || String(e) } });
+                // Persist failure note to conversation history
+                try {
+                    const seconds = (elapsedMs / 1000).toFixed(2);
+                    const msg = `Adım hatası: ${label} (${seconds}s) — ${e?.message || String(e)}`;
+                    this.conversationManager.addMessage('assistant', msg);
+                } catch {}
                 const log = { label, elapsedMs, error: e?.message || String(e) };
                 this.executedStepLogs.push(log);
+                // Persist failed execution as well for continuity
+                try {
+                    await this.conversationManager.addPlannerExecution({
+                        stepIndex,
+                        label,
+                        tool: (this.lastPlannerPlan?.steps?.[stepIndex]?.tool || this.lastPlannerPlan?.steps?.[stepIndex]?.tool_calls?.[0]?.tool) as any,
+                        args: (this.lastPlannerPlan?.steps?.[stepIndex]?.args || this.lastPlannerPlan?.steps?.[stepIndex]?.tool_calls?.[0]?.args),
+                        result: `Hata: ${e?.message || String(e)}`,
+                        elapsedMs
+                    });
+                } catch {}
                 // 3 kez denendi ve başarısız: kullanıcıdan manuel giriş iste veya atlama öner
                 try {
                     this.webview.postMessage({ type: 'plannerStepManualRequired', payload: { index: stepIndex, step, error: e?.message || String(e) } });
@@ -646,7 +715,7 @@ export class InteractionHandler {
                 payload: { plan: this.lastPlannerPlan, insertedIndex: targetIndex }
             });
             
-            console.log(`[Interaction] Inserted new step at index ${targetIndex}, plan now has ${this.lastPlannerPlan.steps.length} steps`);
+            // Inserted new step at index
             
         } catch (e) {
             console.error('[Interaction] insertPlannerStep error:', e);
@@ -719,7 +788,7 @@ export class InteractionHandler {
         
         this.executedStepIndices = newExecutedStepIndices;
         
-        console.log(`[Interaction] Updated execution tracking after insertion at ${insertedIndex}:`, Array.from(this.executedStepIndices));
+        // Updated execution tracking after insertion
     }
 
     private async generateAndShowSummaryNote(): Promise<void> {
@@ -1011,17 +1080,36 @@ export class InteractionHandler {
         ];
 
         try {
+            let fullResponse = '';
             await this.apiManager.generateChatContent(
                 messages,
                 (chunk) => {
                     if ((cancellationSignal as any)?.aborted) return;
+                    fullResponse += chunk;
                     this.webview.postMessage({ type: 'addResponseChunk', payload: chunk });
                 },
                 cancellationSignal as any
             );
+            // Store assistant explanation in conversation history
+            try {
+                if (!cancellationSignal.aborted && fullResponse && fullResponse.trim().length > 0) {
+                    this.conversationManager.addMessage('assistant', fullResponse);
+                }
+            } catch {}
+            // Capture token usage for this stream and reflect in UI/context size
+            try {
+                const usage = (this.apiManager as any).getLastUsageIfAvailable?.();
+                if (usage && typeof usage === 'object') {
+                    const completion = Number((usage as any).completion_tokens || 0) || 0;
+                    if (completion > 0) {
+                        try { this.conversationManager.addUsageTokens(completion); } catch {}
+                    }
+                    this.webview.postMessage({ type: 'modelTokenUsage', payload: usage });
+                }
+            } catch {}
         } catch (error: any) {
             if (error?.name === 'AbortError') {
-                console.log('[Interaction] Plan explanation aborted by user.');
+                // Plan explanation aborted by user.
             } else {
                 console.error('[Interaction] Plan explanation stream error:', error);
                 const errorMessage = error instanceof Error ? error.message : 'Açıklama oluşturulurken bir hata oluştu.';
@@ -1038,7 +1126,7 @@ export class InteractionHandler {
         const cancellationSignal = this.currentRequestController.signal;
         
         const messagesForApi = await this.prepareMessagesForApiWithRetrieval();
-        console.log('Prompt to LLM:', JSON.stringify(messagesForApi, null, 2));
+        // Prompt to LLM suppressed
 
         
         let fullResponse = '';
@@ -1065,12 +1153,14 @@ export class InteractionHandler {
             
         } catch (error: any) {
             if (axios.isCancel(error) || error.name === 'AbortError') {
-                console.log('Stream successfully aborted by the user.');
+                // Stream aborted by the user.
             } else {
-                this.conversationManager.removeLastMessage();
+                // Kullanıcı mesajını silmeyelim; tarihi tam tutalım
                 console.error("Chat API Stream Hatası:", error);
                 const errorMessage = error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu.";
-                this.webview.postMessage({ type: 'addResponse', payload: `**Hata:** ${errorMessage}` });
+                const uiMsg = `**Hata:** ${errorMessage}`;
+                this.webview.postMessage({ type: 'addResponse', payload: uiMsg });
+                try { this.conversationManager.addMessage('assistant', uiMsg); } catch {}
             }
         } finally {
             this.webview.postMessage({ type: 'streamEnd' });

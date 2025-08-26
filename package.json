@@ -2,7 +2,7 @@
   "name": "ivme-ivme",
   "displayName": "İvme",
   "description": "LLM kullanarak kod hatalarını otomatik düzelten bir VS Code eklentisi.",
-  "version": "2.2.2",
+  "version": "2.2.4",
   "publisher": "ivme",
   "repository": {
     "type": "git",

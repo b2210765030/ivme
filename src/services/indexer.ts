@@ -153,13 +153,23 @@ export class ProjectIndexer {
 
     public async indexWorkspace(progress?: { report: (info: { message?: string; percent?: number }) => void } | vscode.Progress<{ message?: string; increment?: number }>): Promise<IndexResult> {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID);
-        const includeGlobs = config.get<string[]>(SETTINGS_KEYS.indexingIncludeGlobs) || ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'];
-        const excludeGlobs = config.get<string[]>(SETTINGS_KEYS.indexingExcludeGlobs) || ['**/node_modules/**', '**/dist/**', '**/out/**'];
+        const builtinIncludes: string[] = [
+            // JS/TS
+            '**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx',
+            // Python, Java, Go, C#
+            '**/*.py', '**/*.java', '**/*.go', '**/*.cs',
+            // C/C++ variants
+            '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.c++', '**/*.c',
+            '**/*.hpp', '**/*.hh', '**/*.hxx', '**/*.h',
+            // CSS/JSON
+            '**/*.css', '**/*.json'
+        ];
+        const includeFromSettings = config.get<string[]>(SETTINGS_KEYS.indexingIncludeGlobs);
+        const includeGlobs = Array.from(new Set([...(includeFromSettings || []), ...builtinIncludes]));
+        const excludeFromSettings = config.get<string[]>(SETTINGS_KEYS.indexingExcludeGlobs);
+        const excludeGlobs = Array.from(new Set([...(excludeFromSettings || []), '**/node_modules/**', '**/dist/**', '**/out/**', '**/.git/**', '**/.vscode/**', '**/.ivme/**']));
         const sourceName = config.get<string>(SETTINGS_KEYS.indexingSourceName) || 'workspace';
-        console.log('[Indexer] Başlatılıyor...');
-        console.log('[Indexer] Include globs:', JSON.stringify(includeGlobs));
-        console.log('[Indexer] Exclude globs:', JSON.stringify(excludeGlobs));
-        console.log('[Indexer] Source name:', sourceName);
+        // indexer startup logs removed
 
         // VS Code'un brace pattern davranışına güvenmek yerine her pattern için ayrı arama yap
         const uriMap = new Map<string, vscode.Uri>();
@@ -167,16 +177,36 @@ export class ProjectIndexer {
             try {
                 const found = await vscode.workspace.findFiles(pattern, `{${excludeGlobs.join(',')}}`);
                 for (const u of found) uriMap.set(u.fsPath, u);
-                console.log(`[Indexer] Pattern: ${pattern} -> ${found.length} dosya`);
+                // pattern search log removed
             } catch (e) {
                 console.warn('[Indexer] Pattern arama hatası:', pattern, e);
             }
         }
-        const uris = Array.from(uriMap.values());
-        console.log(`[Indexer] Toplam bulunan dosya: ${uris.length}`);
-        if (uris.length > 0) {
-            console.log('[Indexer] İlk 10 dosya:', uris.slice(0, 10).map(u => u.fsPath));
+        let uris = Array.from(uriMap.values());
+        // Fallback: Eğer hiç dosya bulunamazsa, güvenli varsayılanlarla tekrar dene
+        if (uris.length === 0) {
+            try {
+                const safeExcludes = ['**/node_modules/**', '**/.git/**', '**/.vscode/**', '**/.ivme/**'];
+                const retryMap = new Map<string, vscode.Uri>();
+                for (const pattern of builtinIncludes) {
+                    try {
+                        const found = await vscode.workspace.findFiles(pattern, `{${safeExcludes.join(',')}}`);
+                        for (const u of found) retryMap.set(u.fsPath, u);
+                    } catch {}
+                }
+                uris = Array.from(retryMap.values());
+                if (uris.length === 0) {
+                    const broad = await vscode.workspace.findFiles('**/*.*', `{${safeExcludes.join(',')}}`);
+                    if (broad.length > 0) {
+                        console.warn('[Indexer] Fallback broad scan matched files.');
+                        uris = broad;
+                    }
+                } else {
+                    console.warn('[Indexer] No files matched custom include/exclude globs; using safe defaults.');
+                }
+            } catch {}
         }
+        // file discovery logs removed
         const chunks: CodeChunkMetadata[] = [];
 
         let processed = 0;
@@ -190,9 +220,9 @@ export class ProjectIndexer {
             try {
                 const fileText = (await vscode.workspace.fs.readFile(uri)).toString();
                 const language = this.detectLanguageByExtension(uri.fsPath);
-                console.log(`[Indexer] Dosya: ${uri.fsPath} -> dil: ${language || 'tanımsız'}`);
+                // per-file language detection log removed
                 if (!language) {
-                    console.log(`[Indexer] Dil tanınamadı, atlanıyor: ${uri.fsPath}`);
+                    // language not recognized log removed
                     continue;
                 }
                 const fileChunks = this.extractChunksFromSource(fileText, uri.fsPath, language, sourceName);
@@ -201,9 +231,9 @@ export class ProjectIndexer {
                     const totalLines = fileText.split(/\r?\n/).length;
                     const fallbackChunk = this.makeChunk(sourceName, uri.fsPath, language as any, 'other', path.basename(uri.fsPath), 1, totalLines, this.simpleDependenciesFromText(fileText), fileText);
                     fileChunks.push(fallbackChunk);
-                    console.log(`[Indexer] Fallback chunk eklendi: ${uri.fsPath}`);
+                    // fallback chunk added
                 }
-                console.log(`[Indexer] Dosya chunk sayısı: ${fileChunks.length}`);
+                // file chunk count log removed
                 chunks.push(...fileChunks);
             } catch (e) {
                 console.error('Index parse error for', uri.fsPath, e);
@@ -223,7 +253,7 @@ export class ProjectIndexer {
             const summaryPrompt = this.buildSummaryPrompt(chunk.content);
             try {
                 const idx = done;
-                console.log(`[Indexer] (summary) Başlıyor: ${idx}/${chunks.length} -> ${chunk.filePath} :: ${chunk.name}`);
+                // summary generation log removed
                 const start = Date.now();
                 const summaryText = await this.generateContentWithTimeout(summaryPrompt, 10000);
                 const elapsed = Date.now() - start;
@@ -233,7 +263,7 @@ export class ProjectIndexer {
                     const parsed = this.tryParseSummaryJson(summaryText);
                     if (parsed?.summary) {
                         chunk.summary = parsed.summary;
-                        console.log(`[Indexer] Özet üretildi: ${chunk.name} -> ${chunk.summary.slice(0, 80)}... (elapsed ${elapsed}ms)`);
+                        // summary produced
                     } else {
                         console.warn(`[Indexer] (summary) Geçersiz JSON çıktı: ${chunk.filePath} :: ${chunk.name}`);
                     }
@@ -251,7 +281,7 @@ export class ProjectIndexer {
                     console.warn(`[Indexer] (embed) Zaman aşımı veya hata: ${chunk.filePath} :: ${chunk.name} (elapsed ${elapsedE}ms)`);
                 } else {
                     chunk.embedding = embedding;
-                    console.log(`[Indexer] Embedding üretildi: ${chunk.name} -> boyut ${embedding.length} (elapsed ${elapsedE}ms)`);
+                    // embedding produced
                 }
             } catch (e) {
                 console.warn('Embedding generation failed for', chunk.name, e);
@@ -259,7 +289,7 @@ export class ProjectIndexer {
         }
 
         await this.writeToLocalVectorStore(chunks);
-        console.log(`[Indexer] Yazma tamamlandı. Chunk sayısı: ${chunks.length}`);
+        // vector store write completed
         return { chunks };
     }
 
@@ -623,7 +653,7 @@ export class ProjectIndexer {
         const contentBytes = Buffer.from(JSON.stringify({ chunks }, null, 2), 'utf8');
         await vscode.workspace.fs.writeFile(storageUri, contentBytes);
         
-        console.log(`[Indexer] Vector store kaydedildi: ${storageUri.fsPath}`);
+        // Vector store saved
         
         // İndeksleme tamamlandığında ayarı aktif et
         await this.setIndexingEnabled(true);
@@ -668,7 +698,7 @@ export class ProjectIndexer {
 
         const contentBytes = Buffer.from(JSON.stringify({ chunks }, null, 2), 'utf8');
         await vscode.workspace.fs.writeFile(storageUri, contentBytes);
-        console.log(`[Indexer] Vector store güncellendi (incremental): ${storageUri.fsPath} -> ${chunks.length} parçacık`);
+        // Vector store updated (incremental)
     }
     public async setIndexingEnabled(enabled: boolean): Promise<void> {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID);

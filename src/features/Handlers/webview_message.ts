@@ -11,6 +11,7 @@ import { SettingsManager } from '../manager/settings';
 import { InteractionHandler } from '../Handlers/Interaction';
 import { ChatViewProvider } from '../../providers/view_chat';
 import { setPromptLanguage, createInitialSystemPrompt } from '../../system_prompts';
+import { EXTENSION_ID, SETTINGS_KEYS } from '../../core/constants';
 import { getToolsManager, ToolCreationRequest } from '../../services/tools_manager';
 
 
@@ -41,6 +42,8 @@ export class WebviewMessageHandler {
                     const args = data?.payload?.args || {};
                     if (idx >= 0 && tool) {
                         await this.interactionHandler.provideManualToolArgs(idx, tool, args);
+                        // Snapshot current UI flags for this conversation
+                        try { await this.persistConversationUiSnapshot(); } catch {}
                     }
                 } catch (e: any) {
                     vscode.window.showErrorMessage(`Manuel araç/argüman uygulanamadı: ${e?.message || e}`);
@@ -77,6 +80,8 @@ export class WebviewMessageHandler {
                 const stepIndex = Number(data?.payload?.index ?? -1);
                 try {
                     await this.interactionHandler.executePlannerStep(stepIndex);
+                    // Snapshot current UI flags for this conversation
+                    try { await this.persistConversationUiSnapshot(); } catch {}
                 } catch (e: any) {
                     vscode.window.showErrorMessage(`Adım uygulanamadı: ${e?.message || e}`);
                 }
@@ -117,10 +122,14 @@ export class WebviewMessageHandler {
             case 'askAI':
                 await this.messageHandler.handleAskAi(data.payload);
                 this.sendContextSize();
+                // Snapshot current UI flags for this conversation
+                try { await this.persistConversationUiSnapshot(); } catch {}
                 break;
             // Planner: tüm adımları uygula
             case 'executePlannerAll':
                 await this.interactionHandler.executePlannerAll();
+                // Snapshot current UI flags for this conversation
+                try { await this.persistConversationUiSnapshot(); } catch {}
                 break;
             
             // --- YENİ: Değişikliği Uygula Mesajı ---
@@ -215,6 +224,7 @@ export class WebviewMessageHandler {
 
             case 'agentModeToggled':
                 this.chatProvider.setAgentMode(data.payload.isActive);
+                try { this.conversationManager.setUiState({ agentModeActive: !!data.payload.isActive }); } catch {}
                 if (data.payload.language) {
                     setPromptLanguage(data.payload.language);
                     const prompt = createInitialSystemPrompt();
@@ -231,6 +241,9 @@ export class WebviewMessageHandler {
 
             case 'agentBarExpandedChanged':
                 this.settingsManager.saveAgentBarExpandedState(data.payload.isExpanded);
+                break;
+
+            case 'agentActModeChanged':
                 break;
 
             case 'languageChanged':
@@ -322,6 +335,16 @@ export class WebviewMessageHandler {
         this.contextManager.clearAll(this.webview, false);
         const conversation = this.conversationManager.switchConversation(conversationId);
         if (conversation) {
+            // Restore per-conversation minimal UI flags (only agent/chat mode)
+            try {
+                const ui = this.conversationManager.getUiState(conversationId) || {};
+                if (typeof ui.agentModeActive === 'boolean') {
+                    this.chatProvider.setAgentMode(ui.agentModeActive);
+                }
+                this.webview.postMessage({ type: 'restoreAgentMode', payload: { isActive: !!ui.agentModeActive } });
+            } catch {}
+
+            // Then load conversation messages
             this.webview.postMessage({ type: 'loadConversation', payload: conversation.messages });
         }
         // Sohbet değiştirildi: planner/act state'i sıfırla
@@ -335,6 +358,15 @@ export class WebviewMessageHandler {
         const nextConversation = this.conversationManager.deleteConversation(conversationId);
         
         if (nextConversation) {
+            // Restore minimal UI flags for the new active conversation
+            try {
+                const ui = this.conversationManager.getUiState(nextConversation.id) || {};
+                if (typeof ui.agentModeActive === 'boolean') {
+                    this.chatProvider.setAgentMode(ui.agentModeActive);
+                }
+                this.webview.postMessage({ type: 'restoreAgentMode', payload: { isActive: !!ui.agentModeActive } });
+            } catch {}
+            // Then load messages
             this.webview.postMessage({ type: 'loadConversation', payload: nextConversation.messages });
         } else {
             this.handleNewChat();
@@ -492,5 +524,18 @@ export class WebviewMessageHandler {
                 }
             });
         }
+    }
+
+    /** Persist a fresh snapshot of current UI flags into the active conversation. */
+    private async persistConversationUiSnapshot(): Promise<void> {
+        try {
+            // Infer UI state from VS Code settings/context if possible
+            const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+            const isAgentActive = config.get<boolean>(SETTINGS_KEYS.agentModeActive, false);
+            const uiPrev = this.conversationManager.getUiState();
+            this.conversationManager.setUiState({
+                agentModeActive: typeof isAgentActive === 'boolean' ? isAgentActive : uiPrev.agentModeActive
+            });
+        } catch {}
     }
 }
