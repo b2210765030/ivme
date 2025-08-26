@@ -366,7 +366,7 @@ export function initMessageListener() {
                 updateUITexts();
                 break;
             case 'agentSelectionSet':
-                setAgentSelectionStatus(data.fileName, data.startLine, data.endLine);
+                setAgentSelectionStatus(data.fileName, data.startLine, data.endLine, data.content);
                 break;
             case 'agentSelectionCleared':
                 clearAgentSelectionStatus();

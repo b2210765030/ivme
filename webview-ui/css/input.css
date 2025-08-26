@@ -245,6 +245,49 @@
     z-index: 1; /* Progress bar'ın üstünde kalması için */
 }
 
+/* Agent seçimi küçük önizleme alanı (seçilen kodun hızla göründüğü yer) */
+/* Inline preview kaldırıldı — küçük popover için yeni stiller */
+.agent-selection-popover {
+    position: fixed;
+    z-index: 100;
+    min-width: 360px;
+    max-width: 600px;
+    max-height: 240px;
+    overflow: auto;
+    background-color: rgba(25, 25, 25, 0.95);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 8px 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+.agent-selection-popover pre { margin: 6px 0 0 0; white-space: pre; }
+.agent-selection-popover .asp-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.agent-selection-popover .asp-popover-title {
+    font-size: 11px;
+    color: var(--vscode-input-foreground);
+    opacity: 0.95;
+}
+.agent-selection-popover .asp-popover-close {
+    background: transparent;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 6px;
+    color: var(--vscode-input-foreground);
+    width: 18px;
+    height: 18px;
+    line-height: 16px;
+    text-align: center;
+    cursor: pointer;
+    opacity: 0.8;
+    padding: 0;
+}
+.agent-selection-popover .asp-popover-close:hover { opacity: 1; }
+
 .action-group-left, .action-group-right {
     display: flex;
     align-items: center;

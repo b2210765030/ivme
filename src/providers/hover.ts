@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { COMMAND_IDS, EXTENSION_NAME } from '../core/constants';
+import { COMMAND_IDS, EXTENSION_NAME, EXTENSION_ID, SETTINGS_KEYS } from '../core/constants';
 import { ApplyFixArgs } from '../types';
 import { getPendingSelection } from '../core/pending_selection';
 
@@ -21,9 +21,11 @@ export class BaykarAiHoverProvider implements vscode.HoverProvider {
         const markdown = new vscode.MarkdownString();
         markdown.isTrusted = true;
 
-        // 1) Eğer mevcut dosya için bekleyen bir seçim varsa, "İvme'ye aktar" butonu göster.
+        // 1) Yalnızca Agent modu aktifse ve mevcut dosya için bekleyen bir seçim varsa, "İvme'ye aktar" butonu göster.
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+        const isAgentActive = config.get<boolean>(SETTINGS_KEYS.agentModeActive, false);
         const pending = getPendingSelection(document.uri);
-        if (pending && pending.range.contains(position)) {
+        if (isAgentActive && pending && pending.range.contains(position)) {
             const applyUri = vscode.Uri.parse(`command:${COMMAND_IDS.confirmAgentSelection}`);
             markdown.appendMarkdown(`**İvme Seçim**\n\n`);
             markdown.appendMarkdown(`_${pending.fileName} (${pending.range.start.line + 1}-${pending.range.end.line + 1})_\n\n`);
@@ -32,7 +34,7 @@ export class BaykarAiHoverProvider implements vscode.HoverProvider {
 
         // 2) Hata üzerine gelinirse mevcut fix hover'ını da göster.
         const diagnosticAtPosition = vscode.languages.getDiagnostics(document.uri).find(d => d.range.contains(position));
-        if (!diagnosticAtPosition && !pending) {
+        if (!diagnosticAtPosition && !(isAgentActive && pending)) {
             return null;
         }
         if (diagnosticAtPosition) {

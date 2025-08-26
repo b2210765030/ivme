@@ -142,7 +142,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private handleSelectionChange(event: vscode.TextEditorSelectionChangeEvent) {
-        if (!this._view || !this.isAgentModeActive || !event.textEditor) {
+        if (!event.textEditor) {
+            return;
+        }
+        // Yalnızca Agent modu aktifken pending seçim üret
+        if (!this.isAgentModeActive) {
+            // Agent modu kapalıyken tüm pending state'i temizle
+            this.pendingAgentSelection = null;
+            try { clearPendingSelection(event.textEditor.document.uri); } catch {}
+            ivmeSelectionCodeLensProvider.refresh();
             return;
         }
         
@@ -168,21 +176,77 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     // YENİ: Önerilen seçimi onaylayıp bağlama uygular
-    public applyPendingSelection() {
-        if (!this._view || !this.isAgentModeActive || !this.pendingAgentSelection) return;
-        const { start, end, content, fileName } = this.pendingAgentSelection;
-        const selection = new vscode.Selection(start, end);
-        this.contextManager.setAgentSelectionContext(selection, content, this._view.webview);
-        this._view.webview.postMessage({
-            type: 'agentSelectionSet',
-            payload: {
-                fileName,
-                startLine: start.line + 1,
-                endLine: end.line + 1
+    public async applyPendingSelection() {
+        // Webview görünür değilse aç ve odakla
+        if (!this._view) {
+            await vscode.commands.executeCommand(`${EXTENSION_ID}.chatView.focus`);
+        }
+
+        const editor = vscode.window.activeTextEditor;
+        let sel = this.pendingAgentSelection;
+
+        // Eğer bellekte bekleyen seçim yoksa, aktif editörden al
+        if (!sel && editor && !editor.selection.isEmpty) {
+            const content = editor.document.getText(editor.selection);
+            const fileName = path.basename(editor.document.fileName);
+            sel = {
+                start: editor.selection.start,
+                end: editor.selection.end,
+                content,
+                fileName
+            };
+            // CodeLens/hover için global bekleyen seçimi de güncelle
+            setPendingSelection(editor.document.uri, editor.selection, fileName, content);
+        }
+
+        if (!sel) return;
+
+        // Agent modu AÇIKSA: mevcut davranış — agent seçim bağlamına uygula
+        if (this.isAgentModeActive && this._view) {
+            const { start, end, content, fileName } = sel;
+            const selection = new vscode.Selection(start, end);
+
+            // Agent dosya bağlamı yoksa aktif editör içeriğini yükle
+            if (!this.contextManager.agentFileContext && editor) {
+                const fileContent = editor.document.getText();
+                this.contextManager.setAgentFileContext(editor.document.uri, fileContent, this._view.webview);
             }
-        });
-        this.pendingAgentSelection = null;
-        ivmeSelectionCodeLensProvider.refresh();
+
+            this.contextManager.setAgentSelectionContext(selection, content, this._view.webview);
+            this._view.webview.postMessage({
+                type: 'agentSelectionSet',
+                payload: {
+                    fileName,
+                    startLine: start.line + 1,
+                    endLine: end.line + 1,
+                    content
+                }
+            });
+            // Ensure the Agent context bar is expanded (bağlam butonu açık)
+            try {
+                await this.settingsManager.saveAgentBarExpandedState(true);
+                this.contextManager.agentFileSuppressed = false;
+                this._view.webview.postMessage({
+                    type: 'restoreAgentMode',
+                    payload: { isActive: true, isBarExpanded: true }
+                });
+                // Refresh status with current editor for accurate filename display
+                this.handleEditorChange(vscode.window.activeTextEditor);
+            } catch {}
+            this.pendingAgentSelection = null;
+            ivmeSelectionCodeLensProvider.refresh();
+            return;
+        }
+
+        // Agent modu KAPALIYSA: seçimli sohbet bağlamına ekle ve paneli odakla
+        if (editor && this._view) {
+            const { start, end, content } = sel;
+            const selection = new vscode.Selection(start, end);
+            this.contextManager.setEditorContext(editor.document.uri, selection, content, this._view.webview);
+            this.pendingAgentSelection = null;
+            ivmeSelectionCodeLensProvider.refresh();
+            await vscode.commands.executeCommand(`${EXTENSION_ID}.chatView.focus`);
+        }
     }
 
     // YENİ: Önerilen seçimi iptal eder (uygulanmış seçimi etkilemez)

@@ -4,12 +4,13 @@
    ========================================================================== */
 
 import * as VsCode from '../services/vscode.js';
-import { setAgentBarExpanded, setAgentActMode, getState, updatePlanActToggleVisibility } from '../core/state.js';
+import { setAgentBarExpanded, setAgentActMode, getState, updatePlanActToggleVisibility, toggleAgentSelectionPopover } from '../core/state.js';
 
 export function init() {
     const collapsedBtn = document.getElementById('agent-status-collapsed');
     const agentStatusBar = document.getElementById('agent-status-bar');
     const agentStatusHide = document.getElementById('agent-status-hide');
+    const agentSelectionToggle = document.getElementById('agent-selection-toggle');
     const modeButton = document.getElementById('agent-mode-button');
     const menu = document.getElementById('agent-mode-menu');
     const toggle = document.getElementById('agent-mode-toggle');
@@ -33,11 +34,25 @@ export function init() {
     if (agentStatusHide && collapsedBtn && agentStatusBar) {
         agentStatusHide.addEventListener('click', (e) => {
             e.stopPropagation();
+            // Seçimi tamamen temizle (label dosya adına dönsün)
+            try { VsCode.postMessage('clearAgentSelection'); } catch {}
+            // Bağlam barını kapat
             agentStatusBar.classList.add('hidden');
             collapsedBtn.classList.remove('hidden');
             setAgentBarExpanded(false);
             VsCode.postMessage('toggleAgentFileSuppressed', { suppressed: true });
             VsCode.postMessage('agentBarExpandedChanged', { isExpanded: false });
+        });
+    }
+
+    // 3) Seçim önizleme panelini aç/kapat (yukarı/aşağı ok)
+    if (agentSelectionToggle) {
+        agentSelectionToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const opened = toggleAgentSelectionPopover();
+            agentSelectionToggle.textContent = opened ? '▾' : '▴';
+            agentSelectionToggle.title = opened ? 'Seçimi gizle' : 'Seçimi göster';
+            agentSelectionToggle.setAttribute('aria-label', agentSelectionToggle.title);
         });
     }
     if (modeButton) {

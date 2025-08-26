@@ -12,6 +12,7 @@ let isBackgroundVideoEnabled = localStorage.getItem('backgroundVideoEnabled') !=
 let isAgentModeActive = localStorage.getItem('agentModeActive') === 'true'; // Agent modu durumu - localStorage'dan yükle
 let currentAgentFileName = '';
 let isAgentSelectionActive = false; // YENİ: Agent modunda seçili alan olup olmadığını gösterir.
+let lastAgentSelectionData = null; // { fileName, startLine, endLine, content }
 let isAgentBarExpanded = localStorage.getItem('agentBarExpanded') === 'true'; // Agent bağlam barının açık/kapalı durumu - localStorage'dan yükle
 let isAgentActMode = localStorage.getItem('agentActMode') === 'true'; // Plan(false)/Act(true) modu - localStorage
 
@@ -102,9 +103,18 @@ export function setAgentMode(isActive, activeFileName = '') {
         }
         if (activeFileName) currentAgentFileName = activeFileName;
         if (agentStatusBar && agentStatusText) {
-            const text = activeFileName || currentAgentFileName;
-            if (text) {
-                agentStatusText.textContent = text;
+            // Seçim varsa: dosya + (Lstart - Lend), yoksa sadece dosya adı
+            let displayText = activeFileName || currentAgentFileName;
+            if (isAgentSelectionActive && lastAgentSelectionData) {
+                const f = lastAgentSelectionData.fileName || displayText || '';
+                const s = Number(lastAgentSelectionData.startLine || 0);
+                const e = Number(lastAgentSelectionData.endLine || 0);
+                if (f && s > 0 && e > 0) {
+                    displayText = `${f} (L${s} - L${e})`;
+                }
+            }
+            if (displayText) {
+                agentStatusText.textContent = displayText;
             } else {
                 // Dosya adı yoksa varsayılan metin göster
                 agentStatusText.textContent = 'Agent Modu';
@@ -120,8 +130,8 @@ export function setAgentMode(isActive, activeFileName = '') {
                     agentStatusBar.classList.add('hidden');
                 }
             }
-            // Seçim yokken kaldırma butonunu gizle
-            if (agentRemoveBtn) agentRemoveBtn.classList.add('hidden');
+            // X: sadece seçim varsa göster, yoksa gizle
+            if (agentRemoveBtn) agentRemoveBtn.classList.toggle('hidden', !isAgentSelectionActive);
         }
         // Agent modu açıldığında indeksleme durumunu kontrol et
         checkAndUpdateIndexingState();
@@ -489,20 +499,32 @@ export function updatePlanActToggleVisibility() {
 }
 
 // YENİ: Agent seçim durumunu göster/gizle
-export function setAgentSelectionStatus(fileName, startLine, endLine) {
+export function setAgentSelectionStatus(fileName, startLine, endLine, content) {
     const agentStatusBar = document.getElementById('agent-status-bar');
     const agentStatusText = document.getElementById('agent-status-text');
     const agentRemoveBtn = document.getElementById('agent-selection-remove');
     if (!agentStatusBar || !agentStatusText) return;
     currentAgentFileName = fileName || currentAgentFileName;
-    agentStatusText.textContent = `${currentAgentFileName} (${startLine}-${endLine})`;
+    agentStatusText.textContent = `${currentAgentFileName} (L${startLine} - L${endLine})`;
+    try {
+        const selToggle = document.getElementById('agent-selection-toggle');
+        if (selToggle) {
+            // Seçim VAR: yukarı ok görünür
+            selToggle.classList.remove('hidden');
+            selToggle.textContent = '▴';
+            selToggle.title = 'Seçimi göster';
+            selToggle.setAttribute('aria-label', 'Seçimi göster');
+        }
+    } catch (e) {}
     // Bar sadece kullanıcı açtıysa gösterilsin
     if (isAgentBarExpanded) {
         agentStatusBar.classList.remove('hidden');
     }
     isAgentSelectionActive = true; // Seçim aktif hale geldi
-    // Seçim varken kaldırma butonunu göster
+    // Seçim varken X butonu görünür
     if (agentRemoveBtn) agentRemoveBtn.classList.remove('hidden');
+    // Son seçimi sakla (popover için)
+    lastAgentSelectionData = { fileName: currentAgentFileName, startLine, endLine, content: String(content || '') };
 }
 
 export function clearAgentSelectionStatus() {
@@ -511,9 +533,14 @@ export function clearAgentSelectionStatus() {
     const agentRemoveBtn = document.getElementById('agent-selection-remove');
     if (!agentStatusBar || !agentStatusText) return;
     isAgentSelectionActive = false; // Seçim pasif hale geldi
+    // Herhangi bir popover varsa kaldır
+    try { const pop = document.getElementById('agent-selection-popover'); if (pop && pop.parentNode) pop.parentNode.removeChild(pop); } catch(e){}
+    // Eski preview kalıntılarını da temizle (geçiş desteği)
+    try { const prev = document.getElementById('agent-selection-preview'); if (prev && prev.parentNode) prev.parentNode.removeChild(prev); } catch(e){}
     if (isAgentModeActive && currentAgentFileName) {
         // Sadece satır aralığını kaldır, dosya adı kalsın
         agentStatusText.textContent = currentAgentFileName;
+        try { const selToggle = document.getElementById('agent-selection-toggle'); if (selToggle) selToggle.classList.add('hidden'); } catch(e){}
         if (isAgentBarExpanded) {
             agentStatusBar.classList.remove('hidden');
         } else {
@@ -524,6 +551,58 @@ export function clearAgentSelectionStatus() {
     } else {
         agentStatusBar.classList.add('hidden');
     }
+}
+
+// Küçük seçim popover penceresini aç/kapat
+export function toggleAgentSelectionPopover() {
+    try {
+        const existing = document.getElementById('agent-selection-popover');
+        if (existing) { existing.parentNode.removeChild(existing); return false; }
+        if (!lastAgentSelectionData || !lastAgentSelectionData.content) return false;
+        const anchor = document.getElementById('agent-selection-toggle') || document.getElementById('agent-status-bar');
+        const rect = anchor ? anchor.getBoundingClientRect() : { left: 20, top: 40, bottom: 46, width: 0 };
+        const pop = document.createElement('div');
+        pop.id = 'agent-selection-popover';
+        pop.className = 'agent-selection-popover';
+        const escapeText = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const title = `${lastAgentSelectionData.fileName} (L${lastAgentSelectionData.startLine} - L${lastAgentSelectionData.endLine})`;
+        pop.innerHTML = `
+            <div class="asp-popover-header"><span class="asp-popover-title">${escapeText(title)}</span>
+                <button class="asp-popover-close" title="Kapat" aria-label="Kapat">×</button>
+            </div>
+            <pre><code>${escapeText(lastAgentSelectionData.content)}</code></pre>`;
+        // Append hidden to measure
+        pop.style.visibility = 'hidden';
+        pop.style.top = '0px';
+        pop.style.left = '0px';
+        document.body.appendChild(pop);
+        // Measure
+        const vw = window.innerWidth || document.documentElement.clientWidth || 1024;
+        const vh = window.innerHeight || document.documentElement.clientHeight || 768;
+        const pW = Math.max(1, pop.offsetWidth || 360);
+        const pH = Math.max(1, pop.offsetHeight || 120);
+        // Preferred: above the anchor (yukarı)
+        let top = Math.round((rect.top || 0) - pH - 6);
+        let left = Math.round((rect.left || 0) + ((rect.width || 0) / 2) - (pW / 2));
+        // Clamp horizontally
+        left = Math.max(8, Math.min(left, vw - pW - 8));
+        // If not enough space above, fallback to below
+        if (top < 8) {
+            top = Math.round((rect.bottom || 0) + 6);
+            // Ensure on screen vertically
+            if (top + pH > vh - 8) {
+                top = Math.max(8, vh - pH - 8);
+            }
+        }
+        // Apply final position
+        pop.style.left = `${left}px`;
+        pop.style.top = `${top}px`;
+        pop.style.visibility = 'visible';
+        try { pop.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b)); } catch (e) {}
+        const closeBtn = pop.querySelector('.asp-popover-close');
+        closeBtn?.addEventListener('click', () => { try { pop.parentNode && pop.parentNode.removeChild(pop); } catch(e){} });
+        return true;
+    } catch (e) { return false; }
 }
 
 // Öneri çubuğu kaldırıldı
