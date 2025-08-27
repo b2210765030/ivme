@@ -68,8 +68,21 @@ export class VllmApiService implements IApiService {
         if (!baseUrl || !baseUrl.trim()) {
             return { success: false, message: 'vLLM Sunucu Adresi boş olamaz.' };
         }
-        
-        const url = `${baseUrl}/models`;
+        // Normalize to include '/v1' suffix like getBaseUrl(), but don't break already-suffixed URLs
+        let normalized = String(baseUrl).trim();
+        try {
+            const parsed = new URL(normalized);
+            const hasV1 = /\/v1\/?$/.test(parsed.pathname);
+            if (!hasV1) {
+                normalized = normalized.replace(/\/?$/, '') + '/v1';
+            }
+        } catch {
+            // If not a valid URL, best effort append '/v1' if missing pattern
+            if (!/\/v1\/?$/.test(normalized)) {
+                normalized = normalized.replace(/\/?$/, '') + '/v1';
+            }
+        }
+        const url = `${normalized}/models`;
 
         try {
             await axios.get(url, { timeout: 3000 });

@@ -46,28 +46,83 @@ export class SettingsManager {
             const baseUrl = String(settings.vllmBaseUrl || '').trim();
             const modelName = String(settings.vllmModelName || '').trim();
             const embeddingModelName = String(settings.vllmEmbeddingModelName || settings.vllmModelName || '').trim();
-            await Promise.all([
-                // Persist both globally and at workspace level so user doesn't need manual edits
-                config.update(SETTINGS_KEYS.activeApiService, settings.activeApiService, vscode.ConfigurationTarget.Global),
-                config.update(SETTINGS_KEYS.activeApiService, settings.activeApiService, vscode.ConfigurationTarget.Workspace),
+            const hasWorkspace = Array.isArray(vscode.workspace.workspaceFolders) && vscode.workspace.workspaceFolders.length > 0;
+            const safeWorkspaceUpdate = async (key: string, value: any) => {
+                if (!hasWorkspace) return;
+                try {
+                    await config.update(key, value, vscode.ConfigurationTarget.Workspace);
+                } catch (e) {
+                    try { console.warn('[settings] Workspace update skipped for key:', key, e); } catch {}
+                }
+            };
+            let majorOk = true;
+            const tryGlobal = async (key: string, value: any) => {
+                try {
+                    await config.update(key, value, vscode.ConfigurationTarget.Global);
+                } catch (e) {
+                    try { console.error('[settings] Global update failed for key:', key, e); } catch {}
+                    // Major keys failure will flip flag below where used
+                    throw e;
+                }
+            };
 
-                config.update(SETTINGS_KEYS.vllmBaseUrl, baseUrl, vscode.ConfigurationTarget.Global),
-                config.update(SETTINGS_KEYS.vllmBaseUrl, baseUrl, vscode.ConfigurationTarget.Workspace),
+            // Aktif servis (MAJOR)
+            try {
+                await tryGlobal(SETTINGS_KEYS.activeApiService, settings.activeApiService);
+                await safeWorkspaceUpdate(SETTINGS_KEYS.activeApiService, settings.activeApiService);
+            } catch { majorOk = false; }
 
-                config.update(SETTINGS_KEYS.vllmModelName, modelName, vscode.ConfigurationTarget.Global),
-                config.update(SETTINGS_KEYS.vllmModelName, modelName, vscode.ConfigurationTarget.Workspace),
+            // vLLM Base URL (MAJOR)
+            try {
+                await tryGlobal(SETTINGS_KEYS.vllmBaseUrl, baseUrl);
+                await safeWorkspaceUpdate(SETTINGS_KEYS.vllmBaseUrl, baseUrl);
+            } catch { majorOk = false; }
 
-                config.update(SETTINGS_KEYS.vllmEmbeddingModelName, embeddingModelName, vscode.ConfigurationTarget.Global),
-                config.update(SETTINGS_KEYS.vllmEmbeddingModelName, embeddingModelName, vscode.ConfigurationTarget.Workspace),
+            // vLLM Model Name (MAJOR)
+            try {
+                await tryGlobal(SETTINGS_KEYS.vllmModelName, modelName);
+                await safeWorkspaceUpdate(SETTINGS_KEYS.vllmModelName, modelName);
+            } catch { majorOk = false; }
 
-                // Keep Gemini key Global only
-                config.update(SETTINGS_KEYS.geminiApiKey, String(settings.geminiApiKey || '').trim(), vscode.ConfigurationTarget.Global),
+            // vLLM Embedding Model Name (NON-MAJOR)
+            try {
+                await tryGlobal(SETTINGS_KEYS.vllmEmbeddingModelName, embeddingModelName);
+                await safeWorkspaceUpdate(SETTINGS_KEYS.vllmEmbeddingModelName, embeddingModelName);
+            } catch (e) {
+                try { console.warn('[settings] Optional update failed: vllmEmbeddingModelName'); } catch {}
+            }
 
-                config.update(SETTINGS_KEYS.conversationHistoryLimit, Number(settings.conversationHistoryLimit) || 2, vscode.ConfigurationTarget.Global),
-                // Persist temperature in BOTH Global and Workspace to avoid precedence issues
-                config.update(SETTINGS_KEYS.temperature, (isFinite(tempValue) ? tempValue : 0.7), vscode.ConfigurationTarget.Global),
-                config.update(SETTINGS_KEYS.temperature, (isFinite(tempValue) ? tempValue : 0.7), vscode.ConfigurationTarget.Workspace)
-            ]);
+            // Gemini anahtarı (yalnızca Global, NON-MAJOR)
+            try {
+                await tryGlobal(SETTINGS_KEYS.geminiApiKey, String(settings.geminiApiKey || '').trim());
+            } catch (e) {
+                try { console.warn('[settings] Optional update failed: geminiApiKey'); } catch {}
+            }
+
+            // Sohbet geçmiş limiti (Global, NON-MAJOR)
+            try {
+                await tryGlobal(SETTINGS_KEYS.conversationHistoryLimit, Number(settings.conversationHistoryLimit) || 2);
+            } catch (e) {
+                try { console.warn('[settings] Optional update failed: conversationHistoryLimit'); } catch {}
+            }
+
+            // Sıcaklık - Global zorunlu (MAJOR-ish), Workspace opsiyonel
+            const finalTemp = (isFinite(tempValue) ? tempValue : 0.7);
+            try {
+                await tryGlobal(SETTINGS_KEYS.temperature, finalTemp);
+                await safeWorkspaceUpdate(SETTINGS_KEYS.temperature, finalTemp);
+            } catch (e) {
+                // Temperature failure shouldn't block save entirely
+                try { console.warn('[settings] Temperature update failed, proceeding'); } catch {}
+            }
+
+            if (!majorOk) {
+                // Report error but keep a helpful message
+                const message = 'Ayarlar kaydedilirken bir hata oluştu (temel alanlar kaydedilemedi).';
+                vscode.window.showErrorMessage(message);
+                webview.postMessage({ type: 'settingsSaveResult', payload: { success: false, message } });
+                return;
+            }
             vscode.window.showInformationMessage('Ayarlar başarıyla kaydedildi.');
             
             // Başarılı olursa, arayüze başarı durumunu gönder.
