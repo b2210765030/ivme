@@ -63,7 +63,14 @@ export function init() {
     // İlk yüklemede tooltip'i ayarla
     setTimeout(() => {
         recalculateTotalAndUpdateUI();
+        try { autoResize(); } catch (e) {}
     }, 100);
+
+    // Viewport değişimlerinde konumları yeniden hesapla
+    try {
+        window.addEventListener('resize', () => { try { autoResize(); } catch (e) {} });
+        window.addEventListener('orientationchange', () => { try { autoResize(); } catch (e) {} });
+    } catch (e) {}
 }
 
 export function autoResize() {
@@ -81,7 +88,26 @@ export function autoResize() {
             // from viewport top, so inputBottom is the height from top to bottom of input area.
             // We want the safe bottom space (height of area from bottom of viewport up to top of input)
             const safeBottom = Math.ceil(window.innerHeight - (inputWrapper ? inputWrapper.getBoundingClientRect().top : (rect.top)) + 20);
+            // Reserve space for chat container
             document.documentElement.style.setProperty('--input-safe-bottom', `${safeBottom}px`);
+            // Planner panel should hug the top edge of input wrapper:
+            // Compute distance from viewport bottom to input-wrapper top, then add a small gap
+            const GAP = 10; // px gap between planner panel and input wrapper
+            const plannerBottom = Math.max(0, Math.ceil(window.innerHeight - (inputWrapper ? inputWrapper.getBoundingClientRect().top : (rect.top)) + GAP));
+            document.documentElement.style.setProperty('--planner-panel-bottom', `${plannerBottom}px`);
+            // Also reserve space in chat for the visible planner panel height so messages aren't covered
+            let panelExtra = 0;
+            try {
+                const panel = document.getElementById('planner-panel');
+                if (panel && !panel.classList.contains('hidden')) {
+                    const pRect = panel.getBoundingClientRect();
+                    const visible = Math.max(0, Math.min(pRect.height, window.innerHeight));
+                    // add a little spacing
+                    panelExtra = Math.ceil(visible + 8);
+                }
+            } catch (e2) { panelExtra = 0; }
+            const chatReserved = Math.max(safeBottom + panelExtra, safeBottom);
+            document.documentElement.style.setProperty('--chat-bottom-reserved', `${chatReserved}px`);
         }
     } catch (e) {}
 }

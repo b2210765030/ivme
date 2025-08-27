@@ -9,8 +9,8 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
-    /* reserve bottom space so messages aren't pushed/covered when input grows */
-    padding-bottom: calc(var(--input-safe-bottom, 260px) + 20px);
+    /* reserve bottom space so messages aren't pushed/covered when input + planner grow */
+    padding-bottom: var(--chat-bottom-reserved, calc(var(--input-safe-bottom, 260px) + 20px));
 }
 
 .message {
@@ -186,7 +186,7 @@ pre code.hljs {
     position: fixed;
     left: 25px;
     right: 25px;
-    bottom: 140px; /* daha yukarı: input-area'nın üstünde görünmesi için */
+    bottom: var(--planner-panel-bottom, var(--input-safe-bottom, 140px)); /* input wrapper üst sınırına dinamik tutun */
     max-height: 220px;
     border-radius: 20px; /* input-wrapper ile aynı */
     background-color: rgba(25, 25, 25, 0.2); /* input-wrapper ile aynı renk */
@@ -271,7 +271,7 @@ pre code.hljs {
 #planner-panel.hidden { display: none; }
 
 @media (max-height: 720px) {
-    #planner-panel { bottom: 110px; max-height: 180px; }
+    #planner-panel { bottom: var(--planner-panel-bottom, var(--input-safe-bottom, 110px)); max-height: 180px; }
 }
 
 

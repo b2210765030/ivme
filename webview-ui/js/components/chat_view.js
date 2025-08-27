@@ -6,6 +6,7 @@ import * as DOM from '../utils/dom.js';
 import { getState, setAiResponding, incrementConversationSize, setContextSize, resetChatState, lockConversation } from '../core/state.js';
 import { postMessage } from '../services/vscode.js';
 import { recalculateTotalAndUpdateUI, setPlaceholder, focus as focusInput } from './InputArea.js';
+import { autoResize as autoResizeInput } from './InputArea.js';
 
 // --- Değişkenler ---
 let streamingBuffer = '';
@@ -462,6 +463,8 @@ export function showPlannerPanel(steps) {
         panel.classList.remove('expanded');
         panel.classList.remove('completed');
 
+        try { autoResizeInput(); } catch (e) {}
+
         // Toggle buton handler (bir kez ekle)
         const toggle = document.getElementById('planner-panel-toggle');
         if (toggle && !toggle.dataset.bound) {
@@ -474,6 +477,7 @@ export function showPlannerPanel(steps) {
                     panel.classList.remove('collapsed');
                     panel.classList.add('expanded');
                 }
+                try { autoResizeInput(); } catch (e) {}
             });
             toggle.dataset.bound = '1';
             // Add single run-all checkbox button to the left of the toggle (only once)
@@ -716,6 +720,7 @@ export function showPlannerPanelWithPlan(plan) {
         panel.classList.add('collapsed');
         panel.classList.remove('expanded');
         panel.classList.remove('completed');
+        try { autoResizeInput(); } catch (e) {}
 
         // Toggle buton handler (bir kez ekle)
         const toggle = document.getElementById('planner-panel-toggle');
@@ -729,6 +734,7 @@ export function showPlannerPanelWithPlan(plan) {
                     panel.classList.remove('collapsed');
                     panel.classList.add('expanded');
                 }
+                try { autoResizeInput(); } catch (e) {}
             });
             toggle.dataset.bound = '1';
             // Run-all düğmesini ekle (varsa atla)
@@ -985,6 +991,7 @@ export function refreshPlannerPanelVisibility() {
             panel.classList.remove('expanded');
             panel.classList.remove('completed');
         }
+        try { autoResizeInput(); } catch (e) {}
     } else {
         panel.classList.add('hidden');
     }
