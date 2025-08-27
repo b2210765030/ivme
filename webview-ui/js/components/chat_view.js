@@ -510,6 +510,9 @@ export function showPlannerPanel(steps) {
 
         try { autoResizeInput(); } catch (e) {}
 
+        // Eski "Tüm adımları uygula" (✔) butonunu kaldır
+        try { const oldRunAll = document.getElementById('planner-run-all-toggle'); if (oldRunAll && oldRunAll.parentNode) oldRunAll.parentNode.removeChild(oldRunAll); } catch (e) {}
+
         // Toggle buton handler (bir kez ekle)
         const toggle = document.getElementById('planner-panel-toggle');
         if (toggle && !toggle.dataset.bound) {
@@ -525,31 +528,6 @@ export function showPlannerPanel(steps) {
                 try { autoResizeInput(); } catch (e) {}
             });
             toggle.dataset.bound = '1';
-            // Add single run-all checkbox button to the left of the toggle (only once)
-            try {
-                if (!document.getElementById('planner-run-all-toggle')) {
-                    const runAllBtn = document.createElement('button');
-                    runAllBtn.id = 'planner-run-all-toggle';
-                    runAllBtn.className = 'icon-button planner-run-all';
-                    runAllBtn.title = 'Tüm adımları uygula';
-                    runAllBtn.innerText = '✔';
-                    // small left margin so it's just left of the toggle label
-                    runAllBtn.style.marginLeft = '4px';
-                    runAllBtn.addEventListener('click', () => { try { postMessage('executePlannerAll'); } catch (e) {} });
-                    // Insert the run-all button into the planner bar immediately before the toggle
-                    try {
-                        const titleEl = toggle.parentNode.querySelector('.planner-panel-title');
-                        if (titleEl) {
-                            titleEl.appendChild(runAllBtn); // place inside title so it stays right next to text
-                        } else {
-                            const bar = toggle.closest('.planner-panel-bar') || toggle.parentNode;
-                            bar.insertBefore(runAllBtn, toggle); // fallback: left of toggle
-                        }
-                    } catch (e) {
-                        try { toggle.parentNode.insertBefore(runAllBtn, toggle); } catch(e){}
-                    }
-                }
-            } catch (e) { /* ignore */ }
         }
     } catch (e) { console.warn('showPlannerPanel error', e); }
 }
@@ -767,6 +745,9 @@ export function showPlannerPanelWithPlan(plan) {
         panel.classList.remove('completed');
         try { autoResizeInput(); } catch (e) {}
 
+        // Eski "Tüm adımları uygula" (✔) butonunu kaldır
+        try { const oldRunAll = document.getElementById('planner-run-all-toggle'); if (oldRunAll && oldRunAll.parentNode) oldRunAll.parentNode.removeChild(oldRunAll); } catch (e) {}
+
         // Toggle buton handler (bir kez ekle)
         const toggle = document.getElementById('planner-panel-toggle');
         if (toggle && !toggle.dataset.bound) {
@@ -782,29 +763,6 @@ export function showPlannerPanelWithPlan(plan) {
                 try { autoResizeInput(); } catch (e) {}
             });
             toggle.dataset.bound = '1';
-            // Run-all düğmesini ekle (varsa atla)
-            try {
-                if (!document.getElementById('planner-run-all-toggle')) {
-                    const runAllBtn = document.createElement('button');
-                    runAllBtn.id = 'planner-run-all-toggle';
-                    runAllBtn.className = 'icon-button planner-run-all';
-                    runAllBtn.title = 'Tüm adımları uygula';
-                    runAllBtn.innerText = '✔';
-                    runAllBtn.style.marginLeft = '4px';
-                    runAllBtn.addEventListener('click', () => { try { postMessage('executePlannerAll'); } catch (e) {} });
-                    try {
-                        const titleEl = toggle.parentNode.querySelector('.planner-panel-title');
-                        if (titleEl) {
-                            titleEl.appendChild(runAllBtn);
-                        } else {
-                            const bar = toggle.closest('.planner-panel-bar') || toggle.parentNode;
-                            bar.insertBefore(runAllBtn, toggle);
-                        }
-                    } catch (e) {
-                        try { toggle.parentNode.insertBefore(runAllBtn, toggle); } catch(e){}
-                    }
-                }
-            } catch (e) { /* ignore */ }
         }
     } catch (e) { console.warn('showPlannerPanelWithPlan error', e); }
 }
