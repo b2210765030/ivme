@@ -526,6 +526,24 @@ input:checked + .slider:before {
     pointer-events: none;
 }
 
+/* ReAct Modu için küçük not stili */
+.small-note {
+    font-size: 10px;
+    color: var(--vscode-input-placeholderForeground);
+    margin-left: 5px;
+}
+
+/* Devre dışı bırakılmış switch stili */
+.switch input:disabled + .slider {
+    background-color: var(--vscode-input-background);
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.switch input:disabled + .slider:before {
+    background-color: var(--vscode-input-placeholderForeground);
+}
+
 /* ==========================================================================
    TOOL CREATOR MODAL STYLES
    ========================================================================== */

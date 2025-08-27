@@ -139,6 +139,7 @@
                             </div>
                         </div>
                         
+                        
                         <button id="send-button" title="Gönder">
                             <img src="{{send_icon_uri}}" alt="Gönder" class="send-icon"/>
                             <svg class="stop-icon hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
@@ -193,6 +194,7 @@
                     <li><button class="nav-button" data-target="pane-interface">Arayüz</button></li>
                     <li><button class="nav-button" data-target="pane-general">Genel</button></li>
                     <li><button class="nav-button" data-target="pane-tools">Araçlar</button></li>
+                    <li><button class="nav-button" data-target="pane-developer">Geliştirici</button></li>
                 </ul>
             </div>
             <div class="modal-main-content">
@@ -231,6 +233,28 @@
                             <label for="temperature">Sıcaklık (Temperature)</label>
                             <input type="range" id="temperature" min="0" max="2" step="0.1">
                             <p id="temperature-label" class="form-group-description">0.7</p>
+                        </div>
+                    </div>
+                    <div id="pane-developer" class="settings-pane">
+                        <div class="form-group form-group-toggle">
+                            <div class="toggle-label-group">
+                                <label for="react-toggle-switch">ReAct Modu <span class="small-note">(Yakında...)</span></label>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="react-toggle-switch" disabled>
+                                <span class="slider round"></span>
+                            </label>
+                            <p class="form-group-description">Planlama ve eylem özelliklerini gerçek zamanlı olarak uygulamak için kullanılır. Bu özellik yakında gelecek.</p>
+                        </div>
+                        <div class="form-group form-group-toggle">
+                            <div class="toggle-label-group">
+                                <label for="autocomplete-toggle-switch">Otomatik Tamamlama <span class="small-note">(Yakında...)</span></label>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="autocomplete-toggle-switch" disabled>
+                                <span class="slider round"></span>
+                            </label>
+                            <p class="form-group-description">Yazım sırasında öneriler sunar. Bu özellik yakında gelecek.</p>
                         </div>
                     </div>
                     <div id="pane-tools" class="settings-pane">
