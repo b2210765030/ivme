@@ -208,15 +208,69 @@ export class VllmApiService implements IApiService {
         const base = this.getBaseUrl();
         const model = this.getEmbeddingModelName();
         if (!base || !model) throw new Error('vLLM URL veya Embedding Model Name yapılandırılmamış.');
-        const url = `${base}/embeddings`;
+
+        const headers = { 'Content-Type': 'application/json' } as const;
         const payload: any = { model, input: text };
+        const url = `${base}/embeddings`;
+
         try {
-            const resp = await axios.post(url, payload, { headers: { 'Content-Type': 'application/json' } });
-            const arr = resp?.data?.data;
-            if (Array.isArray(arr) && arr[0]?.embedding && Array.isArray(arr[0].embedding)) {
-                return arr[0].embedding as number[];
+            const resp = await axios.post(url, payload, { headers });
+
+            // Olası yanıt formatlarını kontrol et
+            // Format 1 (OpenAI uyumlu): { data: [ { embedding: [...] } ] }
+            const nestedEmbedding = resp?.data?.data?.[0]?.embedding;
+            if (Array.isArray(nestedEmbedding)) {
+                return nestedEmbedding as number[];
             }
-            throw new Error('Geçersiz vLLM embeddings yanıtı.');
+
+            // Format 2 (düz): { embedding: [...] }
+            const directEmbedding = resp?.data?.embedding;
+            if (Array.isArray(directEmbedding)) {
+                return directEmbedding as number[];
+            }
+
+            // Alternatif anahtarlar (bazı sunucular/cohere benzeri)
+            const possibleValues = resp?.data?.data?.[0]?.values;
+            if (Array.isArray(possibleValues)) {
+                return possibleValues as number[];
+            }
+            const altVector = resp?.data?.vector || resp?.data?.embeddings?.[0];
+            if (Array.isArray(altVector)) {
+                return altVector as number[];
+            }
+
+            // Son çare: yanıttaki ilk büyük sayısal diziyi bul (>= 8 eleman)
+            const pickFirstNumericArray = (obj: any): number[] | null => {
+                const seen = new Set<any>();
+                const stack: any[] = [obj];
+                while (stack.length > 0) {
+                    const cur = stack.pop();
+                    if (!cur || typeof cur !== 'object') continue;
+                    if (seen.has(cur)) continue;
+                    seen.add(cur);
+                    if (Array.isArray(cur)) {
+                        if (cur.length >= 8 && cur.every(x => typeof x === 'number')) {
+                            return cur as number[];
+                        }
+                        for (const v of cur) stack.push(v);
+                    } else {
+                        for (const k of Object.keys(cur)) stack.push(cur[k]);
+                    }
+                }
+                return null;
+            };
+            const fallback = pickFirstNumericArray(resp?.data);
+            if (Array.isArray(fallback)) {
+                try { console.warn('[vLLM] Using fallback embedding extraction (numeric array search).'); } catch {}
+                return fallback as number[];
+            }
+
+            try {
+                const keys = resp && resp.data && typeof resp.data === 'object' ? Object.keys(resp.data) : [];
+                console.warn(`[vLLM] Geçersiz embeddings yanıtı (${url}). Üst seviye anahtarlar:`, keys);
+            } catch {}
+
+            throw new Error('Geçersiz embeddings yanıtı alındı.');
         } catch (e: any) {
             console.error('vLLM Embeddings Error:', e?.response?.data || e?.message || e);
             throw new Error('vLLM embeddings isteği başarısız.');

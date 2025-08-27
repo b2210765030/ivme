@@ -13,6 +13,7 @@ import { ChatViewProvider } from '../../providers/view_chat';
 import { setPromptLanguage, createInitialSystemPrompt } from '../../system_prompts';
 import { EXTENSION_ID, SETTINGS_KEYS } from '../../core/constants';
 import { getToolsManager, ToolCreationRequest } from '../../services/tools_manager';
+import { hasVectorStore } from '../../services/vector_store';
 
 
 
@@ -309,23 +310,25 @@ export class WebviewMessageHandler {
         const indexer = new ProjectIndexer(this.messageHandler['apiManager'], this.conversationManager.getExtensionContext());
         
         // Workspace'de indexing dosyası var mı kontrol et
-        const isIndexed = await indexer.isWorkspaceIndexed();
+        const hasIndex = await hasVectorStore(this.conversationManager.getExtensionContext());
         const isEnabled = await indexer.getIndexingEnabled();
         
         // Eğer indexing dosyası yoksa ama enabled true ise, false yap
-        if (!isIndexed && isEnabled) {
+        if (!hasIndex && isEnabled) {
             await indexer.setIndexingEnabled(false);
             this.webview.postMessage({
                 type: 'indexingStatus',
                 payload: {
-                    isEnabled: false
+                    isEnabled: false,
+                    hasIndex: false
                 }
             });
         } else {
             this.webview.postMessage({
                 type: 'indexingStatus',
                 payload: {
-                    isEnabled
+                    isEnabled,
+                    hasIndex
                 }
             });
         }

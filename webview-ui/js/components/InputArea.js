@@ -16,11 +16,12 @@ function handleSendMessage() {
     addUserMessage(text);
     addAiResponsePlaceholder();
     try {
-        const { isAgentModeActive, isIndexingEnabled } = getState();
+        const { isAgentModeActive, isIndexingEnabled, isAgentActMode } = getState();
         if (isAgentModeActive && isIndexingEnabled) {
             setPlannerStreaming(true);
             setShimmerActive(true);
-            replaceStreamingPlaceholderHeader('İvme planlıyor...');
+            const headerText = isAgentActMode ? (DOM.getText('thinking') || 'İvme düşünüyor...') : 'İvme planlıyor...';
+            replaceStreamingPlaceholderHeader(headerText);
         }
     } catch (e) {}
     DOM.input.value = '';
@@ -175,10 +176,21 @@ export function recalculateTotalAndUpdateUI() {
 
 export function updateInputAndButtonState(limitExceeded = false) {
     const { isAiResponding, isIndexing } = getState();
+    const isUiBlocked = isAiResponding || isIndexing;
 
-    DOM.input.disabled = isAiResponding || isIndexing;
+    DOM.input.disabled = isUiBlocked;
 
-    const canSend = !isAiResponding && !isIndexing && DOM.input.value.trim().length > 0 && !limitExceeded;
+    // Header buttons and toggles (if present)
+    try {
+        const languageToggle = document.getElementById('language-toggle');
+        if (languageToggle) languageToggle.disabled = isUiBlocked;
+        if (DOM.newChatButton) DOM.newChatButton.disabled = isUiBlocked;
+        if (DOM.historyButton) DOM.historyButton.disabled = isUiBlocked;
+        if (DOM.settingsButton) DOM.settingsButton.disabled = isUiBlocked;
+        if (DOM.feedbackButton) DOM.feedbackButton.disabled = isUiBlocked;
+    } catch (e) {}
+
+    const canSend = !isUiBlocked && DOM.input.value.trim().length > 0 && !limitExceeded;
     
     const sendIcon = DOM.sendButton.querySelector('.send-icon');
     const stopIcon = DOM.sendButton.querySelector('.stop-icon');
@@ -198,7 +210,7 @@ export function updateInputAndButtonState(limitExceeded = false) {
     DOM.sendButton.style.opacity = DOM.sendButton.disabled ? '0.5' : '1';
     DOM.sendButton.style.cursor = DOM.sendButton.disabled ? 'not-allowed' : 'pointer';
 
-    const canAttach = !isAiResponding && !isIndexing;
+    const canAttach = !isUiBlocked;
     DOM.attachFileButton.disabled = !canAttach;
     DOM.attachFileButton.style.opacity = canAttach ? '1' : '0.5';
     DOM.attachFileButton.style.cursor = canAttach ? 'pointer' : 'not-allowed';

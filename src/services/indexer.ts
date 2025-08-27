@@ -15,7 +15,7 @@ import generate from '@babel/generator';
 import * as t from '@babel/types';
 import { ApiServiceManager } from './manager';
 import { CodeChunkMetadata } from '../types';
-import { EXTENSION_ID, SETTINGS_KEYS, RETRIEVAL_DEFAULTS } from '../core/constants';
+import { EXTENSION_ID, SETTINGS_KEYS, RETRIEVAL_DEFAULTS, INDEXING_TIMEOUTS } from '../core/constants';
 import { generateUuid } from '../core/utils';
 
 type IndexResult = {
@@ -63,6 +63,8 @@ export class ProjectIndexer {
 
         const config = vscode.workspace.getConfiguration(EXTENSION_ID);
         const sourceName = config.get<string>(SETTINGS_KEYS.indexingSourceName) || 'workspace';
+        const summaryTimeout = config.get<number>(SETTINGS_KEYS.indexingSummaryTimeoutMs) ?? INDEXING_TIMEOUTS.SUMMARY_TIMEOUT_MS;
+        const embeddingTimeout = config.get<number>(SETTINGS_KEYS.indexingEmbeddingTimeoutMs) ?? INDEXING_TIMEOUTS.EMBEDDING_TIMEOUT_MS;
 
         const newChunks: CodeChunkMetadata[] = [];
         for (const filePath of uniquePaths) {
@@ -82,19 +84,35 @@ export class ProjectIndexer {
                 for (const chunk of fileChunks) {
                     try {
                         const summaryPrompt = this.buildSummaryPrompt(chunk.content);
-                        const summaryText = await this.generateContentWithTimeout(summaryPrompt, 10000);
+                        const start = Date.now();
+                        const summaryText = await this.generateContentWithTimeout(summaryPrompt, summaryTimeout);
+                        const elapsed = Date.now() - start;
                         const parsed = summaryText ? this.tryParseSummaryJson(summaryText) : null;
                         if (parsed?.summary) {
                             chunk.summary = parsed.summary;
+                        } else if (!summaryText) {
+                            console.warn(`[Indexer] (summary|incremental) Zaman aşımı veya boş yanıt: ${filePath} :: ${chunk.name} (elapsed ${elapsed}ms)`);
+                        } else {
+                            console.warn(`[Indexer] (summary|incremental) Geçersiz JSON çıktı: ${filePath} :: ${chunk.name}`);
                         }
-                    } catch {}
+                    } catch (e) {
+                        console.warn('[Indexer] (summary|incremental) Hata:', filePath, chunk.name, e);
+                    }
 
                     try {
                         const combined = this.buildCombinedForEmbedding(chunk);
                         const prepared = this.clampTextForEmbedding(combined);
-                        const embedding = await this.embedWithTimeout(prepared, 20000);
-                        if (embedding) chunk.embedding = embedding;
-                    } catch {}
+                        const startE = Date.now();
+                        const embedding = await this.embedWithTimeout(prepared, embeddingTimeout);
+                        const elapsedE = Date.now() - startE;
+                        if (embedding) {
+                            chunk.embedding = embedding;
+                        } else {
+                            console.warn(`[Indexer] (embed|incremental) Zaman aşımı veya hata: ${filePath} :: ${chunk.name} (elapsed ${elapsedE}ms)`);
+                        }
+                    } catch (e) {
+                        console.warn('[Indexer] (embed|incremental) Hata:', filePath, chunk.name, e);
+                    }
                 }
 
                 newChunks.push(...fileChunks);
@@ -170,6 +188,9 @@ export class ProjectIndexer {
         const excludeFromSettings = config.get<string[]>(SETTINGS_KEYS.indexingExcludeGlobs);
         const excludeGlobs = Array.from(new Set([...(excludeFromSettings || []), '**/node_modules/**', '**/dist/**', '**/out/**', '**/.git/**', '**/.vscode/**', '**/.ivme/**']));
         const sourceName = config.get<string>(SETTINGS_KEYS.indexingSourceName) || 'workspace';
+        // Add configurable timeouts for summary and embedding
+        const summaryTimeout = config.get<number>(SETTINGS_KEYS.indexingSummaryTimeoutMs) ?? INDEXING_TIMEOUTS.SUMMARY_TIMEOUT_MS;
+        const embeddingTimeout = config.get<number>(SETTINGS_KEYS.indexingEmbeddingTimeoutMs) ?? INDEXING_TIMEOUTS.EMBEDDING_TIMEOUT_MS;
         // indexer startup logs removed
 
         // VS Code'un brace pattern davranışına güvenmek yerine her pattern için ayrı arama yap
@@ -256,7 +277,7 @@ export class ProjectIndexer {
                 const idx = done;
                 // summary generation log removed
                 const start = Date.now();
-                const summaryText = await this.generateContentWithTimeout(summaryPrompt, 10000);
+                const summaryText = await this.generateContentWithTimeout(summaryPrompt, summaryTimeout);
                 const elapsed = Date.now() - start;
                 if (!summaryText) {
                     console.warn(`[Indexer] (summary) Zaman aşımı veya boş yanıt: ${chunk.filePath} :: ${chunk.name} (elapsed ${elapsed}ms)`);
@@ -277,7 +298,7 @@ export class ProjectIndexer {
                 const combined = this.buildCombinedForEmbedding(chunk);
                 const prepared = this.clampTextForEmbedding(combined);
                 const startE = Date.now();
-                const embedding = await this.embedWithTimeout(prepared, 20000);
+                const embedding = await this.embedWithTimeout(prepared, embeddingTimeout);
                 const elapsedE = Date.now() - startE;
                 if (!embedding) {
                     console.warn(`[Indexer] (embed) Zaman aşımı veya hata: ${chunk.filePath} :: ${chunk.name} (elapsed ${elapsedE}ms)`);

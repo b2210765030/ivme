@@ -183,6 +183,61 @@ export class ConversationManager {
         }
         return lines.join('\n');
     }
+
+    /**
+     * Persist the latest planner plan JSON per conversation so planning can resume/revise later.
+     */
+    public async saveLastPlannerPlanJson(planJson: string): Promise<void> {
+        const activeConv = this.getActive();
+        if (!activeConv) return;
+        const key = 'baykar.planner.lastPlan';
+        const map = this.context.workspaceState.get<Record<string, string>>(key) || {};
+        const text = String(planJson || '').trim();
+        if (text.length === 0) return;
+        map[activeConv.id] = text;
+        await this.context.workspaceState.update(key, map);
+    }
+
+    /**
+     * Retrieve the last planner plan JSON for the active conversation, if any.
+     */
+    public getLastPlannerPlanJson(): string | undefined {
+        const activeConv = this.getActive();
+        if (!activeConv) return undefined;
+        const key = 'baykar.planner.lastPlan';
+        const map = this.context.workspaceState.get<Record<string, string>>(key) || {};
+        const text = map[activeConv.id];
+        return typeof text === 'string' && text.trim().length > 0 ? text : undefined;
+    }
+
+    /**
+     * Persist completed step indices (1-based) for the active conversation.
+     */
+    public async saveCompletedPlannerStepIndices(indices: number[]): Promise<void> {
+        const activeConv = this.getActive();
+        if (!activeConv) return;
+        const key = 'baykar.planner.completedSteps';
+        const map = this.context.workspaceState.get<Record<string, number[]>>(key) || {};
+        const cleaned = Array.from(new Set((Array.isArray(indices) ? indices : [])
+            .map(n => Number(n))
+            .filter(n => Number.isFinite(n) && n > 0)))
+            .sort((a, b) => a - b);
+        map[activeConv.id] = cleaned;
+        await this.context.workspaceState.update(key, map);
+    }
+
+    /**
+     * Get completed step indices (1-based) for the active conversation, if stored.
+     */
+    public getCompletedPlannerStepIndices(): number[] | undefined {
+        const activeConv = this.getActive();
+        if (!activeConv) return undefined;
+        const key = 'baykar.planner.completedSteps';
+        const map = this.context.workspaceState.get<Record<string, number[]>>(key) || {};
+        const arr = map[activeConv.id];
+        if (!Array.isArray(arr) || arr.length === 0) return undefined;
+        return arr.filter(n => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
+    }
     
     public removeLastMessage(): void {
         const activeConv = this.getActive();

@@ -170,6 +170,16 @@ pre code.hljs {
     color: #8a8a8a;
 }
 
+/* Adım satırları (placeholder içinde tool/args logları) */
+.step-line {
+    display: block;
+    margin: 2px 0;
+    font-size: 13px;
+}
+.running-line {
+    animation: aiPulse 1.2s ease-in-out infinite; /* sadece çalışan satıra pulse */
+}
+
 /* Planner steps message (küçük listeler için) */
 .planner-steps-message .message-content ol {
     margin: 0;

@@ -183,9 +183,13 @@ export function initMessageListener() {
 
             // --- Planner streaming UI parça mesajı ---
             case 'plannerUiChunk': {
-                const { isAgentModeActive, isIndexingEnabled } = getState();
+                const { isAgentModeActive, isIndexingEnabled, isAgentActMode } = getState();
                 if (!(isAgentModeActive && isIndexingEnabled)) {
                     // Index modu kapalıysa planlama bildirimi göstermeyelim
+                    break;
+                }
+                // ACT modunda: planlama akışı başlık/placeholder'ını güncellemeyelim (adım satırlarını ezmesin)
+                if (isAgentActMode) {
                     break;
                 }
                 // PLAN AKIŞI: Index aktifken shimmer ve başlık
@@ -197,7 +201,10 @@ export function initMessageListener() {
                     }
                     ChatView.setPlannerStreaming(true);
                     ChatView.setShimmerActive(true);
-                    ChatView.replaceStreamingPlaceholderHeader('İvme planlıyor...');
+                    // Act modunda plan başlığı yerine "düşünüyor" göster
+                    const { isAgentActMode } = getState();
+                    const headerText = isAgentActMode ? (DOM.getText('thinking') || 'İvme düşünüyor...') : 'İvme planlıyor...';
+                    ChatView.replaceStreamingPlaceholderHeader(headerText);
                 } catch (e) {
                     console.warn('plannerUiChunk render error', e);
                 }

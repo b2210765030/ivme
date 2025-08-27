@@ -1097,14 +1097,18 @@ export function showStepExecutionPlaceholder(label) {
     }
     // Execution aşamasında planner streaming başlığını ve içeriğini temizle
     setPlannerStreaming(false);
-    setShimmerActive(true);
+    // Placeholder genel pulse'u kapat; sadece running satır pulse yapsın
+    setShimmerActive(false);
     const el = document.getElementById('ai-streaming-placeholder');
     try { summaryTargetEl = el; } catch (e) {}
     const contentElement = el?.querySelector('.message-content');
     if (contentElement) {
-        // Planlama başlığını ve önceki içerikleri temizle
-        contentElement.innerHTML = '';
-        // Her adım için ayrı blok satır kullan (display: block)
+        const hasExistingStepLines = contentElement.querySelector('.step-line') != null;
+        if (!hasExistingStepLines) {
+            // İlk adım: "İvme düşünüyor..." başlığını kaldır
+            contentElement.innerHTML = '';
+        }
+        // Her adım için yeni bir satır ekle (öncekiler kalsın)
         const line = document.createElement('div');
         line.className = 'step-line running-line';
         line.textContent = String(label || '');
@@ -1121,7 +1125,12 @@ export function finishStepExecutionPlaceholder(label, elapsedMs, error) {
     if (!contentElement) return;
     const seconds = Math.max(0, Number(elapsedMs || 0) / 1000).toFixed(2);
     const finalText = `${label} (${seconds}s)` + (error ? ` — Hata: ${error}` : '');
-    const running = contentElement.querySelector('.running-line');
+    // ACT modunda: sadece son running-line'ı tamamlanmışa çevir, önceki satırları koru
+    let running = null;
+    try {
+        const lines = contentElement.querySelectorAll('.running-line');
+        if (lines && lines.length > 0) running = lines[lines.length - 1];
+    } catch (e) { running = contentElement.querySelector('.running-line'); }
     const soft = document.createElement('div');
     soft.className = 'step-line planned-soft';
     soft.textContent = finalText;
@@ -1416,17 +1425,18 @@ export function clear(playVideo = true) {
 
     if (DOM.welcomeVideo) {
         if (playVideo) {
-            DOM.welcomeVideo.currentTime = 0;
-            DOM.welcomeVideo.play();
+            try { DOM.welcomeVideo.currentTime = 0; } catch (e) {}
+            try { DOM.welcomeVideo.play(); } catch (e) {}
             DOM.welcomeVideo.classList.remove('video-hidden');
         } else {
-            DOM.welcomeVideo.pause();
+            try { DOM.welcomeVideo.pause(); } catch (e) {}
             DOM.welcomeVideo.classList.add('video-hidden');
         }
     }
     resetChatState();
     setPlaceholder();
     recalculateTotalAndUpdateUI();
+    try { focusInput(); } catch (e) {}
 }
 
 export function load(messages) {

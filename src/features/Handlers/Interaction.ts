@@ -101,11 +101,31 @@ export class InteractionHandler {
                 // Streaming: ui_text parçalarını anında UI'a ilet
                 // Planner'ı hafızadaki son özetle zenginleştir
                 const latestSummary = this.conversationManager.getPlannerSummaryMemory?.();
-                // Prepare previous plan JSON and executed step indices for revision
-                const prevPlanJson = this.lastPlannerPlan ? JSON.stringify(this.lastPlannerPlan) : undefined;
-                const completedIndices = Array.isArray(Array.from(this.executedStepIndices)) && this.executedStepIndices.size > 0
-                    ? Array.from(this.executedStepIndices)
-                    : undefined;
+                // Persisted state: previous plan and completed steps
+                let prevPlanJson: string | undefined = this.lastPlannerPlan ? JSON.stringify(this.lastPlannerPlan) : undefined;
+                if (!prevPlanJson) {
+                    try {
+                        const saved = this.conversationManager.getLastPlannerPlanJson?.();
+                        if (typeof saved === 'string' && saved.trim().length > 0) {
+                            prevPlanJson = saved;
+                            try { this.lastPlannerPlan = JSON.parse(saved); } catch {}
+                        }
+                    } catch {}
+                }
+                // Completed indices (1-based) — prefer in-memory, else load persisted
+                let completedIndices: number[] | undefined;
+                if (this.executedStepIndices && this.executedStepIndices.size > 0) {
+                    completedIndices = Array.from(this.executedStepIndices).map(i => i + 1);
+                } else {
+                    try {
+                        const savedCompleted = this.conversationManager.getCompletedPlannerStepIndices?.();
+                        if (Array.isArray(savedCompleted) && savedCompleted.length > 0) {
+                            completedIndices = savedCompleted;
+                            // Also hydrate in-memory zero-based set for UI coherence
+                            this.executedStepIndices = new Set(savedCompleted.map(n => Math.max(0, Number(n) - 1)).filter(n => Number.isFinite(n) && n >= 0));
+                        }
+                    } catch {}
+                }
                 // Build focused context from Agent mode (active editor) if available
                 const agentFile = this.contextManager.agentFileContext;
                 const agentSel = this.contextManager.agentSelectionContext;
@@ -159,12 +179,14 @@ export class InteractionHandler {
                 } catch {
                     this.webview.postMessage({ type: 'plannerResult', payload: { plan } });
                 }
-                // Planı hafızada tut
+                // Planı hafızada tut ve kalıcı hale getir
                 this.lastPlannerPlan = plan;
-                // Yeni plan için yürütülen adım izlerini sıfırla
+                try { await this.conversationManager.saveLastPlannerPlanJson(JSON.stringify(plan)); } catch {}
+                // Yeni plan için yürütülen adım izlerini sıfırla ve kalıcı completed listesini temizle
                 this.executedStepIndices = new Set();
                 this.executedStepLogs = [];
                 this.didEmitSummaryNote = false;
+                try { await this.conversationManager.saveCompletedPlannerStepIndices([]); } catch {}
                 this.currentRequestController = null;
 
                 // Plan finalize edildikten sonra, aynı placeholder altında açıklamayı stream et
@@ -211,14 +233,10 @@ export class InteractionHandler {
         }
         const ctx = this.conversationManager.getExtensionContext();
         const step = this.lastPlannerPlan.steps[stepIndex];
-        const label = this.formatStepLabel(step);
-        const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-        // Kalıcılık: Adım başlangıcını da konuşma geçmişine yaz
-        try {
-            this.conversationManager.addMessage('assistant', `Adım başlıyor: ${label}`);
-        } catch {}
-        // UI placeholder: başlat
-        this.webview.postMessage({ type: 'stepExecStart', payload: { index: stepIndex, label } });
+        // Not: ACT modunda kullanıcı, çalıştırılan gerçek tool ve argümanları görmek istiyor.
+        // Bu nedenle label'ı tool/args seçimi tamamlandıktan sonra oluşturacağız.
+        let label = '';
+        let t0 = 0;
 
         const attemptCount = useManualArgs ? 1 : 3;
         let lastError: any = null;
@@ -387,6 +405,18 @@ export class InteractionHandler {
                         }
                     }
                 } catch {}
+                // ACT görselleştirme: gerçek tool ve args ile label oluştur ve UI'da pulse başlat
+                try {
+                    label = this.formatToolAndArgsDisplay(selection.tool, selection.args);
+                } catch {
+                    label = this.formatStepLabel(this.lastPlannerPlan.steps[stepIndex]);
+                }
+                // Kalıcılık: Adım başlangıcını da konuşma geçmişine yaz
+                try { this.conversationManager.addMessage('assistant', `Adım başlıyor: ${label}`); } catch {}
+                // UI placeholder: başlat (pulse)
+                this.webview.postMessage({ type: 'stepExecStart', payload: { index: stepIndex, label } });
+                // Süre ölçümünü sadece gerçek araç çalışması için başlat
+                t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
                 const result = await this.executor.executeStep(ctx, this.apiManager, this.lastPlannerPlan, stepIndex);
                 // Capture token usage produced by the tool's internal LLM calls (if any)
                 try {
@@ -411,6 +441,8 @@ export class InteractionHandler {
                 const log = { label, elapsedMs };
                 this.executedStepLogs.push(log);
                 this.executedStepIndices.add(stepIndex);
+                // Persist completed steps (1-based)
+                try { await this.conversationManager.saveCompletedPlannerStepIndices(Array.from(this.executedStepIndices).map(i => i + 1)); } catch {}
                 // Persist execution record to conversation memory (for future planning continuity)
                 try {
                     await this.conversationManager.addPlannerExecution({
@@ -451,6 +483,8 @@ export class InteractionHandler {
                 } catch {}
                 const log = { label, elapsedMs, error: e?.message || String(e) };
                 this.executedStepLogs.push(log);
+                // Persist completed/failed step index as well (considered handled)
+                try { await this.conversationManager.saveCompletedPlannerStepIndices(Array.from(this.executedStepIndices).map(i => i + 1)); } catch {}
                 // Persist failed execution as well for continuity
                 try {
                     await this.conversationManager.addPlannerExecution({
@@ -674,6 +708,8 @@ export class InteractionHandler {
             // Basit doğrulama: nesne mi?
             if (typeof newStep !== 'object' || newStep == null) throw new Error('Geçersiz adım verisi');
             this.lastPlannerPlan.steps[stepIndex] = newStep as any;
+            // Plan değişti: kalıcı hale getir
+            try { await this.conversationManager.saveLastPlannerPlanJson(JSON.stringify(this.lastPlannerPlan)); } catch {}
         } catch (e) {
             console.error('[Interaction] updatePlannerStep error:', e);
             throw e;
@@ -706,6 +742,10 @@ export class InteractionHandler {
             
             // Execution tracking'i güncelle: ekleme noktasından sonraki tüm indeksleri kaydır
             this.updateExecutionTrackingAfterInsertion(targetIndex);
+            // Persist execution tracking after insert (1-based)
+            try { await this.conversationManager.saveCompletedPlannerStepIndices(Array.from(this.executedStepIndices).map(i => i + 1)); } catch {}
+            // Plan değişti: kalıcı hale getir
+            try { await this.conversationManager.saveLastPlannerPlanJson(JSON.stringify(this.lastPlannerPlan)); } catch {}
             
             // UI'ı güncelle - yeni planı webview'e gönder
             this.webview.postMessage({
@@ -749,6 +789,10 @@ export class InteractionHandler {
                 }
             }
             this.executedStepIndices = newExecuted;
+            // Persist execution tracking after delete (1-based)
+            try { await this.conversationManager.saveCompletedPlannerStepIndices(Array.from(this.executedStepIndices).map(i => i + 1)); } catch {}
+            // Plan değişti: kalıcı hale getir
+            try { await this.conversationManager.saveLastPlannerPlanJson(JSON.stringify(this.lastPlannerPlan)); } catch {}
 
             // UI'ı güncelle - yeni planı webview'e gönder
             this.webview.postMessage({ type: 'plannerStepDeleted', payload: { plan: this.lastPlannerPlan, deletedIndex: stepIndex } });
@@ -865,6 +909,50 @@ export class InteractionHandler {
         }
     }
 
+    /** ACT modunda UI'da gösterilecek net tool+args etiketini oluşturur. */
+    private formatToolAndArgsDisplay(tool: string, args: any): string {
+        try {
+            const safeTool = String(tool || 'tool').trim();
+            const q = (s?: string) => (typeof s === 'string' && s.trim().length > 0 ? s.trim() : undefined);
+            switch (safeTool) {
+                case 'check_index': {
+                    const files = Array.isArray(args?.files) ? args.files : (args?.file ? [String(args.file)] : []);
+                    return `check index ${files.join(', ')}`.trim();
+                }
+                case 'search': {
+                    const kw = Array.isArray(args?.keywords) ? args.keywords.join(' ') : q(args?.query) || '';
+                    return `search ${kw}`.trim();
+                }
+                case 'locate_code': {
+                    return `locate ${q(args?.name) || q(args?.pattern) || ''}`.trim();
+                }
+                case 'retrieve_chunks': {
+                    return `retrieve ${q(args?.query) || ''}`.trim();
+                }
+                case 'create_file': {
+                    return `create file ${q(args?.path) || ''}`.trim();
+                }
+                case 'edit_file': {
+                    return `edit file ${q(args?.path) || q(args?.use_saved_range) || ''}`.trim();
+                }
+                case 'append_file': {
+                    return `append file ${q(args?.path) || ''}`.trim();
+                }
+                default: {
+                    // Genel gösterim: kısa JSON args (kırpılmış)
+                    let argsShort = '';
+                    try {
+                        const json = JSON.stringify(args ?? {}, null, 0);
+                        argsShort = json.length > 120 ? (json.slice(0, 117) + '...') : json;
+                    } catch { argsShort = ''; }
+                    return argsShort && argsShort !== '{}' ? `${safeTool} ${argsShort}` : `${safeTool}`;
+                }
+            }
+        } catch {
+            return String(tool || 'tool');
+        }
+    }
+
     /** UI'dan manuel araç/argüman sağlanırsa bu metot çağrılır ve seçim aşaması atlanır. */
     public async provideManualToolArgs(stepIndex: number, tool: string, args: any): Promise<void> {
         if (!this.lastPlannerPlan) return;
@@ -886,6 +974,8 @@ export class InteractionHandler {
         const label = this.formatStepLabel(step);
         // İşaretle ve UI'a bildir
         this.executedStepIndices.add(stepIndex);
+        // Persist completed (skipped) steps as well (1-based)
+        try { await this.conversationManager.saveCompletedPlannerStepIndices(Array.from(this.executedStepIndices).map(i => i + 1)); } catch {}
         this.webview.postMessage({ type: 'stepSkipped', payload: { index: stepIndex, label } });
         try {
             if (this.lastPlannerPlan && this.executedStepIndices.size >= this.lastPlannerPlan.steps.length) {
@@ -1041,9 +1131,20 @@ export class InteractionHandler {
         const cancellationSignal = this.currentRequestController.signal;
         // Yeni placeholder açma — aynı mesajda devam edeceğiz, sadece markdown açıklama gelecek
 
-        // Promptu hazırla
-        const planJson = JSON.stringify(plan, null, 2);
-        const stepCount = Array.isArray((plan as any)?.steps) ? (plan as any).steps.length : 0;
+        // Promptu hazırla — açıklamada ÖNCE TAMAMLANAN ADIMLARI gizle
+        let planForExplanation = plan;
+        try {
+            const completed1Based = this.conversationManager.getCompletedPlannerStepIndices?.();
+            if (Array.isArray(completed1Based) && completed1Based.length > 0) {
+                const set = new Set<number>(completed1Based);
+                const filtered = Array.isArray((plan as any)?.steps)
+                    ? (plan as any).steps.filter((s: any) => !set.has(Number(s?.step)))
+                    : [];
+                planForExplanation = { steps: filtered } as any;
+            }
+        } catch {}
+        const planJson = JSON.stringify(planForExplanation, null, 2);
+        const stepCount = Array.isArray((planForExplanation as any)?.steps) ? (planForExplanation as any).steps.length : 0;
         const stepsTemplate = Array.from({ length: stepCount }, (_, i) => `${i + 1}) <kısa cümle>`).join('\n');
 
         const systemInstruction = [

@@ -630,7 +630,20 @@ export async function run_planner(
 				if (!basePlan || !Array.isArray(basePlan.steps)) {
 					throw new Error('Revizyon için geçerli bir önceki plan bulunamadı.');
 				}
+				// DETERMINISTIK KORUMA: Tamamlanmış adımları baz plandan çıkar
+				try {
+					if (Array.isArray(completedStepIndices) && completedStepIndices.length > 0) {
+						const set = new Set<number>(completedStepIndices.map(n => Number(n)).filter(n => Number.isFinite(n) && n > 0));
+						basePlan.steps = basePlan.steps.filter((s: any) => !set.has(Number(s?.step)));
+					}
+				} catch {}
 				const merged = applyDeltaChangesToPlan(basePlan, delta);
+				// DETERMINISTIK KORUMA: Delta sonrası completed adımları tekrar dahil etme
+				try {
+					if (Array.isArray(completedStepIndices) && completedStepIndices.length > 0) {
+						merged.steps = merged.steps.filter((s: any) => !new Set<number>(completedStepIndices as number[]).has(Number(s?.step)));
+					}
+				} catch {}
 				return parse_and_validate_plan(merged);
 			} catch (e) {
 				console.error('Tool-call delta JSON parse/apply failed:', fn?.arguments, e);

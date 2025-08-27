@@ -251,17 +251,21 @@ export function updateIndexerProgress(value, message = '') {
 
 // YENİ: İndeksleme açık/kapalı durumunu ayarlar
 export function setIndexingEnabledState(enabled) {
-    isIndexingEnabled = enabled;
-    // İndeksleme durumunu localStorage'a kaydet
+    // hasIndex false ise, enabled durumunu zorla false yapın
+    const finalEnabledState = hasIndex ? enabled : false;
+    isIndexingEnabled = finalEnabledState;
+    
     localStorage.setItem('indexingEnabled', isIndexingEnabled.toString());
+    
     const startBtn = DOM.indexerStartButton;
     if (startBtn) {
-        if (enabled) {
+        // hasIndex durumu false ise butonu zaten devre dışı bırakırız.
+        if (finalEnabledState) {
             startBtn.classList.add('indexing-enabled');
-            startBtn.title = 'İndeksleme aktif - Kapatmak için tıklayın';
+            startBtn.title = DOM.getText('indexingEnabledTitle'); // Yeni bir i18n key ekleyin
         } else {
             startBtn.classList.remove('indexing-enabled');
-            startBtn.title = 'İndeksleme kapalı - Açmak için tıklayın';
+            startBtn.title = DOM.getText('indexingDisabledTitle'); // Yeni bir i18n key ekleyin
         }
     }
 
@@ -364,9 +368,11 @@ export function setHasIndex(value) {
         if (!hasIndex) {
             startBtn.classList.add('no-index');
             startBtn.setAttribute('aria-disabled', 'true');
+            startBtn.disabled = true;
         } else {
             startBtn.classList.remove('no-index');
             startBtn.removeAttribute('aria-disabled');
+            startBtn.disabled = false;
         }
     }
     // Eğer retrieval açıksa ve şimdi vektör oluştuysa input'ı tamamlanmış yap
@@ -638,6 +644,7 @@ export function applyVideoState() {
     if (DOM.welcomeVideo) {
         if (isBackgroundVideoEnabled) {
             DOM.welcomeVideo.style.display = 'block';
+            try { DOM.welcomeVideo.play(); } catch (e) {}
         } else {
             DOM.welcomeVideo.style.display = 'none';
             DOM.welcomeVideo.pause();

@@ -9,14 +9,33 @@ import * as path from 'path';
 import { EXTENSION_ID, SETTINGS_KEYS, RETRIEVAL_DEFAULTS } from '../core/constants';
 import { CodeChunkMetadata } from '../types';
 
-export function isIndexingEnabled(): boolean {
+export async function hasVectorStore(context: vscode.ExtensionContext): Promise<boolean> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        return false;
+    }
+    const storageUri = vscode.Uri.joinPath(workspaceFolder.uri, '.ivme', 'vector_store.json');
+    try {
+        await vscode.workspace.fs.stat(storageUri);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+export async function isIndexingEnabled(context: vscode.ExtensionContext): Promise<boolean> {
     const config = vscode.workspace.getConfiguration(EXTENSION_ID);
-    return config.get<boolean>(SETTINGS_KEYS.indexingEnabled, RETRIEVAL_DEFAULTS.INDEXING_ENABLED_DEFAULT);
+    const settingEnabled = config.get<boolean>(SETTINGS_KEYS.indexingEnabled, RETRIEVAL_DEFAULTS.INDEXING_ENABLED_DEFAULT);
+    const indexExists = await hasVectorStore(context);
+    if (!indexExists) {
+        return false;
+    }
+    return settingEnabled;
 }
 
 export async function loadVectorStoreChunks(context: vscode.ExtensionContext): Promise<CodeChunkMetadata[]> {
     // İndeksleme kapalıysa boş dizi döndür
-    if (!isIndexingEnabled()) {
+    if (!(await isIndexingEnabled(context))) {
         return [];
     }
 

@@ -37,6 +37,8 @@ export const SETTINGS_KEYS = {
     indexingExcludeGlobs: 'indexing.excludeGlobs',
     indexingVectorStorePath: 'indexing.vectorStorePath',
     indexingEnabled: 'indexing.enabled',
+    indexingSummaryTimeoutMs: 'indexing.summaryTimeoutMs',
+    indexingEmbeddingTimeoutMs: 'indexing.embeddingTimeoutMs',
     // vLLM
     vllmBaseUrl: 'vllm.baseUrl',
     vllmModelName: 'vllm.modelName',
@@ -76,6 +78,12 @@ export const RETRIEVAL_DEFAULTS = {
     RERANK_TOP_N: 10,
     MAX_CONTEXT_TOKENS: 10000,
     INDEXING_ENABLED_DEFAULT: true
+};
+
+// --- Indexing Timeouts (defaults, can be overridden via settings) ---
+export const INDEXING_TIMEOUTS = {
+    SUMMARY_TIMEOUT_MS: 25000,
+    EMBEDDING_TIMEOUT_MS: 45000
 };
 
 // --- User Interface Messages ---

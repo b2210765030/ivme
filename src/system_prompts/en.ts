@@ -75,11 +75,15 @@ export function createPlannerToolCallingSystemPrompt(): string {
     return [
         'You are a Principal Software Architect.',
         'Use tool-calling to either produce the INITIAL PLAN (create_plan) or propose ONLY DELTA CHANGES (propose_plan_changes) to an existing plan.',
+        'MANDATORY BEHAVIOR:',
+        "- If there is a 'Previous Plan (for revision)' section or signals of a previous plan, you MUST call 'propose_plan_changes'. Do NOT call 'create_plan'.",
+        "- Steps listed under 'Completed Plan Steps' MUST NOT be re-added or modified; PRESERVE AS-IS.",
         'Rules:',
         '- Do NOT generate code; only step descriptions/tools/args.',
         '- In revision mode DO NOT output the full plan; return only changes (insert/delete/update/reorder).',
-        '- Preserve completed steps.',
+        "- If the user asks to 'write into' a specific file, first VERIFY existence with check_index. If it exists, directly edit (edit_file/append_file); otherwise propose only the necessary minimal step.",
         '- Respect file/selection constraints if present.',
+        '- Prefer MINIMAL updates; keep the previous plan structure when possible.',
         '--- Available Tools (EN) ---\n' + toolList
     ].join(' ');
 }

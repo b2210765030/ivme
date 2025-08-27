@@ -2,7 +2,7 @@
   "name": "ivme-ivme",
   "displayName": "İvme",
   "description": "LLM kullanarak kod hatalarını otomatik düzelten bir VS Code eklentisi.",
-  "version": "2.2.4",
+  "version": "2.2.5",
   "publisher": "ivme",
   "repository": {
     "type": "git",
@@ -148,6 +148,20 @@
           "default": true,
           "description": "İndeksleme özelliğini açar veya kapatır. Kapalıyken retrieval işlemi yapılmaz."
         },
+        "baykar-ai-fixer.indexing.summaryTimeoutMs": {
+          "type": "number",
+          "default": 25000,
+          "minimum": 5000,
+          "maximum": 120000,
+          "description": "Özet üretimi için zaman aşımı (ms). Daha büyük dosyalar için yükseltin."
+        },
+        "baykar-ai-fixer.indexing.embeddingTimeoutMs": {
+          "type": "number",
+          "default": 45000,
+          "minimum": 5000,
+          "maximum": 180000,
+          "description": "Embedding üretimi için zaman aşımı (ms). vLLM yoğun olduğunda yükseltin."
+        },
         "baykar-ai-fixer.vllm.baseUrl": {
           "type": "string",
           "default": "http://ivme.baykar.tech/coder/v1",
@@ -157,6 +171,11 @@
           "type": "string",
           "default": "o3-Qwen3-Coder-30B-A3B-Instruct",
           "description": "vLLM sunucusunda kullanılacak modelin adı."
+        },
+        "baykar-ai-fixer.vllm.embeddingModelName": {
+          "type": "string",
+          "default": "",
+          "description": "Opsiyonel: vLLM için ayrı bir embedding modeli adı. Boşsa ana model adı kullanılır."
         },
         "baykar-ai-fixer.gemini.apiKey": {
           "type": "string",

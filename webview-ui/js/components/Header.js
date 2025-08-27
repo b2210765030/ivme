@@ -12,6 +12,7 @@ import { refreshPlannerPanelVisibility } from './chat_view.js';
 
 export function init() {
     DOM.logoButton?.addEventListener('click', () => {
+        if (getState().isUiBlocked) return;
         VsCode.postMessage('showPresentation');
     });
 
@@ -27,6 +28,7 @@ export function init() {
 
         VsCode.postMessage('languageChanged', { language: getState().currentLanguage });
         languageToggle.addEventListener('change', () => {
+            if (getState().isUiBlocked) return;
             const lang = languageToggle.checked ? 'en' : 'tr';
             setLanguage(lang);
             updateUITexts(); // UI metinlerini güncelle
@@ -40,6 +42,7 @@ export function init() {
     });
     
     DOM.feedbackButton?.addEventListener('click', () => {
+        if (getState().isUiBlocked) return;
         VsCode.postMessage('showFeedbackMessage');
     });
 

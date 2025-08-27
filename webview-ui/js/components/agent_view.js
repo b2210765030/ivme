@@ -20,6 +20,7 @@ export function init() {
     // 1) Başlangıçta sadece ikon butonu görünür kalır (collapsed)
     if (collapsedBtn && agentStatusBar) {
         collapsedBtn.addEventListener('click', () => {
+            if (getState().isUiBlocked) return;
             // Bağlamı göster
             agentStatusBar.classList.remove('hidden');
             collapsedBtn.classList.add('hidden');
@@ -34,6 +35,7 @@ export function init() {
     if (agentStatusHide && collapsedBtn && agentStatusBar) {
         agentStatusHide.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (getState().isUiBlocked) return;
             // Seçimi tamamen temizle (label dosya adına dönsün)
             try { VsCode.postMessage('clearAgentSelection'); } catch {}
             // Bağlam barını kapat
@@ -49,6 +51,7 @@ export function init() {
     if (agentSelectionToggle) {
         agentSelectionToggle.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (getState().isUiBlocked) return;
             const opened = toggleAgentSelectionPopover();
             agentSelectionToggle.textContent = opened ? '▾' : '▴';
             agentSelectionToggle.title = opened ? 'Seçimi gizle' : 'Seçimi göster';
@@ -82,6 +85,7 @@ export function init() {
         // Buton artık tek bir baloncuk: tıklayınca menü açılır. Kısa tıklama ile anında mod değiştirme yok.
         modeButton.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (getState().isUiBlocked) return;
             if (!menu) return;
             const isHidden = menu.classList.toggle('hidden');
             menu.setAttribute('aria-hidden', isHidden ? 'true' : 'false');
@@ -105,6 +109,7 @@ export function init() {
             menu.querySelectorAll('.mode-menu-item').forEach(item => {
                 item.addEventListener('click', (ev) => {
                     ev.stopPropagation();
+                    if (getState().isUiBlocked) return;
                     const mode = item.getAttribute('data-mode');
                     const isAgent = mode === 'agent';
                     // update UI label
@@ -145,6 +150,7 @@ export function init() {
     // Toggle click/change -> state'e yaz ve persist et
     if (planActSwitch) {
         planActSwitch.addEventListener('change', () => {
+            if (getState().isUiBlocked) { planActSwitch.checked = !!getState().isAgentActMode; return; }
             const prevAct = !!getState().isAgentActMode;
             const nextAct = !!planActSwitch.checked;
             setAgentActMode(nextAct);

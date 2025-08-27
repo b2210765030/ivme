@@ -4,11 +4,13 @@
    
 import * as DOM from '../utils/dom.js';
 import * as VsCode from '../services/vscode.js';
+import { getState } from '../core/state.js';
 
 // --- Public Fonksiyonlar ---
 
 export function init() {
     DOM.historyButton.addEventListener('click', () => {
+        if (getState().isUiBlocked) return;
         const isHidden = DOM.historyPanel.classList.toggle('hidden');
         if (!isHidden) {
             VsCode.postMessage('requestHistory');

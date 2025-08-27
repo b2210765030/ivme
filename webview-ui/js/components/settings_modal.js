@@ -218,6 +218,7 @@ async function createCustomTool(toolData) {
 
 export function init() {
     DOM.settingsButton.addEventListener('click', () => {
+        if (getState().isUiBlocked) return;
         VsCode.postMessage('requestConfig');
         DOM.settingsModal.classList.remove('hidden');
         // Populate tools table when modal opens
@@ -234,6 +235,7 @@ export function init() {
 
     DOM.navButtons.forEach(button => {
         button.addEventListener('click', () => {
+            if (getState().isUiBlocked) return;
             const currentActiveButton = document.querySelector('.nav-button.active');
             if (currentActiveButton === button) return;
             
@@ -245,7 +247,10 @@ export function init() {
         });
     });
 
-    DOM.serviceSelect.addEventListener('change', handleServiceChange);
+    DOM.serviceSelect.addEventListener('change', () => {
+        if (getState().isUiBlocked) return;
+        handleServiceChange();
+    });
 
     // Temperature slider live label update + ensure precision is preserved
     if (DOM.temperatureInput && DOM.temperatureLabel) {
@@ -267,6 +272,7 @@ export function init() {
 
         // Değiştiğinde state'i güncelle
         videoToggle.addEventListener('change', (event) => {
+            if (getState().isUiBlocked) return;
             setBackgroundVideoEnabled(event.currentTarget.checked);
         });
     }
@@ -285,12 +291,14 @@ export function init() {
         plannerToolsToggle.checked = getState().isPlannerToolsVisible;
         // Değiştiğinde state'i güncelle
         plannerToolsToggle.addEventListener('change', (event) => {
+            if (getState().isUiBlocked) return;
             setPlannerToolsVisible(event.currentTarget.checked);
         });
     }
 
     DOM.settingsForm.addEventListener('submit', (event) => {
         event.preventDefault();
+        if (getState().isUiBlocked) return;
         
         const errorContainer = document.getElementById('vllm-connection-error');
         if (errorContainer) {
