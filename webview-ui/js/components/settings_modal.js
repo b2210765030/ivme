@@ -34,10 +34,11 @@ function setupToolButtons() {
     const addToolButton = document.getElementById('add-tool-button');
     if (addToolButton) {
         // Ensure previously bound listener is removed
+        try { addToolButton.removeEventListener('click', openWarningModal); } catch (e) {}
         try { addToolButton.removeEventListener('click', openToolCreator); } catch (e) {}
         // If the button is disabled (feature gated), do not bind click handler so it's not clickable
         if (!addToolButton.disabled && addToolButton.getAttribute('aria-disabled') !== 'true') {
-            addToolButton.addEventListener('click', openToolCreator);
+            addToolButton.addEventListener('click', openWarningModal);
         }
     }
 }
@@ -138,6 +139,42 @@ function openToolCreator() {
         modal.classList.remove('hidden');
         // Clear form
         document.getElementById('tool-creator-form').reset();
+    }
+}
+
+function openToolCreatorForm() {
+    const modal = document.getElementById('tool-creator-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        const form = document.getElementById('tool-creator-form');
+        if (form && typeof form.reset === 'function') form.reset();
+    }
+}
+
+function openWarningModal() {
+    const warningModal = document.getElementById('feature-warning-modal');
+    if (warningModal) {
+        warningModal.classList.remove('hidden');
+        const confirmBtn = document.getElementById('confirm-warning');
+        const cancelBtn = document.getElementById('cancel-warning');
+        if (confirmBtn && !confirmBtn.dataset.bound) {
+            confirmBtn.dataset.bound = '1';
+            confirmBtn.addEventListener('click', () => {
+                warningModal.classList.add('hidden');
+                openToolCreatorForm();
+            });
+        }
+        if (cancelBtn && !cancelBtn.dataset.bound) {
+            cancelBtn.dataset.bound = '1';
+            cancelBtn.addEventListener('click', () => warningModal.classList.add('hidden'));
+        }
+        // Close when clicking outside content
+        warningModal.addEventListener('click', (event) => {
+            if (event.target === warningModal) warningModal.classList.add('hidden');
+        }, { once: true });
+    } else {
+        // Fallback: open form directly if modal not found
+        openToolCreatorForm();
     }
 }
 

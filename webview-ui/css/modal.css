@@ -27,6 +27,20 @@
     z-index: 1100;
 }
 
+/* Ensure Feature Warning modal stacks above Settings modal (and near Tool Code) */
+#feature-warning-modal {
+    z-index: 1125;
+}
+
+/* Inherit VS Code font stack explicitly for confirm modals */
+#feature-warning-modal .confirm-modal-content {
+    font-family: var(--vscode-font-family, inherit);
+}
+
+/* Ensure Tool Creator modal stacks appropriately and inherits font */
+#tool-creator-modal { z-index: 1110; }
+#tool-creator-modal .tool-creator-modal-content { font-family: var(--vscode-font-family, inherit); }
+
 .modal-content {
     width: 90%;
     max-width: 750px;

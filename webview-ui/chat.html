@@ -237,6 +237,19 @@
                         </div>
                     </div>
                     <div id="pane-developer" class="settings-pane">
+
+                        <div class="form-group form-group-toggle">
+                            <div class="toggle-label-group">
+                                <label for="planner-tools-toggle-switch">Akıllı Planlama Asistanı</label>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="planner-tools-toggle-switch">
+                                <span class="slider round"></span>
+                            </label>
+                            <p class="form-group-description">Agent ile ortaklaşa çalışarak planlama sürecini yönetmenizi sağlar. Her bir plan adımına ait araç seçimlerini ve düzenleme seçeneklerini açarak sürece tam hakimiyet kurun.</p>
+                        </div>
+
+                        <!-- ReAct Modu -->
                         <div class="form-group form-group-toggle">
                             <div class="toggle-label-group">
                                 <label for="react-toggle-switch">ReAct Modu <span class="small-note">(Yakında...)</span></label>
@@ -257,16 +270,7 @@
                             </label>
                             <p class="form-group-description">Yazım sırasında öneriler sunar. Bu özellik yakında gelecek.</p>
                         </div>
-                        <div class="form-group form-group-toggle">
-                            <div class="toggle-label-group">
-                                <label for="planner-tools-toggle-switch">Akıllı Planlama Asistanı</label>
-                            </div>
-                            <label class="switch">
-                                <input type="checkbox" id="planner-tools-toggle-switch">
-                                <span class="slider round"></span>
-                            </label>
-                            <p class="form-group-description">Agent ile ortaklaşa çalışarak planlama sürecini yönetmenizi sağlar. Her bir plan adımına ait araç seçimlerini ve düzenleme seçeneklerini açarak sürece tam hakimiyet kurun.</p>
-                        </div>
+                        
                     </div>
                     <div id="pane-tools" class="settings-pane">
                         <div class="tools-container">
@@ -283,12 +287,11 @@
                                 </div>
                             </div>
                             <div class="tools-actions">
-                                <button type="button" id="add-tool-button" class="primary-button" disabled aria-disabled="true" title="Bu özellik gelecek versiyonda aktif olacak">
+                                <button type="button" id="add-tool-button" class="primary-button">
                                     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                                         <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z"/>
                                     </svg>
                                     Yeni Araç Ekle
-                                    <span class="small-note"> — gelecek versiyonda aktif olacak</span>
                                 </button>
                             </div>
                         </div>
@@ -299,8 +302,20 @@
         </div>
     </div>
 
+    <!-- Deneysel Özellik Uyarı Modalı -->
+    <div id="feature-warning-modal" class="modal-overlay glass-overlay hidden">
+        <div class="modal-content confirm-modal-content">
+            <h3>Deneysel Özellik Uyarısı</h3>
+            <p>Bu özellik şu anda deneysel aşamadadır ve beklenmeyen davranışlara yol açabilir. Devam etmek istiyor musunuz?</p>
+            <div class="modal-actions">
+                <button id="cancel-warning" class="secondary-button">İptal</button>
+                <button id="confirm-warning" class="primary-button">Devam Et</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Tool Creator Modal -->
-    <div id="tool-creator-modal" class="modal-overlay hidden">
+    <div id="tool-creator-modal" class="modal-overlay glass-overlay hidden">
         <div class="modal-content tool-creator-modal-content">
             <div class="tool-creator-header">
                 <h2>Yeni Araç Oluştur</h2>
