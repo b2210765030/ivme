@@ -203,7 +203,7 @@ export function initMessageListener() {
                     ChatView.setShimmerActive(true);
                     // Act modunda plan başlığı yerine "düşünüyor" göster
                     const { isAgentActMode } = getState();
-                    const headerText = isAgentActMode ? (DOM.getText('thinking') || 'İvme düşünüyor...') : 'İvme planlıyor...';
+                    const headerText = isAgentActMode ? (DOM.getText('thinking') || 'İvme düşünüyor...') : (DOM.getText('planning') || 'İvme planlıyor...');
                     ChatView.replaceStreamingPlaceholderHeader(headerText);
                 } catch (e) {
                     console.warn('plannerUiChunk render error', e);
@@ -238,7 +238,7 @@ export function initMessageListener() {
                     ChatView.showPlannerPanelWithPlan(plan);
                 } catch (e) { ChatView.showPlannerPanelWithPlan(plan); }
                 if (!plan || !Array.isArray(plan.steps)) {
-                    ChatView.showAiResponse('Plan adımları bulunamadı.');
+                    ChatView.showAiResponse(DOM.getText('noPlanSteps'));
                     break;
                 }
                 // Eğer streaming aktifleştirildiyse: plan tamamlandığında aynı mesajda "İvme planladı (Xs)" yaz ve altında açıklama için boşluk bırak

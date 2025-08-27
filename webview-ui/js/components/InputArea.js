@@ -20,7 +20,7 @@ function handleSendMessage() {
         if (isAgentModeActive && isIndexingEnabled) {
             setPlannerStreaming(true);
             setShimmerActive(true);
-            const headerText = isAgentActMode ? (DOM.getText('thinking') || 'İvme düşünüyor...') : 'İvme planlıyor...';
+            const headerText = isAgentActMode ? (DOM.getText('thinking') || 'İvme düşünüyor...') : (DOM.getText('planning') || 'İvme planlıyor...');
             replaceStreamingPlaceholderHeader(headerText);
         }
     } catch (e) {}

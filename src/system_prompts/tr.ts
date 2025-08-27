@@ -151,3 +151,15 @@ export function createPlannerToolCallingSystemPrompt(): string {
         "--- Kullanılabilir Araçlar (TR) ---\n" + toolList
     ].join(' ');
 }
+
+// Act sonrası özet ve öneriler (TR)
+export function createActSummaryPrompts(actionsText: string): { system: string; user: string } {
+    const system = [
+        'Türkçe ve kısa yaz. Kod blokları, başlıklar veya gereksiz süsleme yok.',
+        'Madde işareti kullanabilirsin. Önce neler yapıldığını ve nelerin eklendiğini/oluşturulduğunu belirt.',
+        "Ardından 'Önerilen sonraki adımlar' için 1-3 madde yaz.",
+        'Gerekirse kullanıcıdan onay talep eden kısa bir kapanış ekle.'
+    ].join(' ');
+    const user = `Gerçekleştirilen adımlar:\n${actionsText}\n\nÖzet ve öneriler:`;
+    return { system, user };
+}

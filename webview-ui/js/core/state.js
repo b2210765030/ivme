@@ -101,7 +101,7 @@ export function setAgentMode(isActive, activeFileName = '') {
     if (isActive) {
         agentModeButton.classList.add('active');
         if (typeof agentModeButton?.textContent === 'string') {
-            agentModeButton.textContent = 'Agent';
+            try { agentModeButton.textContent = require('../utils/dom.js').getText('agent'); } catch(e) { agentModeButton.textContent = 'Agent'; }
         }
         if (activeFileName) currentAgentFileName = activeFileName;
         if (agentStatusBar && agentStatusText) {
@@ -119,7 +119,7 @@ export function setAgentMode(isActive, activeFileName = '') {
                 agentStatusText.textContent = displayText;
             } else {
                 // Dosya adı yoksa varsayılan metin göster
-                agentStatusText.textContent = 'Agent Modu';
+                try { agentStatusText.textContent = require('../utils/dom.js').getText('agentMode'); } catch(e) { agentStatusText.textContent = 'Agent Modu'; }
             }
             
             // Bar açık ise barı göster, değilse sadece ikon göster
@@ -176,7 +176,7 @@ export function setAgentMode(isActive, activeFileName = '') {
     } else {
         agentModeButton.classList.remove('active');
         if (typeof agentModeButton?.textContent === 'string') {
-            agentModeButton.textContent = 'Chat';
+            try { agentModeButton.textContent = require('../utils/dom.js').getText('chat'); } catch(e) { agentModeButton.textContent = 'Chat'; }
         }
         // Agent kapatıldığında seçim göstergesini gizle
         clearAgentSelectionStatus();
@@ -534,8 +534,8 @@ export function setAgentSelectionStatus(fileName, startLine, endLine, content) {
             // Seçim VAR: yukarı ok görünür
             selToggle.classList.remove('hidden');
             selToggle.textContent = '▴';
-            selToggle.title = 'Seçimi göster';
-            selToggle.setAttribute('aria-label', 'Seçimi göster');
+            selToggle.title = DOM.getText('showSelection');
+            selToggle.setAttribute('aria-label', DOM.getText('showSelection'));
         }
     } catch (e) {}
     // Bar sadece kullanıcı açtıysa gösterilsin
@@ -590,7 +590,7 @@ export function toggleAgentSelectionPopover() {
         const title = `${lastAgentSelectionData.fileName} (L${lastAgentSelectionData.startLine} - L${lastAgentSelectionData.endLine})`;
         pop.innerHTML = `
             <div class="asp-popover-header"><span class="asp-popover-title">${escapeText(title)}</span>
-                <button class="asp-popover-close" title="Kapat" aria-label="Kapat">×</button>
+                <button class="asp-popover-close" title="${DOM.getText('close')}" aria-label="${DOM.getText('close')}">×</button>
             </div>
             <pre><code>${escapeText(lastAgentSelectionData.content)}</code></pre>`;
         // Append hidden to measure
@@ -701,11 +701,13 @@ export function setLanguage(lang) {
     localStorage.setItem('language', lang);
 
     if (DOM.languageWarning) {
+        // Show TR warning only in TR, hide in EN. Update text via i18n
         if (lang === 'tr') {
             DOM.languageWarning.classList.remove('invisible');
         } else {
             DOM.languageWarning.classList.add('invisible');
         }
+        try { DOM.languageWarning.textContent = DOM.getText('languageWarningText'); } catch (e) {}
     }
 
     // UI metinlerini güncelle
@@ -735,6 +737,9 @@ export function updateUITexts() {
     
     // Token tooltip'ini güncelle
     updateTokenTooltip();
+    
+    // Dil uyarı metnini güncelle
+    try { if (DOM.languageWarning) DOM.languageWarning.textContent = DOM.getText('languageWarningText'); } catch (e) {}
 }
 
 // Token tooltip'ini güncelle
@@ -812,6 +817,23 @@ function updateHTMLTexts() {
         if (actLabel) actLabel.textContent = DOM.getText('act');
     } catch(e) {}
     
+    // Planner panel bar başlığı ve toggle title
+    try {
+        const titleEl = document.querySelector('#planner-panel .planner-panel-title');
+        if (titleEl) titleEl.textContent = DOM.getText('plannerPanelTitle');
+        const toggleEl = document.getElementById('planner-panel-toggle');
+        if (toggleEl) {
+            toggleEl.title = DOM.getText('toggleOpenClose');
+            toggleEl.setAttribute('aria-label', DOM.getText('toggleOpenClose'));
+        }
+    } catch (e) {}
+    
+    // Planner action note metnini güncelle
+    try {
+        const note = document.getElementById('planner-action-note');
+        if (note) note.innerHTML = DOM.getText('plannerActionNote');
+    } catch (e) {}
+    
     // Settings modal metinlerini güncelle
     const settingsModal = document.getElementById('settings-modal');
     if (settingsModal) {
@@ -830,6 +852,12 @@ function updateHTMLTexts() {
                 button.textContent = DOM.getText('interface');
             } else if (target === 'pane-general') {
                 button.textContent = DOM.getText('general');
+            } else if (target === 'pane-tools') {
+                // Tools navigation label (TR/EN)
+                button.textContent = DOM.getText('tools');
+            } else if (target === 'pane-developer') {
+                // Developer navigation label (TR/EN)
+                button.textContent = DOM.getText('developer');
             }
         });
         
@@ -888,6 +916,49 @@ function updateHTMLTexts() {
         if (tokenLimitDesc) {
             tokenLimitDesc.textContent = DOM.getText('tokenLimitDesc');
         }
+        // Temperature label text (TR: Sıcaklık, EN: Temperature)
+        try {
+            const tempLabel = settingsModal.querySelector('label[for="temperature"]');
+            if (tempLabel) tempLabel.textContent = DOM.getText('temperature');
+        } catch (e) {}
+        
+        // Tools pane headings and table headers/texts/buttons
+        try {
+            const toolsHeader = settingsModal.querySelector('#pane-tools .tools-container h3');
+            if (toolsHeader) toolsHeader.textContent = DOM.getText('toolsHeader');
+            const toolsDesc = settingsModal.querySelector('#pane-tools .tools-container .tools-description');
+            if (toolsDesc) toolsDesc.textContent = DOM.getText('toolsDescription');
+            const nameHeader = settingsModal.querySelector('#pane-tools .tools-table-header .tool-name-header');
+            if (nameHeader) nameHeader.textContent = DOM.getText('toolNameHeader');
+            const descHeader = settingsModal.querySelector('#pane-tools .tools-table-header .tool-description-header');
+            if (descHeader) descHeader.textContent = DOM.getText('toolDescriptionHeader');
+            const actHeader = settingsModal.querySelector('#pane-tools .tools-table-header .tool-actions-header');
+            if (actHeader) actHeader.textContent = DOM.getText('toolActionsHeader');
+            const addBtn = settingsModal.querySelector('#pane-tools #add-tool-button');
+            if (addBtn) {
+                try {
+                    const textNode = Array.from(addBtn.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
+                    if (textNode) { textNode.nodeValue = ` ${DOM.getText('addToolButton')}`; }
+                    else { addBtn.innerHTML += ` ${DOM.getText('addToolButton')}`; }
+                } catch (e) { addBtn.innerHTML = addBtn.innerHTML.replace(/>([\s\S]*?)$/, `>${DOM.getText('addToolButton')}`); }
+            }
+        } catch (e) {}
+        
+        // Developer pane labels and descriptions
+        try {
+            const smartPlannerLbl = settingsModal.querySelector('label[for="planner-tools-toggle-switch"]');
+            if (smartPlannerLbl) smartPlannerLbl.textContent = DOM.getText('smartPlannerAssistant');
+            const smartPlannerDesc = settingsModal.querySelector('#pane-developer .form-group-description');
+            if (smartPlannerDesc) smartPlannerDesc.textContent = DOM.getText('smartPlannerAssistantDesc');
+            const reactLbl = settingsModal.querySelector('label[for="react-toggle-switch"]');
+            if (reactLbl) reactLbl.innerHTML = `${DOM.getText('reactMode')} <span class="small-note">(${DOM.getText('comingSoon')})</span>`;
+            const reactDesc = settingsModal.querySelector('#pane-developer .form-group:nth-of-type(2) .form-group-description');
+            if (reactDesc) reactDesc.textContent = DOM.getText('reactModeDesc');
+            const autoLbl = settingsModal.querySelector('label[for="autocomplete-toggle-switch"]');
+            if (autoLbl) autoLbl.innerHTML = `${DOM.getText('autocomplete')} <span class="small-note">(${DOM.getText('comingSoon')})</span>`;
+            const autoDesc = settingsModal.querySelector('#pane-developer .form-group:nth-of-type(3) .form-group-description');
+            if (autoDesc) autoDesc.textContent = DOM.getText('autocompleteDesc');
+        } catch (e) {}
         
         const cancelButton = settingsModal.querySelector('#cancel-settings-button');
         if (cancelButton) {
@@ -899,6 +970,28 @@ function updateHTMLTexts() {
             saveButton.textContent = DOM.getText('save');
         }
     }
+
+    // Agent mode label'ını güncelle
+    try {
+        const label = document.querySelector('#agent-mode-button .mode-label');
+        if (label) {
+            const { isAgentModeActive } = getState();
+            label.textContent = isAgentModeActive ? DOM.getText('agent') : DOM.getText('chat');
+        }
+    } catch (e) {}
+
+    // Agent selection toggle butonunun title/aria-label'ını güncelle (kapalı konum)
+    try {
+        const selToggle = document.getElementById('agent-selection-toggle');
+        if (selToggle && selToggle.classList.contains('hidden')) {
+            selToggle.title = DOM.getText('showSelection');
+            selToggle.setAttribute('aria-label', DOM.getText('showSelection'));
+        }
+    } catch (e) {}
+
+    // Genel kapat butonları
+    try { const btn = document.getElementById('close-step-json'); if (btn) btn.textContent = DOM.getText('close'); } catch (e) {}
+    try { const btn2 = document.getElementById('close-tool-code'); if (btn2) btn2.textContent = DOM.getText('close'); } catch (e) {}
 }
 
 // YENİ: Workspace adını ayarlama fonksiyonu (şimdilik sadece state'de tutuyoruz)

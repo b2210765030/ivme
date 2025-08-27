@@ -28,4 +28,8 @@ export const createContextualPrompt = (
 
 // Returns an object with `system` and `user` fields to be sent as messages
 export const createPlanExplanationPrompts = (planJson: string) => getModule().createPlanExplanationPrompts(planJson);
-export const createPlannerToolCallingSystemPrompt = () => getModule().createPlannerToolCallingSystemPrompt();
+// Internal planner tool-calling prompt MUST be in English regardless of UI language
+export const createPlannerToolCallingSystemPrompt = () => en.createPlannerToolCallingSystemPrompt();
+
+// Act-mode (post-execution) summary prompts should follow UI language
+export const createActSummaryPrompts = (actionsText: string) => getModule().createActSummaryPrompts(actionsText);

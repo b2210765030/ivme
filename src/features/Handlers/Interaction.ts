@@ -841,21 +841,16 @@ export class InteractionHandler {
                 const status = l.error ? `Hata: ${l.error}` : 'Tamamlandı';
                 return `${idx + 1}. ${l.label} — ${status}`; // süreyi LLM'e göndermiyoruz, içerik odağı
             }).join('\n');
-
-            const system = [
-                'Türkçe ve kısa yaz. Kod blokları, başlıklar veya gereksiz süsleme yok.',
-                'Madde işareti kullanabilirsin. Önce neler yapıldığını ve nelerin eklendiğini/oluşturulduğunu belirt.',
-                "Ardından 'Önerilen sonraki adımlar' için 1-3 madde yaz.",
-                'Kullanıcıdan gerekirse onay/istek talep eden bir son cümle ekle.'
-            ].join(' ');
-            const user = `Gerçekleştirilen adımlar:\n${lines}\n\nÖzet ve öneriler:`;
+            // Dil seçimine göre sistem promptu oluştur (TR/EN UI)
+            const { createActSummaryPrompts } = require('../../system_prompts');
+            const prompts = createActSummaryPrompts(lines);
 
             // Aynı placeholder içinde stream edilecek
             this.webview.postMessage({ type: 'summaryStart' });
             let summaryCollected = '';
             await this.apiManager.generateChatContent([
-                { role: 'system' as const, content: system },
-                { role: 'user' as const, content: user }
+                { role: 'system' as const, content: prompts.system },
+                { role: 'user' as const, content: prompts.user }
             ], (chunk) => {
                 summaryCollected += chunk;
                 this.webview.postMessage({ type: 'summaryChunk', payload: chunk });

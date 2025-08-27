@@ -338,12 +338,12 @@ export function showConfirmationPanel(instruction) {
         const content = document.createElement('div');
         content.className = 'modal-content confirm-modal-content';
         content.innerHTML = `
-            <h3>Planı çalıştırmak istiyor musunuz?</h3>
-            <p>Bu istek mevcut planı şimdi çalıştırma niyeti olarak algılandı. Onaylıyor musunuz?</p>
+            <h3>${DOM.getText('confirmRunTitle')}</h3>
+            <p>${DOM.getText('confirmRunBody')}</p>
             <blockquote style="margin:8px 0 0 0; padding:8px 10px; border-left:3px solid var(--vscode-focusBorder); background: var(--vscode-editor-background); font-size: 11px; opacity: 0.9;">${String(instruction || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</blockquote>
             <div class="modal-actions">
-                <button id="confirm-no" class="secondary-button">Hayır</button>
-                <button id="confirm-yes" class="primary-button">Evet</button>
+                <button id="confirm-no" class="secondary-button">${DOM.getText('no')}</button>
+                <button id="confirm-yes" class="primary-button">${DOM.getText('yes')}</button>
             </div>
         `;
 
@@ -655,14 +655,14 @@ export function showPlannerPanelWithPlan(plan) {
                 toolWrap.style.gap = '6px';
                 toolWrap.style.marginRight = '8px';
                 const label = document.createElement('span');
-                label.textContent = 'Araç:';
+                label.textContent = DOM.getText('toolLabel');
                 label.className = 'planner-tool-label';
                 const select = document.createElement('select');
                 select.className = 'planner-tool-select';
                 // Options
                 const optAuto = document.createElement('option');
                 optAuto.value = 'auto';
-                optAuto.textContent = '(auto)';
+                optAuto.textContent = DOM.getText('autoOption');
                 select.appendChild(optAuto);
                 try {
                     const names = (getAvailableToolNames?.() || []);

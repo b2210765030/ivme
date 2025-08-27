@@ -87,3 +87,15 @@ export function createPlannerToolCallingSystemPrompt(): string {
         '--- Available Tools (EN) ---\n' + toolList
     ].join(' ');
 }
+
+// Post-Act summary and suggestions (EN)
+export function createActSummaryPrompts(actionsText: string): { system: string; user: string } {
+    const system = [
+        'Write in short, clear English. No headings or code blocks.',
+        'Bullet points are allowed. First list what was done and created/changed.',
+        "Then add 'Next recommended steps' with 1-3 bullets.",
+        'End with a short question if the user should confirm next actions.'
+    ].join(' ');
+    const user = `Executed steps (labels):\n${actionsText}\n\nSummary and recommendations:`;
+    return { system, user };
+}

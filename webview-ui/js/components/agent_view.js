@@ -4,6 +4,7 @@
    ========================================================================== */
 
 import * as VsCode from '../services/vscode.js';
+import * as DOM from '../utils/dom.js';
 import { setAgentBarExpanded, setAgentActMode, getState, updatePlanActToggleVisibility, toggleAgentSelectionPopover } from '../core/state.js';
 
 export function init() {
@@ -54,7 +55,7 @@ export function init() {
             if (getState().isUiBlocked) return;
             const opened = toggleAgentSelectionPopover();
             agentSelectionToggle.textContent = opened ? '▾' : '▴';
-            agentSelectionToggle.title = opened ? 'Seçimi gizle' : 'Seçimi göster';
+            agentSelectionToggle.title = opened ? DOM.getText('hideSelection') : DOM.getText('showSelection');
             agentSelectionToggle.setAttribute('aria-label', agentSelectionToggle.title);
         });
     }
@@ -114,7 +115,7 @@ export function init() {
                     const isAgent = mode === 'agent';
                     // update UI label
                     const label = modeButton.querySelector('.mode-label');
-                    if (label) label.textContent = isAgent ? 'Agent' : 'Chat';
+                    if (label) label.textContent = isAgent ? DOM.getText('agent') : DOM.getText('chat');
                     // notify VS Code
                     VsCode.postMessage('agentModeToggled', { isActive: isAgent, language: undefined });
                     // close menu

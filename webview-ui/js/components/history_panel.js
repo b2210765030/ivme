@@ -23,7 +23,7 @@ export function populate(history) {
     if (!history || history.length === 0) {
         const emptyMessage = document.createElement('p');
         emptyMessage.className = 'history-empty-message';
-        emptyMessage.textContent = 'Henüz bir konuşma geçmişi yok.';
+        emptyMessage.textContent = DOM.getText('historyEmpty');
         DOM.historyListContainer.appendChild(emptyMessage);
         return;
     }

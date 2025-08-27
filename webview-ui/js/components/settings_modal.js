@@ -93,14 +93,14 @@ function createToolRow(tool, isCustom = false) {
     if (isPending) {
         const loading = document.createElement('div');
         loading.className = 'tool-loading';
-        loading.innerHTML = '<span class="loading-indicator" aria-hidden="true"></span><span class="loading-text">Yükleniyor…</span>';
+        loading.innerHTML = `<span class="loading-indicator" aria-hidden="true"></span><span class="loading-text">${DOM.getText('loading')}</span>`;
         toolActions.appendChild(loading);
     } else if (isCustom) {
         // Add delete button for custom tools
         const deleteButton = document.createElement('button');
         deleteButton.type = 'button';
         deleteButton.className = 'delete-tool-button';
-        deleteButton.title = 'Aracı Sil';
+        deleteButton.title = DOM.getText('deleteToolTitle');
         deleteButton.innerHTML = `
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5ZM11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H2.506a.58.58 0 0 0-.01 1.152l.557 10.056A2 2 0 0 0 5.046 16h5.908a2 2 0 0 0 1.993-1.792l.557-10.056a.58.58 0 0 0-.01-1.152H11ZM9 5a.5.5 0 1 1-1 0v6a.5.5 0 0 1 1 0V5Zm-3 0a.5.5 0 1 1-1 0v6a.5.5 0 0 1 1 0V5Z"/>
@@ -113,15 +113,15 @@ function createToolRow(tool, isCustom = false) {
         const codeButton = document.createElement('button');
         codeButton.type = 'button';
         codeButton.className = 'tool-code-button';
-        codeButton.title = 'Tool Code';
+        codeButton.title = DOM.getText('toolCode');
         codeButton.innerHTML = `<img src="${DOM.TOOL_CODE_ICON_URI}" alt="code" width="14" height="14"/>`;
         codeButton.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); openToolCodeEditor(tool.name); });
         toolActions.appendChild(codeButton);
         
         // Add custom tool badge
-        toolName.innerHTML += ' <span class="custom-tool-badge">[ÖZEL]</span>';
+        toolName.innerHTML += ` <span class="custom-tool-badge">[${DOM.getText('customBadge')}]</span>`;
     } else {
-        toolActions.innerHTML = '<span class="system-tool-badge">SİSTEM</span>';
+        toolActions.innerHTML = `<span class="system-tool-badge">${DOM.getText('systemBadge')}</span>`;
     }
     
     toolRow.appendChild(toolName);
@@ -186,7 +186,7 @@ function closeToolCreator() {
 }
 
 function deleteCustomTool(toolName) {
-    const proceed = confirm(`"${toolName}" aracını silmek istediğinizden emin misiniz?`);
+    const proceed = confirm(DOM.getText('confirmDeleteTool').replace('{name}', toolName));
     if (!proceed) return;
     // Optimistic UI: remove immediately from table
     allTools = allTools.filter(tool => tool.name !== toolName);
@@ -210,7 +210,7 @@ async function createCustomTool(toolData) {
         
     } catch (error) {
         console.error('Error creating custom tool:', error);
-        alert('Araç oluşturulurken bir hata oluştu: ' + error.message);
+        alert(DOM.getText('errorToolCreate') + (error?.message || DOM.getText('errorUnknown')));
     }
 }
 
@@ -308,7 +308,7 @@ export function init() {
 
         const saveButton = DOM.settingsForm.querySelector('button[type="submit"]');
         saveButton.disabled = true;
-        saveButton.textContent = 'Test Ediliyor...';
+        saveButton.textContent = DOM.getText('testing');
 
         const settingsPayload = {
             activeApiService: DOM.serviceSelect.value,
@@ -353,20 +353,20 @@ export function init() {
             const toolFunctionality = document.getElementById('tool-functionality').value.trim();
             
             if (!toolName || !toolDescription || !toolFunctionality) {
-                alert('Lütfen tüm alanları doldurun.');
+                alert(DOM.getText('fillAllFields'));
                 return;
             }
 
             // Validate tool name format (snake_case)
             if (!/^[a-z][a-z0-9_]*$/.test(toolName)) {
-                alert('Araç adı yalnızca küçük harf, rakam ve alt çizgi içerebilir. Küçük harf ile başlamalıdır.');
+                alert(DOM.getText('invalidToolName'));
                 return;
             }
 
             // Check if tool name already exists
             const existingTool = allTools.find(tool => tool.name === toolName);
             if (existingTool) {
-                alert('Bu isimde bir araç zaten mevcut. Lütfen farklı bir isim seçin.');
+                alert(DOM.getText('toolExists'));
                 return;
             }
 
@@ -384,14 +384,14 @@ export function init() {
 export function handleSaveResult(payload) {
     const saveButton = DOM.settingsForm.querySelector('button[type="submit"]');
     saveButton.disabled = false;
-    saveButton.textContent = 'Kaydet';
+    saveButton.textContent = DOM.getText('save');
 
     if (payload.success) {
         closeModal();
     } else {
         const errorContainer = document.getElementById('vllm-connection-error');
         if (errorContainer && DOM.serviceSelect.value === 'vLLM') {
-            errorContainer.textContent = payload.message || 'Bilinmeyen bir hata oluştu.';
+            errorContainer.textContent = payload.message || DOM.getText('errorUnknown');
             errorContainer.classList.remove('hidden');
         } else {
             // vLLM seçili değilse inline hata göstermiyoruz.
@@ -467,7 +467,7 @@ export function handleCustomToolCreated(payload) {
             const name = String(payload?.tool?.name || '');
             allTools = allTools.map(t => t.name === name ? { ...t, status: 'error' } : t);
             populateToolsTable();
-            alert('Araç oluşturulurken bir hata oluştu: ' + (payload.error || 'Bilinmeyen hata'));
+            alert(DOM.getText('errorToolCreate') + (payload.error || DOM.getText('errorUnknown')));
         }
     } catch (e) {
         console.error('handleCustomToolCreated error', e);
@@ -488,7 +488,7 @@ export function handleCustomToolDeleted(payload) {
             // Custom tool deleted successfully
         } catch (e) { console.error('handleCustomToolDeleted sync error', e); }
     } else {
-        alert('Araç silinirken bir hata oluştu: ' + (payload.error || 'Bilinmeyen hata'));
+        alert(DOM.getText('errorToolDelete') + (payload.error || DOM.getText('errorUnknown')));
         // Reload custom tools from backend to ensure consistency
         VsCode.postMessage('requestCustomTools');
     }
@@ -532,7 +532,7 @@ function openToolCodeEditor(toolName) {
         // Find code from allTools (may require full fetch later)
         const tool = (allTools || []).find(t => t.name === activeToolCodeName);
         const code = (tool && tool.code) ? String(tool.code) : '';
-        title.textContent = `Tool Kodu: ${activeToolCodeName}`;
+        title.textContent = `${DOM.getText('toolCode')}: ${activeToolCodeName}`;
         editor.value = code;
 
         modal.classList.remove('hidden');
