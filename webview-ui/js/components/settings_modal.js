@@ -6,7 +6,7 @@ import * as DOM from '../utils/dom.js';
 import * as VsCode from '../services/vscode.js';
 import * as ChatView from './chat_view.js';
 // YENİ: Gerekli state fonksiyonları import edildi
-import { getState, setBackgroundVideoEnabled } from '../core/state.js';
+import { getState, setBackgroundVideoEnabled, setPlannerToolsVisible } from '../core/state.js';
 
 // All tools array - will be loaded from backend (.ivme/tools.json)
 let allTools = [];
@@ -239,6 +239,17 @@ export function init() {
     if (effectToggle) {
         effectToggle.disabled = true;
         effectToggle.checked = false;
+    }
+
+    // YENİ: Planner Araçları Butonu Mantığı
+    const plannerToolsToggle = document.getElementById('planner-tools-toggle-switch');
+    if (plannerToolsToggle) {
+        // Butonun başlangıç durumunu state'den al
+        plannerToolsToggle.checked = getState().isPlannerToolsVisible;
+        // Değiştiğinde state'i güncelle
+        plannerToolsToggle.addEventListener('change', (event) => {
+            setPlannerToolsVisible(event.currentTarget.checked);
+        });
     }
 
     DOM.settingsForm.addEventListener('submit', (event) => {

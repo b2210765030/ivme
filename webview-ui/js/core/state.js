@@ -15,6 +15,7 @@ let isAgentSelectionActive = false; // YENİ: Agent modunda seçili alan olup ol
 let lastAgentSelectionData = null; // { fileName, startLine, endLine, content }
 let isAgentBarExpanded = localStorage.getItem('agentBarExpanded') === 'true'; // Agent bağlam barının açık/kapalı durumu - localStorage'dan yükle
 let isAgentActMode = localStorage.getItem('agentActMode') === 'true'; // Plan(false)/Act(true) modu - localStorage
+let isPlannerToolsVisible = localStorage.getItem('isPlannerToolsVisible') !== 'false'; // Planner araçları görünürlüğü - localStorage
 
 let currentLanguage = localStorage.getItem('language') || 'tr';
 
@@ -54,6 +55,7 @@ export const getState = () => ({
     isIndexingEnabled // YENİ: İndeksleme açık/kapalı durumu
     , hasIndex
     , isAgentActMode
+    , isPlannerToolsVisible
 });
 
 // --- State Setters (Durumları Güncelleme) ---
@@ -478,6 +480,20 @@ export function setAgentActMode(enabled) {
             planActSwitch.checked = isAgentActMode;
         }
     } catch(e) {}
+}
+
+// Planner araçları görünürlük durumunu ayarlayan fonksiyon
+export function setPlannerToolsVisible(visible) {
+    try {
+        isPlannerToolsVisible = !!visible;
+        localStorage.setItem('isPlannerToolsVisible', isPlannerToolsVisible.toString());
+    } catch (e) {}
+    try {
+        const panel = document.getElementById('planner-panel');
+        if (panel) {
+            panel.classList.toggle('planner-tools-hidden', !isPlannerToolsVisible);
+        }
+    } catch (e) {}
 }
 
 // Plan/Act toggle görünürlüğünü Agent modu ve Indexing etkinliğine göre günceller

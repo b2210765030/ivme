@@ -515,3 +515,14 @@ pre code.hljs {
     height: 9px;
     filter: invert(1);
 }
+
+/* Yeni: Planner araçları görünürlük sınıfı */
+.planner-tools-hidden .planner-tool-wrap,
+.planner-tools-hidden .planner-step-actions,
+.planner-tools-hidden .planner-insert-item {
+    display: none !important;
+}
+
+.planner-tools-hidden .planner-panel-bar #planner-run-all-toggle {
+    display: none !important;
+}

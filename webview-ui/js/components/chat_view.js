@@ -764,6 +764,13 @@ export function showPlannerPanelWithPlan(plan) {
             });
             toggle.dataset.bound = '1';
         }
+        // Planner araçlarının görünürlüğünü ayarla
+        try {
+            const { isPlannerToolsVisible } = getState();
+            if (panel) {
+                panel.classList.toggle('planner-tools-hidden', !isPlannerToolsVisible);
+            }
+        } catch (e) {}
     } catch (e) { console.warn('showPlannerPanelWithPlan error', e); }
 }
 
