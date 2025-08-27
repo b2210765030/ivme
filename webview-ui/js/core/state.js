@@ -15,7 +15,7 @@ let isAgentSelectionActive = false; // YENİ: Agent modunda seçili alan olup ol
 let lastAgentSelectionData = null; // { fileName, startLine, endLine, content }
 let isAgentBarExpanded = localStorage.getItem('agentBarExpanded') === 'true'; // Agent bağlam barının açık/kapalı durumu - localStorage'dan yükle
 let isAgentActMode = localStorage.getItem('agentActMode') === 'true'; // Plan(false)/Act(true) modu - localStorage
-let isPlannerToolsVisible = localStorage.getItem('isPlannerToolsVisible') !== 'false'; // Planner araçları görünürlüğü - localStorage
+let isPlannerToolsVisible = localStorage.getItem('isPlannerToolsVisible') === 'true'; // Planner araçları görünürlüğü - varsayılan: kapalı
 
 let currentLanguage = localStorage.getItem('language') || 'tr';
 

@@ -92,7 +92,7 @@ export function autoResize() {
             document.documentElement.style.setProperty('--input-safe-bottom', `${safeBottom}px`);
             // Planner panel should hug the top edge of input wrapper:
             // Compute distance from viewport bottom to input-wrapper top, then add a small gap
-            const GAP = 10; // px gap between planner panel and input wrapper
+            const GAP = 17; // px gap between planner panel and input wrapper
             const plannerBottom = Math.max(0, Math.ceil(window.innerHeight - (inputWrapper ? inputWrapper.getBoundingClientRect().top : (rect.top)) + GAP));
             document.documentElement.style.setProperty('--planner-panel-bottom', `${plannerBottom}px`);
             // Also reserve space in chat for the visible planner panel height so messages aren't covered

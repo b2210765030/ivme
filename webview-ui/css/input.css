@@ -29,6 +29,64 @@
     opacity: 0.9;
 }
 
+/* Planner için sade uyarı metni (language-warning ile aynı tipografi) */
+#planner-action-note {
+    position: fixed;
+    left: 25px;
+    right: 25px;
+    bottom: calc(var(--planner-panel-bottom, var(--input-safe-bottom, 140px)) - 23px);
+    z-index: 7;
+    padding: 0 25px 6px 25px;
+    text-align: center;
+    color: var(--vscode-input-placeholderForeground);
+    font-size: 11px;
+    font-weight: 300;
+    line-height: 1.2;
+    opacity: 0.9;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Panel zinciri: panel görünmüyorsa not asla görünmesin */
+#planner-panel.hidden + #planner-action-note { display: none !important; }
+#planner-panel + #planner-action-note { display: block; }
+
+#planner-action-note .accent-act {
+    color: var(--vscode-button-background);
+    font-weight: 600;
+    display: inline-block;
+    padding: 2px 8px;
+    border: 0.2px solid var(--vscode-sideBar-border);
+    border-radius: 9999px;
+    background: transparent;
+    cursor: pointer;
+    line-height: 1.2;
+    vertical-align: baseline;
+}
+
+#planner-action-note .accent-act:hover {
+    background: var(--vscode-toolbar-hoverBackground);
+}
+
+/* Icon inside Act pill (uses CSS var fallback to ../assets/switch.svg) */
+#planner-action-note .accent-act::before {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 4px;
+    background-color: var(--vscode-button-background);
+    -webkit-mask-image: var(--act-switch-icon, url('../assets/switch.svg'));
+    mask-image: var(--act-switch-icon, url('../assets/switch.svg'));
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: 15px 15px;
+    mask-size: 15px 15px;
+    opacity: 0.95;
+    vertical-align: -1px;
+}
+
 
 .file-tag {
     display: inline-flex;

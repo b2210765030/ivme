@@ -476,6 +476,7 @@ export function showPlannerPanel(steps) {
         const panel = document.getElementById('planner-panel');
         const content = document.getElementById('planner-panel-content');
         const list = document.getElementById('planner-steps-list');
+        const note = document.getElementById('planner-action-note');
         if (!panel || !content || !list) return;
         const { isAgentModeActive, isIndexingEnabled } = getState();
         // Sadece Agent modu ve index açıkken paneli göster
@@ -483,6 +484,7 @@ export function showPlannerPanel(steps) {
             // görünürlüğü kapat ama adımları cache'le
             lastPlannerStepsCache = Array.isArray(steps) ? steps.slice() : [];
             panel.classList.add('hidden');
+            try { if (note) note.classList.add('hidden'); } catch (e) {}
             return;
         }
         // Cache'i güncelle
@@ -513,6 +515,32 @@ export function showPlannerPanel(steps) {
         // Eski "Tüm adımları uygula" (✔) butonunu kaldır
         try { const oldRunAll = document.getElementById('planner-run-all-toggle'); if (oldRunAll && oldRunAll.parentNode) oldRunAll.parentNode.removeChild(oldRunAll); } catch (e) {}
 
+        // Panel görünürken bilgilendirme notunu göster ve Act tıklamasını toggle'a bağla
+        try {
+            if (note) {
+                note.classList.remove('hidden');
+                const actEl = note.querySelector('.accent-act');
+                if (actEl && !actEl.dataset.bound) {
+                    actEl.addEventListener('click', () => {
+                        try {
+                            const toggle = document.getElementById('plan-act-switch');
+                            if (toggle) {
+                                // Switch to Act mode if not already
+                                if (!toggle.checked) {
+                                    toggle.checked = true;
+                                    try { require('../core/state.js').setAgentActMode(true); } catch (e) {}
+                                    // Fire a change event so any listeners react
+                                    const evt = new Event('change', { bubbles: true });
+                                    toggle.dispatchEvent(evt);
+                                }
+                            }
+                        } catch (e) {}
+                    });
+                    actEl.dataset.bound = '1';
+                }
+            }
+        } catch (e) {}
+
         // Toggle buton handler (bir kez ekle)
         const toggle = document.getElementById('planner-panel-toggle');
         if (toggle && !toggle.dataset.bound) {
@@ -538,6 +566,7 @@ export function showPlannerPanelWithPlan(plan) {
         const panel = document.getElementById('planner-panel');
         const content = document.getElementById('planner-panel-content');
         const list = document.getElementById('planner-steps-list');
+        const note = document.getElementById('planner-action-note');
         if (!panel || !content || !list) return;
         const { isAgentModeActive, isIndexingEnabled } = getState();
         if (!(isAgentModeActive && isIndexingEnabled)) {
@@ -548,6 +577,7 @@ export function showPlannerPanelWithPlan(plan) {
                 lastPlannerStepsCache = texts;
             } catch {}
             panel.classList.add('hidden');
+            try { if (note) note.classList.add('hidden'); } catch (e) {}
             return;
         }
 
@@ -764,6 +794,29 @@ export function showPlannerPanelWithPlan(plan) {
             });
             toggle.dataset.bound = '1';
         }
+        // Panel görünürken bilgilendirme notunu göster ve Act tıklamasını toggle'a bağla
+        try {
+            if (note) {
+                note.classList.remove('hidden');
+                const actEl = note.querySelector('.accent-act');
+                if (actEl && !actEl.dataset.bound) {
+                    actEl.addEventListener('click', () => {
+                        try {
+                            const toggle = document.getElementById('plan-act-switch');
+                            if (toggle) {
+                                if (!toggle.checked) {
+                                    toggle.checked = true;
+                                    try { require('../core/state.js').setAgentActMode(true); } catch (e) {}
+                                    const evt = new Event('change', { bubbles: true });
+                                    toggle.dispatchEvent(evt);
+                                }
+                            }
+                        } catch (e) {}
+                    });
+                    actEl.dataset.bound = '1';
+                }
+            }
+        } catch (e) {}
         // Planner araçlarının görünürlüğünü ayarla
         try {
             const { isPlannerToolsVisible } = getState();
@@ -975,6 +1028,7 @@ function closeStepInlineEditor() {
 export function hidePlannerPanel() {
     const panel = document.getElementById('planner-panel');
     if (panel) panel.classList.add('hidden');
+    try { const note = document.getElementById('planner-action-note'); if (note) note.classList.add('hidden'); } catch (e) {}
 }
 
 // Agent ve Index state değişimlerinde paneli yönetmek için yardımcı
