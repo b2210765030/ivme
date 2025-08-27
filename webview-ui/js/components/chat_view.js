@@ -3,7 +3,7 @@
    ========================================================================== */
 
 import * as DOM from '../utils/dom.js';
-import { getState, setAiResponding, incrementConversationSize, setContextSize, resetChatState, lockConversation } from '../core/state.js';
+import { getState, setAiResponding, incrementConversationSize, setContextSize, resetChatState, lockConversation, setAgentActMode } from '../core/state.js';
 import { postMessage } from '../services/vscode.js';
 import { recalculateTotalAndUpdateUI, setPlaceholder, focus as focusInput } from './InputArea.js';
 import { autoResize as autoResizeInput } from './InputArea.js';
@@ -326,6 +326,51 @@ export function addUserMessage(text) {
     lockConversation();
     recalculateTotalAndUpdateUI();
     setAiResponding(true);
+}
+
+// Basit onay paneli (overlay) — planı yürütmeden önce kullanıcıdan onay alır
+export function showConfirmationPanel(instruction) {
+    try {
+        const overlay = document.createElement('div');
+        overlay.id = 'execute-confirmation-modal';
+        overlay.className = 'modal-overlay glass-overlay';
+
+        const content = document.createElement('div');
+        content.className = 'modal-content confirm-modal-content';
+        content.innerHTML = `
+            <h3>Planı çalıştırmak istiyor musunuz?</h3>
+            <p>Bu istek mevcut planı şimdi çalıştırma niyeti olarak algılandı. Onaylıyor musunuz?</p>
+            <blockquote style="margin:8px 0 0 0; padding:8px 10px; border-left:3px solid var(--vscode-focusBorder); background: var(--vscode-editor-background); font-size: 11px; opacity: 0.9;">${String(instruction || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</blockquote>
+            <div class="modal-actions">
+                <button id="confirm-no" class="secondary-button">Hayır</button>
+                <button id="confirm-yes" class="primary-button">Evet</button>
+            </div>
+        `;
+
+        overlay.appendChild(content);
+        document.body.appendChild(overlay);
+
+        const cleanup = () => { try { overlay.remove(); } catch {} };
+        // Gerçek modal davranışı: overlay tıklayınca kapanmasın
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) { /* swallow */ } });
+        content.addEventListener('click', (e) => e.stopPropagation());
+        // ESC ile de kapanmasın (kullanıcı bir seçim yapmalı)
+        const escBlocker = (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); } };
+        window.addEventListener('keydown', escBlocker, { capture: true });
+
+        content.querySelector('#confirm-yes')?.addEventListener('click', () => {
+            try { postMessage('confirmExecuteAll', { instruction }); } catch {}
+            // Uygulamaya geçildi: plan/act toggle'ı ACT moduna al
+            try { setAgentActMode(true); } catch (e) {}
+            window.removeEventListener('keydown', escBlocker, true);
+            cleanup();
+        });
+        content.querySelector('#confirm-no')?.addEventListener('click', () => {
+            try { postMessage('refuseExecuteAll', { instruction }); } catch {}
+            window.removeEventListener('keydown', escBlocker, true);
+            cleanup();
+        });
+    } catch {}
 }
 
 export function addSystemMessage(text) {
@@ -1031,12 +1076,15 @@ export function showStepExecutionPlaceholder(label) {
     if (!document.getElementById('ai-streaming-placeholder')) {
         addAiResponsePlaceholder();
     }
-    setPlannerStreaming(true);
+    // Execution aşamasında planner streaming başlığını ve içeriğini temizle
+    setPlannerStreaming(false);
     setShimmerActive(true);
     const el = document.getElementById('ai-streaming-placeholder');
     try { summaryTargetEl = el; } catch (e) {}
     const contentElement = el?.querySelector('.message-content');
     if (contentElement) {
+        // Planlama başlığını ve önceki içerikleri temizle
+        contentElement.innerHTML = '';
         // Her adım için ayrı blok satır kullan (display: block)
         const line = document.createElement('div');
         line.className = 'step-line running-line';

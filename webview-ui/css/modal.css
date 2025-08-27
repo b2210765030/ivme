@@ -15,6 +15,13 @@
     z-index: 1000;
 }
 
+/* Frosted (buzlu) arkaplan efekti için ek sınıf */
+.modal-overlay.glass-overlay {
+    background-color: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+}
+
 /* Ensure Tool Code modal stacks above Settings modal */
 #tool-code-modal {
     z-index: 1100;
@@ -32,6 +39,45 @@
     display: flex;
     overflow: hidden;
     padding: 0;
+}
+
+/* Onay paneli: daha kompakt ve tema ile uyumlu görsel */
+.confirm-modal-content {
+    width: 92%;
+    max-width: 520px;
+    min-height: 0;
+    padding: 16px 18px;
+    display: block;
+    background: linear-gradient(180deg, var(--vscode-sideBar-background) 0%, var(--vscode-editor-background) 100%);
+    border: 1px solid var(--vscode-widget-border);
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+}
+.confirm-modal-content h3 {
+    margin: 0 0 6px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+.confirm-modal-content p {
+    margin: 0 0 12px 0;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--vscode-descriptionForeground);
+}
+.confirm-modal-content .modal-actions {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--vscode-sideBar-border);
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+.confirm-modal-content .primary-button,
+.confirm-modal-content .secondary-button {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
 }
 
 /* Yeni: Adım JSON modalı - daha minimal */

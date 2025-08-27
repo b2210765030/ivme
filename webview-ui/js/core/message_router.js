@@ -21,6 +21,14 @@ export function initMessageListener() {
         const data = message.payload ?? message.value;
         
         switch (message.type) {
+            case 'requestExecuteConfirmation':
+                try {
+                    const instr = (data && (data.instruction || (data.payload && data.payload.instruction))) || '';
+                    if (typeof ChatView.showConfirmationPanel === 'function') {
+                        ChatView.showConfirmationPanel(instr);
+                    }
+                } catch (e) {}
+                break;
             case 'indexingProgress':
                 setIndexingActive(true);
                 updateIndexerProgress(Math.round(data.percent || 0), data.message || '');

@@ -52,34 +52,32 @@ export class InteractionHandler {
         }
     }
 
-    public async handle(instruction: string) {
+    public async handle(instruction: string, forcePlanMode: boolean = false) {
         if (this.currentRequestController) {
             this.cancelStream();
         }
         
         this.conversationManager.addMessage('user', instruction);
 
-        // Natural-language trigger: if the user asks to execute all steps, run the whole plan
-        let intentWantsExecuteAll = this.isExecuteAllInstruction(instruction);
-        if (!intentWantsExecuteAll) {
-            try {
-                intentWantsExecuteAll = await this.shouldAutoExecuteByLLM(instruction);
-            } catch {}
-        }
-        if (intentWantsExecuteAll) {
-            if (this.lastPlannerPlan && Array.isArray(this.lastPlannerPlan.steps) && this.lastPlannerPlan.steps.length > 0) {
+        // Natural-language trigger: if the user asks to execute all steps, request confirmation instead of auto-running
+        let intentWantsExecuteAll = false;
+        if (!forcePlanMode) {
+            intentWantsExecuteAll = this.isExecuteAllInstruction(instruction);
+            if (!intentWantsExecuteAll) {
                 try {
-                    await this.executePlannerAll();
+                    intentWantsExecuteAll = await this.shouldAutoExecuteByLLM(instruction);
+                } catch {}
+            }
+            if (intentWantsExecuteAll) {
+                if (this.lastPlannerPlan && Array.isArray(this.lastPlannerPlan.steps) && this.lastPlannerPlan.steps.length > 0) {
+                    // Ask for user confirmation via webview UI
+                    this.webview.postMessage({ type: 'requestExecuteConfirmation', payload: { instruction } });
                     return;
-                } catch (e: any) {
-                    this.webview.postMessage({ type: 'addResponse', payload: `**Hata:** Tüm adımlar uygulanamadı: ${e?.message || e}` });
+                } else {
+                    this.webview.postMessage({ type: 'addResponse', payload: 'Önce bir plan oluşturulmalı. Lütfen önce bir plan isteyin (örn. "merge.py oluştur").' });
                     this.webview.postMessage({ type: 'streamEnd' });
                     return;
                 }
-            } else {
-                this.webview.postMessage({ type: 'addResponse', payload: 'Önce bir plan oluşturulmalı. Lütfen önce bir plan isteyin (örn. "merge.py oluştur").' });
-                this.webview.postMessage({ type: 'streamEnd' });
-                return;
             }
         }
         // Koşullu: Sadece Agent Modu aktif VE indeksleme (index butonu) açıkken planner akışı çalışsın

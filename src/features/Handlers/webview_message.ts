@@ -131,6 +131,24 @@ export class WebviewMessageHandler {
                 // Snapshot current UI flags for this conversation
                 try { await this.persistConversationUiSnapshot(); } catch {}
                 break;
+            // --- Yeni: Planı yürütme onayı akışı ---
+            case 'confirmExecuteAll':
+                try {
+                    await this.interactionHandler.executePlannerAll();
+                    try { await this.persistConversationUiSnapshot(); } catch {}
+                } catch (e: any) {
+                    vscode.window.showErrorMessage(`Tüm adımlar çalıştırılamadı: ${e?.message || e}`);
+                }
+                break;
+            case 'refuseExecuteAll':
+                try {
+                    const original = String(data?.payload?.instruction || '');
+                    // forcePlanMode=true so we do not re-enter the confirmation path
+                    await this.interactionHandler.handle(original, true);
+                } catch (e: any) {
+                    vscode.window.showErrorMessage(`Planlama modunda devam edilemedi: ${e?.message || e}`);
+                }
+                break;
             
             // --- YENİ: Değişikliği Uygula Mesajı ---
             case 'applyCodeChange':
