@@ -192,11 +192,11 @@ export const i18n = {
         noPlanSteps: 'Plan adımları bulunamadı.'
     },
     en: {
-        thinking: 'İvme is thinking...',
-        planned: 'İvme planned',
+        thinking: 'Ivme is thinking...',
+        planned: 'Ivme planned',
         planExplaining: 'Plan explanation',
-        responding: 'İvme is responding, please wait...',
-        placeholder: 'ask İvme a question...',
+        responding: 'Ivme is responding, please wait...',
+        placeholder: 'ask Ivme a question...',
         welcomeSubtitle: 'Accelerate your code development and analysis with AI.',
         copy: 'Copy',
         copied: 'Copied!',
@@ -251,7 +251,7 @@ export const i18n = {
         plan: 'Plan',
         act: 'Act',
         // New i18n keys
-        planning: 'İvme is planning...',
+        planning: 'Ivme is planning...',
         indexingEnabledTitle: 'Indexing enabled',
         indexingDisabledTitle: 'Indexing disabled',
         languageWarningText: 'Using English (EN) is recommended for better results.',

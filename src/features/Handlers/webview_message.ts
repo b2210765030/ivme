@@ -475,6 +475,10 @@ export class WebviewMessageHandler {
     private async handleRequestCustomTools() {
         try {
             const toolsManager = getToolsManager();
+            // Ensure tools manager finished bootstrapping before reading list
+            if (typeof (toolsManager as any).waitUntilReady === 'function') {
+                await (toolsManager as any).waitUntilReady();
+            }
             if (typeof toolsManager.setExtensionContext === 'function') {
                 toolsManager.setExtensionContext(this.context);
             }

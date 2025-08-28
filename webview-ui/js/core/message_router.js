@@ -8,7 +8,7 @@ import * as FileTags from '../components/file_tags.js';
 import * as HistoryPanel from '../components/history_panel.js';
 import * as InputArea from '../components/InputArea.js';
 import * as SettingsModal from '../components/settings_modal.js';
-import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, setWorkspaceName, getState, setTokenLimit, updateUITexts, setHasIndex, setAgentBarExpanded, setAgentActMode, incrementConversationSize } from './state.js';
+import { setContextSize, resetChatState, setAgentMode, setAgentSelectionStatus, clearAgentSelectionStatus, setIndexingActive, updateIndexerProgress, setIndexingEnabledState, setWorkspaceName, getState, setTokenLimit, updateUITexts, setHasIndex, setAgentBarExpanded, setAgentActMode, incrementConversationSize, updatePlanActToggleVisibility } from './state.js';
 import * as DOM from '../utils/dom.js';
 
 export function initMessageListener() {
@@ -66,6 +66,8 @@ export function initMessageListener() {
                 // Placeholder mesajını güncelle (sadece "ivmeye soru sorun..." göster)
                 InputArea.setPlaceholder();
                 try { ChatView.refreshPlannerPanelVisibility(); } catch(e) {}
+                // Plan/Act toggle görünürlüğünü anında güncelle
+                try { updatePlanActToggleVisibility(); } catch(e) {}
                 // disable durumunda planner steps balonunu da kaldır
                 try {
                     if (data?.enabled === false) {
@@ -81,6 +83,8 @@ export function initMessageListener() {
                 setIndexingEnabledState(data.isEnabled);
                 // Panel görünürlüğünü güncelle
                 try { ChatView.refreshPlannerPanelVisibility(); } catch(e) {}
+                // Plan/Act toggle görünürlüğünü anında güncelle
+                try { updatePlanActToggleVisibility(); } catch(e) {}
                 break;
             case 'workspaceInfo':
                 // Workspace bilgisi geldi

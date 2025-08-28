@@ -560,14 +560,44 @@ input:checked + .slider:before {
     align-items: center;
     gap: 8px;
     font-size: 12px;
-    padding: 8px 16px;
-    border-radius: 4px;
+    padding: 9px 16px;
+    border-radius: 20px;
     font-weight: 500;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    transition: transform 0.08s ease, box-shadow 0.15s ease;
 }
 
 .tools-actions .primary-button svg {
     width: 12px;
     height: 12px;
+}
+
+.tools-actions .primary-button:hover {
+    box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+}
+
+.tools-actions .primary-button:active {
+    transform: translateY(1px);
+}
+
+/* Apply same modern style to Settings modal action buttons */
+#settings-modal .modal-actions .primary-button,
+#settings-modal .modal-actions .secondary-button {
+    padding: 9px 16px;
+    border-radius: 20px;
+    font-weight: 500;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+
+#settings-modal .modal-actions .primary-button:hover,
+#settings-modal .modal-actions .secondary-button:hover {
+    box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+}
+
+#settings-modal .modal-actions .primary-button:active,
+#settings-modal .modal-actions .secondary-button:active {
+    transform: translateY(1px);
 }
 
 /* Disabled (muted) primary button style for feature-gated controls */

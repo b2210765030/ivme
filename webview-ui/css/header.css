@@ -26,6 +26,14 @@
   color: var(--vscode-editor-foreground);
 }
 
+/* Versiyon metni: küçük ve normal ağırlıkta */
+.header-logo-title .app-version {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--vscode-input-placeholderForeground);
+  margin-left: 4px;
+}
+
 .header-logo-title:hover {
   background-color: var(--vscode-toolbar-hoverBackground);
 }

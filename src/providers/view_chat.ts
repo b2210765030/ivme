@@ -409,6 +409,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         let htmlContent = fs.readFileSync(htmlPath, 'utf8');
         const nonce = getNonce();
 
+        // Read extension package version to inject into the webview
+        let version = '';
+        try {
+            const pkgPath = path.join(this._context.extensionUri.fsPath, 'package.json');
+            const pkgRaw = fs.readFileSync(pkgPath, 'utf8');
+            const pkg = JSON.parse(pkgRaw);
+            version = pkg.version || '';
+        } catch (e) {}
+
         return htmlContent
             .replace(/{{cspSource}}/g, webview.cspSource)
             .replace(/{{nonce}}/g, nonce)
@@ -434,6 +443,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             .replace(/{{edit_icon_uri}}/g, toUri('assets/duzenle.svg').toString())
             .replace(/{{apply_icon_uri}}/g, toUri('assets/uygula.svg').toString())
             .replace(/{{insert_icon_uri}}/g, toUri('assets/new-chat-icon.svg').toString())
-            .replace(/{{tool_code_icon_uri}}/g, toUri('assets/tool_code.svg').toString());
+            .replace(/{{tool_code_icon_uri}}/g, toUri('assets/tool_code.svg').toString())
+            .replace(/{{version}}/g, version);
     }
 }

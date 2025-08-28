@@ -48,9 +48,13 @@ export class ToolsManager {
     private toolsFilePath: vscode.Uri | null = null;
     private toolsData: ToolsData = { builtin_tools: [], custom_tools: [] };
     private extensionContext: vscode.ExtensionContext | null = null;
+    private initPromise: Promise<void> | null = null;
+    private initialized: boolean = false;
 
     constructor() {
-        this.initializeAsync();
+        this.initPromise = this.initializeAsync()
+            .then(() => { this.initialized = true; })
+            .catch((error) => { try { console.error('Failed to initialize tools manager:', error); } catch {} });
     }
 
     private async initializeAsync(): Promise<void> {
@@ -60,6 +64,20 @@ export class ToolsManager {
             await this.loadTools();
         } catch (error) {
             console.error('Failed to initialize tools manager:', error);
+        }
+    }
+
+    // Public: Wait until initialization completes to avoid empty list on first request
+    public async waitUntilReady(): Promise<void> {
+        try {
+            if (this.initPromise) {
+                await this.initPromise;
+            } else if (!this.initialized) {
+                await this.initializeAsync();
+                this.initialized = true;
+            }
+        } catch (_) {
+            // Best-effort; errors already logged in initialize
         }
     }
 

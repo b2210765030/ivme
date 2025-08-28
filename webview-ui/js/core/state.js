@@ -331,6 +331,20 @@ export function setIndexingEnabledState(enabled) {
         document.querySelectorAll('.message').forEach(m => {
             try { m.style.removeProperty('--indexing-progress'); m.style.removeProperty('background'); m.classList.remove('indexing-active','indexing-complete','indexing-ready'); } catch(e){}
         });
+        // Plan/Act toggle'ı anında gizle ve devre dışı bırak (kesin kapatma)
+        try {
+            const planActEl = document.getElementById('plan-act-toggle');
+            const planActSwitch = document.getElementById('plan-act-switch');
+            if (planActEl) {
+                planActEl.classList.add('hidden');
+                planActEl.classList.remove('checked');
+                planActEl.setAttribute('aria-checked', 'false');
+            }
+            if (planActSwitch) {
+                planActSwitch.checked = false;
+                planActSwitch.disabled = true;
+            }
+        } catch (e) {}
         // Planner UI'ı kesin kapat: paneli gizle ve varsa steps balonunu kaldır
         try {
             const panel = document.getElementById('planner-panel');
@@ -516,6 +530,14 @@ export function updatePlanActToggleVisibility() {
             if (planActSwitch) planActSwitch.disabled = false;
         } else {
             el.classList.add('hidden');
+            // Kesin gizleme: toggle durumlarını da sıfırla
+            el.classList.remove('checked');
+            el.setAttribute('aria-checked', 'false');
+            const planActSwitch = document.getElementById('plan-act-switch');
+            if (planActSwitch) {
+                planActSwitch.checked = false;
+                planActSwitch.disabled = true;
+            }
         }
     } catch (e) {}
 }
@@ -937,10 +959,11 @@ function updateHTMLTexts() {
             const addBtn = settingsModal.querySelector('#pane-tools #add-tool-button');
             if (addBtn) {
                 try {
-                    const textNode = Array.from(addBtn.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
-                    if (textNode) { textNode.nodeValue = ` ${DOM.getText('addToolButton')}`; }
-                    else { addBtn.innerHTML += ` ${DOM.getText('addToolButton')}`; }
-                } catch (e) { addBtn.innerHTML = addBtn.innerHTML.replace(/>([\s\S]*?)$/, `>${DOM.getText('addToolButton')}`); }
+                    const labelEl = addBtn.querySelector('.btn-label');
+                    if (labelEl) {
+                        labelEl.textContent = DOM.getText('addToolButton');
+                    }
+                } catch (e) {}
             }
         } catch (e) {}
         

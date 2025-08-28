@@ -11,6 +11,16 @@ import { refreshPlannerPanelVisibility } from './chat_view.js';
 // --- Public Fonksiyonlar ---
 
 export function init() {
+    // Inject version into header if provided by template
+    try {
+        const versionEls = document.querySelectorAll('.app-version');
+        versionEls.forEach(el => {
+            // If the template left the placeholder, keep it; otherwise ensure formatting
+            if (el.textContent && el.textContent.trim() === 'v{{version}}') {
+                // nothing
+            }
+        });
+    } catch (e) {}
     DOM.logoButton?.addEventListener('click', () => {
         if (getState().isUiBlocked) return;
         VsCode.postMessage('showPresentation');
