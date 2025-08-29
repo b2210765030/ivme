@@ -359,4 +359,24 @@ export class ConversationManager {
             this.uiStateByConversationId = {};
         }
     }
+
+
+    /**
+     * Aktif konuşmadaki son kullanıcı mesajını döndürür.
+     * Bu metod niyet analizi sonrası "hayır" dediğinde orijinal sorguyu almak için kullanılır.
+     */
+    public getLastUserMessage(): ChatMessage | undefined {
+        const activeConv = this.getActive();
+        if (!activeConv || !Array.isArray(activeConv.messages)) return undefined;
+        
+        // Mesajları tersden tarayarak son kullanıcı mesajını bul
+        for (let i = activeConv.messages.length - 1; i >= 0; i--) {
+            const message = activeConv.messages[i];
+            if (message && message.role === 'user') {
+                return message;
+            }
+        }
+        
+        return undefined;
+    }
 }

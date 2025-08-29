@@ -143,9 +143,13 @@ export class WebviewMessageHandler {
                 break;
             case 'refuseExecuteAll':
                 try {
-                    const original = String(data?.payload?.instruction || '');
-                    // forcePlanMode=true so we do not re-enter the confirmation path
-                    await this.interactionHandler.handle(original, true);
+                    // Kullanıcının son mesajını al (niyet analizi öncesi orijinal sorgu)
+                    const lastUserMessage = this.conversationManager.getLastUserMessage();
+                    const userQuery = lastUserMessage?.content || String(data?.payload?.instruction || '');
+                    
+                    // Eski plan bilgilerini koru ve yeni sorgu ile birlikte revize et
+                    // forcePlanMode=true ile niyet analizini bypass et, doğrudan planlama yap
+                    await this.interactionHandler.handle(userQuery, true);
                 } catch (e: any) {
                     vscode.window.showErrorMessage(`Planlama modunda devam edilemedi: ${e?.message || e}`);
                 }
