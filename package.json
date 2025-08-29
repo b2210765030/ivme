@@ -1,9 +1,9 @@
 {
-  "name": "ivme-ivme",
+  "name": "-ivme",
   "displayName": "İvme",
   "description": "LLM kullanarak kod hatalarını otomatik düzelten bir VS Code eklentisi.",
-  "version": "2.2.7",
-  "publisher": "ivme",
+  "version": "2.2.8",
+  "publisher": "",
   "repository": {
     "type": "git",
     "url": "https://github.com/bakisahin0128/AI.git"

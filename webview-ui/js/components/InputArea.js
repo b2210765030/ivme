@@ -107,7 +107,16 @@ export function autoResize() {
                     panelExtra = Math.ceil(visible + 8);
                 }
             } catch (e2) { panelExtra = 0; }
-            const chatReserved = Math.max(safeBottom + panelExtra, safeBottom);
+            // Kod aktarım göstergesinin de yer kaplamasını hesaba kat
+            let transferIndicatorExtra = 0;
+            try {
+                const transferIndicator = document.querySelector('.code-transfer-indicator');
+                if (transferIndicator) {
+                    const transferRect = transferIndicator.getBoundingClientRect();
+                    transferIndicatorExtra = Math.ceil(transferRect.height);
+                }
+            } catch (e3) { transferIndicatorExtra = 0; }
+            const chatReserved = Math.max(safeBottom + panelExtra + transferIndicatorExtra, safeBottom);
             document.documentElement.style.setProperty('--chat-bottom-reserved', `${chatReserved}px`);
         }
     } catch (e) {}

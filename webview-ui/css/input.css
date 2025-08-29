@@ -916,3 +916,535 @@
 #indexer-start-button.indexing-enabled:hover {
     background-color: var(--vscode-button-hoverBackground);
 }
+
+/* ==========================================================================
+   KOD AKTARIM GÖSTERGESİ STİLLERİ
+   ========================================================================== */
+
+.code-transfer-indicator {
+    /* Input wrapper'ın sınırlarını genişletir - dosya ekleme gibi */
+    position: relative;
+    z-index: 2;
+    flex-shrink: 0; /* Wrapper'ın boyutunu etkiler */
+    
+    /* Görsel tasarım - ince */
+    background: rgba(59, 130, 246, 0.12);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px; /* Alt element ile arasında boşluk */
+    
+    /* Animasyonlar */
+    animation: slideInFromTop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.code-transfer-indicator.fade-out {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+.transfer-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--vscode-foreground);
+    min-height: 20px; /* Minimum yükseklik - ince */
+}
+
+.transfer-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: rgba(59, 130, 246, 0.15);
+    border-radius: 4px;
+    color: rgba(59, 130, 246, 0.9);
+    flex-shrink: 0;
+}
+
+.transfer-icon svg {
+    width: 12px;
+    height: 12px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.transfer-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.transfer-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    line-height: 1.2;
+}
+
+.transfer-description {
+    font-size: 10px;
+    color: var(--vscode-input-placeholderForeground);
+    opacity: 0.85;
+    line-height: 1.2;
+}
+
+.transfer-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.transfer-toggle,
+.transfer-close {
+    background: transparent;
+    border: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--vscode-input-placeholderForeground);
+    opacity: 0.7;
+    transition: opacity 0.2s ease, background-color 0.2s ease;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.transfer-toggle svg,
+.transfer-close svg {
+    width: 10px;
+    height: 10px;
+    stroke-width: 1.5;
+    stroke: currentColor;
+}
+
+.transfer-toggle:hover,
+.transfer-close:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+
+
+/* Kod önizleme alanı */
+.transfer-code-preview {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    margin-top: 0;
+}
+
+.code-transfer-indicator.expanded .transfer-code-preview {
+    max-height: 200px;
+    padding: 10px;
+    margin-top: 8px;
+    overflow-y: auto;
+}
+
+.transfer-code-preview pre {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--vscode-editor-foreground);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.transfer-code-preview code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+}
+
+/* Kod önizleme scrollbar'ı */
+.transfer-code-preview::-webkit-scrollbar {
+    width: 6px;
+}
+
+.transfer-code-preview::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.transfer-code-preview::-webkit-scrollbar-thumb {
+    background-color: var(--vscode-scrollbarSlider-background);
+    border-radius: 3px;
+}
+
+.transfer-code-preview::-webkit-scrollbar-thumb:hover {
+    background-color: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+/* ==========================================================================
+   KOD DIFF KARŞILAŞTIRMA STİLLERİ
+   ========================================================================== */
+
+.code-diff-container {
+    margin-top: 12px;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    background: var(--vscode-editor-background);
+    overflow: hidden;
+    animation: slideInFromTop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.code-diff-container.fade-out {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+.diff-header {
+    background: var(--vscode-panel-background);
+    border-bottom: 1px solid var(--vscode-panel-border);
+    padding: 8px 12px;
+}
+
+.diff-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.diff-icon {
+    font-size: 14px;
+}
+
+.diff-close {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: var(--vscode-input-placeholderForeground);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    opacity: 0.7;
+    transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.diff-close:hover {
+    opacity: 1;
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.diff-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--vscode-panel-border);
+    max-height: 400px;
+    overflow: hidden;
+}
+
+.diff-side {
+    background: var(--vscode-editor-background);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.diff-side-header {
+    background: var(--vscode-sideBar-background);
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--vscode-sideBar-foreground);
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.diff-side.original .diff-side-header {
+    background: rgba(79, 172, 254, 0.1);
+    color: rgba(79, 172, 254, 0.9);
+}
+
+.diff-side.modified .diff-side-header {
+    background: rgba(163, 190, 140, 0.1);
+    color: rgba(163, 190, 140, 0.9);
+}
+
+.diff-code-area {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+}
+
+.diff-line-numbers {
+    background: var(--vscode-sideBar-background);
+    border-right: 1px solid var(--vscode-panel-border);
+    padding: 12px 8px;
+    font-family: var(--vscode-editor-font-family, 'Courier New', monospace);
+    font-size: var(--vscode-editor-font-size, 12px);
+    line-height: 1.4;
+    color: var(--vscode-editorLineNumber-foreground);
+    min-width: 40px;
+    text-align: right;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.diff-code-lines {
+    flex: 1;
+    padding: 12px;
+    font-family: var(--vscode-editor-font-family, 'Courier New', monospace);
+    font-size: var(--vscode-editor-font-size, 12px);
+    line-height: 1.4;
+    color: var(--vscode-editor-foreground);
+    overflow: auto;
+}
+
+.diff-line {
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 1.4em;
+    padding: 0 4px;
+    margin: 0;
+    border-radius: 2px;
+}
+
+.diff-line-num {
+    min-height: 1.4em;
+    padding: 0 2px;
+    margin: 0;
+}
+
+.diff-line.diff-removed,
+.diff-line-num.diff-removed {
+    background-color: rgba(244, 107, 107, 0.2);
+    color: rgba(244, 107, 107, 1);
+}
+
+.diff-line.diff-added,
+.diff-line-num.diff-added {
+    background-color: rgba(163, 190, 140, 0.2);
+    color: rgba(163, 190, 140, 1);
+}
+
+.diff-line.diff-unchanged {
+    color: var(--vscode-editor-foreground);
+}
+
+.diff-line.diff-empty,
+.diff-line-num.diff-empty {
+    background-color: rgba(128, 128, 128, 0.1);
+    opacity: 0.5;
+}
+
+.diff-code-area pre {
+    margin: 0;
+    padding: 12px;
+    background: transparent;
+    font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--vscode-editor-foreground);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    min-height: 100%;
+}
+
+.diff-code-area code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+}
+
+/* Diff renkleri */
+.diff-added {
+    background-color: rgba(163, 190, 140, 0.2);
+    color: rgba(163, 190, 140, 1);
+}
+
+.diff-removed {
+    background-color: rgba(244, 107, 107, 0.2);
+    color: rgba(244, 107, 107, 1);
+    text-decoration: line-through;
+}
+
+.diff-unchanged {
+    color: var(--vscode-editor-foreground);
+}
+
+/* Diff action buttons */
+.diff-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--vscode-panel-background);
+    border-top: 1px solid var(--vscode-panel-border);
+}
+
+.diff-action-button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--vscode-button-border);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: transparent;
+    color: var(--vscode-foreground);
+}
+
+.diff-action-button svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+}
+
+.diff-action-button.reject-button:hover {
+    background: rgba(244, 107, 107, 0.1);
+    border-color: rgba(244, 107, 107, 0.3);
+    color: rgba(244, 107, 107, 1);
+}
+
+.diff-action-button.apply-button {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-color: var(--vscode-button-background);
+}
+
+.diff-action-button.apply-button:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.diff-action-button.apply-button:disabled,
+.diff-action-button.apply-button.applied {
+    opacity: 0.7;
+    cursor: not-allowed;
+    background: rgba(163, 190, 140, 0.2);
+    color: rgba(163, 190, 140, 1);
+    border-color: rgba(163, 190, 140, 0.3);
+}
+
+/* Scrollbar styling */
+.diff-code-area::-webkit-scrollbar,
+.diff-code-lines::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.diff-code-area::-webkit-scrollbar-track,
+.diff-code-lines::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.diff-code-area::-webkit-scrollbar-thumb,
+.diff-code-lines::-webkit-scrollbar-thumb {
+    background-color: var(--vscode-scrollbarSlider-background);
+    border-radius: 3px;
+}
+
+.diff-code-area::-webkit-scrollbar-thumb:hover,
+.diff-code-lines::-webkit-scrollbar-thumb:hover {
+    background-color: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+/* Responsive - mobilde dikey layout */
+@media (max-width: 768px) {
+    .diff-content {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+    }
+    
+    .diff-side-header {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+    
+    .diff-actions {
+        flex-direction: column;
+        gap: 6px;
+    }
+    
+    .diff-action-button {
+        justify-content: center;
+    }
+}
+
+/* Slide in animasyonu - yukarıdan */
+@keyframes slideInFromTop {
+    0% {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.98);
+        max-height: 0;
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        max-height: 50px;
+    }
+}
+
+/* Responsive tasarım */
+@media (max-width: 600px) {
+    .code-transfer-indicator {
+        padding: 5px 8px;
+        margin-bottom: 6px;
+    }
+    
+    .transfer-content {
+        gap: 6px;
+        min-height: 18px;
+    }
+    
+    .transfer-icon {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .transfer-icon svg {
+        width: 10px;
+        height: 10px;
+    }
+    
+    .transfer-label {
+        font-size: 10px;
+    }
+    
+    .transfer-description {
+        font-size: 9px;
+    }
+    
+    .transfer-toggle,
+    .transfer-close {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .transfer-toggle svg,
+    .transfer-close svg {
+        width: 8px;
+        height: 8px;
+    }
+}

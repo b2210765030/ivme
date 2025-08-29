@@ -53,7 +53,10 @@ export class ContextManager {
         this.activeContextText = text;
         webview.postMessage({
             type: 'contextSet',
-            payload: `Talimatınız seçili koda uygulanacaktır...`
+            payload: {
+                message: `Talimatınız seçili koda uygulanacaktır...`,
+                code: text // Aktarılan kod içeriğini gönder
+            }
         });
     }
     
